@@ -30,6 +30,9 @@ SOURCES = {
     "claude-agent-viewer": [
         (REPOS / "Claude Agent Viewer/.claude/skills/release", "release"),
     ],
+    "operant": [
+        (REPOS / "Operant/.claude/skills/release", "release"),
+    ],
     "minecraft-mod-dev": [
         (HOME / ".claude/skills/Minecraft Mod Dev", "minecraft-mod-dev"),
     ],
