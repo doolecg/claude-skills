@@ -1,0 +1,8 @@
+{
+  "name": "claude-agent-viewer",
+  "description": "Release Claude Agent Viewer end to end.",
+  "author": {
+    "name": "doolecg",
+    "email": "doolecg@gmail.com"
+  }
+}

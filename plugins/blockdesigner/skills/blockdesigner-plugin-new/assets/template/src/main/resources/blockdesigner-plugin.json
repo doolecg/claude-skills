@@ -1,0 +1,10 @@
+{
+  "id": "{{ID}}",
+  "name": "{{NAME}}",
+  "version": "@VERSION@",
+  "author": "{{AUTHOR}}",
+  "description": "{{DESCRIPTION}}",
+  "updates": "https://github.com/doolecg/{{REPO}}",
+  "main": "{{PACKAGE}}.{{CLASS}}",
+  "api": {{API}}
+}

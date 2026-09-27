@@ -1,0 +1,20 @@
+package {{PACKAGE}};
+
+import io.blockdesigner.plugin.BlockDesignerPlugin;
+import io.blockdesigner.plugin.PluginAction;
+import io.blockdesigner.plugin.PluginContext;
+
+/**
+ * {{NAME}}: {{DESCRIPTION}}
+ */
+public final class {{CLASS}} implements BlockDesignerPlugin {
+    @Override
+    public void enable(PluginContext ctx) {
+        // Register everything here. BlockDesigner removes it all again when the plugin is turned off or fails,
+        // so disable() is only needed for things you started yourself (threads, open files).
+        // Panels build their JavaFX nodes in create(), never here: the plugin is enabled before any panel is shown.
+        ctx.registerAction(new PluginAction("{{NAME}}: hello", "Shows that {{NAME}} is running", () ->
+                ctx.toast("{{NAME}} " + ctx.info().version() + " is running")));
+        ctx.log("Ready");
+    }
+}

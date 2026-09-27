@@ -1,0 +1,7 @@
+{
+  "name": "minecraft-mod-dev",
+  "description": "General Minecraft mod development: mod APIs (JEI, AE2, Create), dev environments and version migration.",
+  "author": {
+    "name": "mcpmarket"
+  }
+}

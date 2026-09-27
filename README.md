@@ -1,0 +1,46 @@
+# doole-skills
+
+My Claude Code skills as a plugin marketplace: install them on any PC in one go, and browse, update or turn them off from Claude Code's `/plugin` screen like any other plugin.
+
+## Install
+**One click:** clone or download this repo and double-click `install.cmd`. It adds the marketplace and installs every plugin. To pick some: `.\install.ps1 blockdesigner,minecraft-modding`.
+
+**From inside Claude Code:**
+```
+/plugin marketplace add doolecg/claude-skills
+/plugin install minecraft-modding@doole-skills
+```
+**From a terminal:** `claude plugin marketplace add doolecg/claude-skills`, then `claude plugin install <name>@doole-skills`.
+
+The repo is private, so git on that PC has to be signed in to GitHub (Git Credential Manager handles it the first time).
+
+## Check and manage them
+- `/plugin` in Claude Code lists the marketplace and its plugins. From there you can install, enable, disable, uninstall and update them.
+- `claude plugin list` shows what's installed. `claude plugin details <name>@doole-skills` shows a plugin's skills and how many tokens they cost.
+- `claude plugin marketplace update doole-skills` pulls the latest from this repo. Turn on auto-update for the marketplace in `/plugin` › Marketplaces to have it happen at startup.
+
+Plugin skills are namespaced, like `/blockdesigner:blockdesigner-release`.
+
+## What's in it
+| Plugin | Skills | Source |
+|---|---|---|
+| `blockdesigner` | `blockdesigner-release`, `blockdesigner-plugin-release`, `blockdesigner-plugin-new` | mine |
+| `claude-agent-viewer` | `release` | mine |
+| `minecraft-modding` | `fabric-modding`, `neoforge-modding`, `minecraft-26-1-migration` | [siredvin/minecraft-modding-skills](https://github.com/siredvin/minecraft-modding-skills) (MIT), pinned to a commit |
+| `minecraft-multiloader` | `minecraft-multiloader` | [jahrome907/minecraft-agent-skills](https://github.com/jahrome907/minecraft-agent-skills) (MIT), pinned to a commit |
+| `minecraft-mod-dev` | `minecraft-mod-dev` | mcpmarket (copy) |
+
+Anthropic's built-in skills (pdf, docx, xlsx, ...) and the ones synced to my claude.ai account aren't here: they already follow the account.
+
+The BlockDesigner skills call their scripts by their path in the BlockDesigner checkout (`F:/PROGRAMMING/REPOS/BlockDesigner/.claude/skills/...`), so they're meant for a PC with that checkout.
+
+## Keeping it up to date
+My own skills are edited where they're used, next to their projects (often git-ignored there, so this repo is also their backup). To bring the changes here:
+```
+python sync.py --dry-run     # what changed
+python sync.py               # copy it in
+python sync.py --upstream    # also move the third-party plugins to their repos' latest commit
+claude plugin validate .
+git add -A && git commit -m "Sync skills" && git push
+```
+To add a skill of my own, add its folder to `SOURCES` in `sync.py` (and a plugin entry in `.claude-plugin/marketplace.json` if it's a new plugin), then run the sync.

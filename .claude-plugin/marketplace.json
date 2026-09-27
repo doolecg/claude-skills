@@ -1,0 +1,61 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "doole-skills",
+  "description": "doolecg's Claude Code skills: BlockDesigner and Claude Agent Viewer releases, and Minecraft modding.",
+  "owner": {
+    "name": "doolecg",
+    "email": "doolecg@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "blockdesigner",
+      "description": "Release BlockDesigner and its plugins, and scaffold new plugin repos (blockdesigner-release, blockdesigner-plugin-release, blockdesigner-plugin-new).",
+      "category": "development",
+      "source": "./plugins/blockdesigner"
+    },
+    {
+      "name": "claude-agent-viewer",
+      "description": "Release Claude Agent Viewer: version bump, RELEASE_NOTES.md, launch check, dev branch, tag, MSI build and release check.",
+      "category": "development",
+      "source": "./plugins/claude-agent-viewer"
+    },
+    {
+      "name": "minecraft-modding",
+      "description": "Fabric and NeoForge modding with version-matched APIs, and migrating mods from 1.21.x to 26.1 (from siredvin/minecraft-modding-skills, MIT).",
+      "category": "development",
+      "author": { "name": "minecraft-modding-skills contributors" },
+      "homepage": "https://github.com/siredvin/minecraft-modding-skills",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/siredvin/minecraft-modding-skills.git",
+        "path": "skills",
+        "ref": "main",
+        "sha": "b8e1133597d08eb41ac0d00d5d9555af8c1ba895"
+      },
+      "strict": false,
+      "skills": ["./fabric-modding", "./neoforge-modding", "./minecraft-26-1-migration"]
+    },
+    {
+      "name": "minecraft-multiloader",
+      "description": "Architectury mods that share one codebase across NeoForge and Fabric, for Minecraft 26.x or 1.21.x (from jahrome907/minecraft-agent-skills, MIT).",
+      "category": "development",
+      "author": { "name": "jahrome907" },
+      "homepage": "https://github.com/jahrome907/minecraft-agent-skills",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/jahrome907/minecraft-agent-skills.git",
+        "path": ".agents/skills",
+        "ref": "main",
+        "sha": "dd57c5a97741cdc0eb5bb3a8f876581a4f09eeb0"
+      },
+      "strict": false,
+      "skills": ["./minecraft-multiloader"]
+    },
+    {
+      "name": "minecraft-mod-dev",
+      "description": "General Minecraft mod development: mod APIs (JEI, AE2, Create), dev environments and version migration (from mcpmarket).",
+      "category": "development",
+      "source": "./plugins/minecraft-mod-dev"
+    }
+  ]
+}
