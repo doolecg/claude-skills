@@ -21,9 +21,15 @@
     },
     {
       "name": "operant",
-      "description": "Release Operant: version bump, RELEASE_NOTES.md, launch check, dev branch, tag, MSI build and release check.",
+      "description": "Operant control (tiles, workers, task board, memory) and releasing Operant: version bump, RELEASE_NOTES.md, launch check, dev branch, tag, MSI build and release check.",
       "category": "development",
       "source": "./plugins/operant"
+    },
+    {
+      "name": "voxel-icons",
+      "description": "Draw app icons, plugin logos and mod icons as isometric voxel art in the BlockDesigner house style, and write every size a project needs.",
+      "category": "design",
+      "source": "./plugins/voxel-icons"
     },
     {
       "name": "minecraft-modding",

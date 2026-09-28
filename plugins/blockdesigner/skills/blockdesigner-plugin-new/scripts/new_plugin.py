@@ -27,7 +27,7 @@ TEMPLATE = os.path.join(os.path.dirname(HERE), "assets", "template")
 MAIN = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))  # .claude/skills/<skill>/scripts -> repo root
 
 # The first BlockDesigner version with each plugin API level (from RELEASE_NOTES.md / PluginApi.java).
-MIN_APP = {1: "0.3.0", 2: "0.4.4", 3: "0.4.12", 4: "0.4.14", 5: "0.4.17"}
+MIN_APP = {1: "0.3.0", 2: "0.4.4", 3: "0.4.12", 4: "0.4.14", 5: "0.4.17", 6: "0.4.24"}
 
 # Template file -> path in the new repo. The main class and test move into the package folder.
 RENAMES = {"gitignore": ".gitignore", "gitattributes": ".gitattributes"}
@@ -58,7 +58,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--name", required=True, help='Display name, e.g. "Block Counter"')
     ap.add_argument("--package", required=True, help="Java package, e.g. io.blockdesigner.blockcounter")
-    ap.add_argument("--api", type=int, required=True, help="Lowest plugin API level whose features it uses (1-5)")
+    ap.add_argument("--api", type=int, required=True, help="Lowest plugin API level whose features it uses (1-6)")
     ap.add_argument("--description", required=True, help="One or two sentences for the manifest")
     ap.add_argument("--tagline", help="One line under the README title (defaults to the description)")
     ap.add_argument("--id")

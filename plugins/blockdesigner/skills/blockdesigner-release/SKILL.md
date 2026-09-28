@@ -54,7 +54,7 @@ authorises the commits, pushes and publishing — don't release on your own init
    **Only commit what belongs to the release.** `git add -A` is right when every change in `git status` is part of it.
    When the tree also holds someone else's unrelated work (another agent's pending edits, a plan document the user
    hasn't decided on), stage the release's paths explicitly (`git add RELEASE_NOTES.md build.gradle.kts app/src …`)
-   or exclude the others with pathspecs (`git add -A -- . ':!packaging/make_plugin_icons.py' ':!docs/some-plan.md'`),
+   or exclude the others with pathspecs (`git add -A -- . ':!packaging/plugin_logos.py' ':!docs/some-plan.md'`),
    then check `git status --short` / `git diff --cached --stat` before committing. Mention what was left out in the
    report. If unsure whether a file belongs, ask.
 6. **Build.** `./gradlew :app:portable :app:installer` → `dist/BlockDesigner-<v>.msi` (all users, Program Files),

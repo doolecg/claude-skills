@@ -13,7 +13,7 @@ test and later release with `blockdesigner-plugin-release`.
 
 - **Plugin code never goes into the main BlockDesigner repo.** Each plugin is `F:/PROGRAMMING/REPOS/BlockDesigner-<Name>`,
   GitHub `doolecg/BlockDesigner-<Name>`. The only main-repo changes a plugin may bring are API additions (released
-  with the app first) and, when the user asks, a row in the README's plugin table or a logo in `make_plugin_icons.py`.
+  with the app first) and, when the user asks, a row in the README's plugin table or a logo in `packaging/plugin_logos.py`.
 - **Commit, push, create GitHub repos and publish only when the user asks for it in this turn.** Creating local files
   and running a local `git init` is fine; the first commit is the user's call.
 - **Commits are the user's** (git user `doole`): plain messages, **no** Claude/AI attribution, no `Co-Authored-By`,
@@ -33,11 +33,13 @@ test and later release with `blockdesigner-plugin-release`.
    | 1 | 0.3.0 | formats, exporters, menu actions, BlockEdit commands, scene edits |
    | 2 | 0.4.4 | options, scene events, block catalog, assets, transforms, panels, tools, importers |
    | 3 | 0.4.12 | scene objects |
-   | 4 | 0.4.14 | settings in the plugin's tab (`registerSettings`) |
+   | 4 | 0.4.14 | plugin settings (`registerSettings`; in the Settings window from 0.4.24) |
    | 5 | 0.4.17 | tools on the selection, `showWhen`, hotbar, block icons, `pickTool` / `setToolOptions` |
+   | 6 | 0.4.24 | resource packs; the UI kit (`io.blockdesigner.plugin.ui`, `ctx.ui()`), option groups / help / units, `showPanel`, `setPanelStatus`, `openSettings`, `updateSettings` |
 
-   The source of truth is the Javadoc of `plugin-api/src/main/java/io/blockdesigner/plugin/PluginApi.java`; if a level
-   6+ exists, add it to `MIN_APP` in `scripts/new_plugin.py`. Package: `io.blockdesigner.<short>` like the existing
+   Any plugin with a panel should use API 6 and build its pages with the UI kit. The source of truth is the Javadoc of
+   `plugin-api/src/main/java/io/blockdesigner/plugin/PluginApi.java`; if a level 7+ exists, add it to `MIN_APP` in
+   `scripts/new_plugin.py`. Package: `io.blockdesigner.<short>` like the existing
    plugins. A bigger plugin (several phases, API gaps, open questions) also gets `docs/plan.md` (`--plan`).
 
 2. **Have the API jars for the current app version.** The script copies
@@ -78,7 +80,10 @@ test and later release with `blockdesigner-plugin-release`.
    `PLUGINS.md` and `docs/plugin-api-reference.md`. Read one of the existing plugins that uses the same features:
    Resource Tracker (panel, action, scene events, per-project data), Palette Tools (tool, transforms, exporter,
    importer, panel), Reference Planes (scene objects, settings), Pixel Art Generator (big panel, tool, importer),
-   Terrain Generator (command, tool, scene object, two modules).
+   Terrain Generator (command, tool, scene object, two modules). **Pages use the UI kit** (PLUGINS.md, "Building
+   panels with the UI kit"): return a `PanelScaffold` of `Section`s, `Form`s, an `ItemList` and an `ActionBar`, no
+   inline styles or pixel numbers; controls at the top, status and descriptions at the bottom; only set-once settings
+   go to `registerSettings` (the Settings window), working options stay on the page.
 
 5. **README, notes, plan.** Fill the README's tagline, Features and Project layout in the same voice as the other
    plugin READMEs (plain, user-facing, bold lead phrases). Its "needs **BlockDesigner X or later** (plugin API N)" line
@@ -87,10 +92,11 @@ test and later release with `blockdesigner-plugin-release`.
    and `BlockDesigner-TerrainGenerator/docs/plan.md` for the shape (status line, context, reuse table, API gaps, phases).
 
 6. **Logo.** The scaffold puts the generic plugin logo in `docs/images/logo.png`. A logo of its own is drawn by
-   `F:/PROGRAMMING/REPOS/BlockDesigner/packaging/make_plugin_icons.py` (Pillow): add a scene function in the style of
-   the others and an entry `"BlockDesigner-<Name>": <function>` in its `LOGOS` dict, then
-   `python packaging/make_plugin_icons.py` from the main repo; it writes `docs/images/logo.png` (160 px) and
-   `logo-1024.png` into every plugin checkout next to it (unchanged drawings come out the same). That is a main-repo
+   the **`voxel-icons`** skill from `F:/PROGRAMMING/REPOS/BlockDesigner/packaging/plugin_logos.py`: add a scene
+   function in the style of the others and `plugin_logo("<Name>", <function>)` to its `ICONS`, look at it with
+   `draw.py packaging/plugin_logos.py --only <Name> --preview <scratch dir>`, then run `draw.py packaging/plugin_logos.py
+   --only <Name>` from the main repo; it writes `docs/images/logo.png` (160 px) and `logo-1024.png` into that plugin's
+   checkout next to it (unchanged drawings come out the same, so a run without `--only` is harmless). That is a main-repo
    edit: check `git status` there first, and if someone else has uncommitted changes in that file, ask before touching
    it.
 

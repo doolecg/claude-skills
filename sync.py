@@ -32,6 +32,10 @@ SOURCES = {
     ],
     "operant": [
         (REPOS / "Operant/.claude/skills/release", "release"),
+        (HOME / ".claude/skills/operant", "operant"),
+    ],
+    "voxel-icons": [
+        (HOME / ".claude/skills/voxel-icons", "voxel-icons"),
     ],
     "minecraft-mod-dev": [
         (HOME / ".claude/skills/Minecraft Mod Dev", "minecraft-mod-dev"),
