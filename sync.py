@@ -37,6 +37,10 @@ SOURCES = {
     "voxel-icons": [
         (HOME / ".claude/skills/voxel-icons", "voxel-icons"),
     ],
+    "design": [
+        (HOME / ".claude/skills/ui-critique", "ui-critique"),
+        (HOME / ".claude/skills/ui-foundations", "ui-foundations"),
+    ],
     "minecraft-mod-dev": [
         (HOME / ".claude/skills/Minecraft Mod Dev", "minecraft-mod-dev"),
     ],

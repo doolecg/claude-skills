@@ -27,6 +27,7 @@ Plugin skills are namespaced, like `/blockdesigner:blockdesigner-release`.
 | `blockdesigner` | `blockdesigner-release`, `blockdesigner-plugin-release`, `blockdesigner-plugin-new` | mine |
 | `claude-agent-viewer` | `release` | mine |
 | `operant` | `release` | mine |
+| `design` | `ui-critique`, `ui-foundations` | mine, adapted from [designer-skills](https://github.com/Owl-Listener/designer-skills) (MIT) |
 | `minecraft-modding` | `fabric-modding`, `neoforge-modding`, `minecraft-26-1-migration` | [siredvin/minecraft-modding-skills](https://github.com/siredvin/minecraft-modding-skills) (MIT), pinned to a commit |
 | `minecraft-multiloader` | `minecraft-multiloader` | [jahrome907/minecraft-agent-skills](https://github.com/jahrome907/minecraft-agent-skills) (MIT), pinned to a commit |
 | `minecraft-mod-dev` | `minecraft-mod-dev` | mcpmarket (copy) |
