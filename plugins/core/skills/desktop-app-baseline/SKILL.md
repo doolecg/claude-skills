@@ -70,5 +70,6 @@ The Claude Agent Viewer repo was not under `F:/PROGRAMMING/REPOS` when this skil
 
 ## Known gaps in the user's own apps (flag when working in them)
 
-- BlockDesigner: no periodic re-check while running (startup and manual only); no install on quit; no `.run` folder.
+- BlockDesigner: periodic re-check (4 h), install on quit and Main/Dev Run added 2026-10-03 (uncommitted at the time). No no-focus launch flag for test runs.
+- Operant: Main/Dev Run added 2026-10-03 (`scripts/run-dev.mjs`, `run-main.mjs`, own profiles under `build/profiles`).
 - Operant2: no `.run` configs.
