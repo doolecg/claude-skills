@@ -1,0 +1,44 @@
+// Paste into the ROOT build.gradle. Seeds the user's test settings before runServer / runClient (and after the IDE
+// sync, because Loom's IntelliJ run configs launch without Gradle). Only these keys are set; other lines are kept.
+// Change the module names to the project's run modules (match on project.name).
+def devServerProperties = [
+    'white-list'       : 'false',
+    'enforce-whitelist': 'false',
+    'difficulty'       : 'peaceful',
+    'gamemode'         : 'creative',
+    'force-gamemode'   : 'true',
+]
+def devClientOptions = [
+    'guiScale': '2',
+    'pauseOnLostFocus': 'false',   // a background client otherwise opens the pause menu and stalls self-tests
+    'tutorialStep': 'none',
+]
+['master', 'music', 'record', 'weather', 'block', 'hostile', 'neutral', 'player', 'ambient', 'voice', 'ui'].each {
+    devClientOptions["soundCategory_${it}".toString()] = '0.5'
+}
+def seedFile = { File f, Map wanted, String sep ->
+    f.parentFile.mkdirs()
+    def lines = f.exists() ? f.readLines('UTF-8') : []
+    def missing = new LinkedHashMap(wanted)
+    lines = lines.collect { line ->
+        def key = line.contains(sep) && !line.startsWith('#') ? line.substring(0, line.indexOf(sep)).trim() : null
+        if (key != null && missing.containsKey(key)) return "${key}${sep}${missing.remove(key)}".toString()
+        line
+    }
+    missing.each { k, v -> lines << "${k}${sep}${v}".toString() }
+    f.write(lines.join('\n') + '\n', 'UTF-8')
+}
+subprojects {
+    if (!(project.name in ['fabric', 'neoforge', 'paper'])) return
+    tasks.matching { it.name in ['runServer', 'ideaSyncTask'] }.configureEach {
+        def props = project.file('run/server.properties')
+        if (it.name == 'runServer') doFirst { seedFile(props, devServerProperties, '=') } else doLast { seedFile(props, devServerProperties, '=') }
+    }
+    tasks.matching { it.name == 'runClient' }.configureEach {
+        doFirst { seedFile(project.file('run/options.txt'), devClientOptions, ':') }
+    }
+}
+
+// In the Loom module (fabric/build.gradle, neoforge/build.gradle): 1920x1080 window for every client run.
+// loom { runs { client { programArgs '--width', '1920', '--height', '1080' } } }
+// IntelliJ run-config module/JDK fix-ups after ideaSyncTask: see references/pitfalls.md.

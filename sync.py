@@ -37,6 +37,14 @@ SOURCES = {
     "voxel-icons": [
         (HOME / ".claude/skills/voxel-icons", "voxel-icons"),
     ],
+    "core": [
+        (HOME / ".claude/skills/team-work", "team-work"),
+        (HOME / ".claude/skills/ui-change", "ui-change"),
+        (HOME / ".claude/skills/minecraft-test-setup", "minecraft-test-setup"),
+        (HOME / ".claude/skills/desktop-app-baseline", "desktop-app-baseline"),
+        (HOME / ".claude/skills/repo-release", "repo-release"),
+        (HOME / ".claude/skills/plain-writing", "plain-writing"),
+    ],
     "design": [
         (HOME / ".claude/skills/ui-critique", "ui-critique"),
         (HOME / ".claude/skills/ui-foundations", "ui-foundations"),

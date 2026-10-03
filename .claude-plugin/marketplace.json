@@ -84,6 +84,12 @@
       "description": "Critique a UI from a screenshot with a ranked fix list (before/after shots), and design screens from colour, type, spacing and layout fundamentals. For desktop apps, Minecraft mod GUIs and HTML pages.",
       "category": "design",
       "source": "./plugins/design"
+    },
+    {
+      "name": "core",
+      "description": "How I work, as skills: team work in Operant, the UI before/after flow, Minecraft test setup, desktop app baseline, general release flow and plain writing.",
+      "category": "productivity",
+      "source": "./plugins/core"
     }
   ]
 }
