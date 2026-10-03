@@ -25,7 +25,7 @@ Plugin skills are namespaced, like `/blockdesigner:blockdesigner-release`.
 | Plugin | Skills | Source |
 |---|---|---|
 | `blockdesigner` | `blockdesigner-release`, `blockdesigner-plugin-release`, `blockdesigner-plugin-new` | mine |
-| `claude-agent-viewer` | `release` | mine |
+| `agent-viewer` | `release` (Claude Agent Viewer) | mine; the only copy (its checkout is gone) |
 | `operant` | `release` | mine |
 | `core` | `team-work`, `ui-change`, `minecraft-test-setup`, `desktop-app-baseline`, `repo-release`, `plain-writing` | mine |
 | `design` | `ui-critique`, `ui-foundations` | mine, adapted from [designer-skills](https://github.com/Owl-Listener/designer-skills) (MIT) |

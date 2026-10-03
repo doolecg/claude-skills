@@ -1,5 +1,5 @@
 ---
-description: Baseline every desktop app (JavaFX, Electron or other) must ship with - auto-update from GitHub releases, an in-app settings page with rebindable keybinds, exactly two IntelliJ run configurations (Main Run and Dev Run), MIT licence, README and RELEASE_NOTES.md. Use when starting a "new app" or "new desktop app", when asked to "add auto update", "add a settings page", set up "run configurations", "Main Run" or "Dev Run", or when working in an existing desktop app and checking it meets the baseline.
+description: Baseline every desktop app (JavaFX, Electron or other) must ship with - auto-update from GitHub releases, an in-app settings page with rebindable keybinds, exactly two IntelliJ run configurations (Main Run and Dev Run), an open-source licence (MIT for new apps), README and RELEASE_NOTES.md. Use when starting a "new app" or "new desktop app", when asked to "add auto update", "add a settings page", set up "run configurations", "Main Run" or "Dev Run", or when working in an existing desktop app and checking it meets the baseline.
 ---
 
 # Desktop app baseline
@@ -16,7 +16,7 @@ Every desktop app Dayle builds ships with the items below. Two modes:
 3. **Exactly two IntelliJ run configurations**, committed in `.run/*.run.xml`: `Main Run` (builds and runs the code committed on `main`, exported to `build/main-run`, working tree untouched) and `Dev Run` (builds and runs the working tree). No sandbox, lab or other configs. See [references/run-configs.md](references/run-configs.md).
 4. **Test runs never take focus.** Windows open behind the active window (Electron: `OPERANT_BACKGROUND=1` and `showInactive()`). See [references/run-configs.md](references/run-configs.md).
 5. **Free and open source only.** No paid services, closed-source libraries or proprietary APIs. No dependency added without asking.
-6. **Repo files.** MIT `LICENSE` (`Copyright (c) <year> doole`, as in BlockDesigner), `README.md`, and `RELEASE_NOTES.md`, newest release first: `# <App> <version>`, then New / Changed / Fixed, sections separated by `---`. That top section is the GitHub release body. Templates are in `templates/`. If an existing app is not MIT, mention it, do not change it (Operant is Apache-2.0).
+6. **Repo files.** MIT `LICENSE` (`Copyright (c) <year> doole`, as in BlockDesigner), `README.md`, and `RELEASE_NOTES.md`, newest release first: `# <App> <version>`, then New / Changed / Fixed, sections separated by `---`. That top section is the GitHub release body. Templates are in `templates/`. Existing apps keep their own open-source licence (Operant is Apache-2.0, which is fine); only closed or missing licences are a gap.
 7. **Release flow** follows the global rules in CLAUDE.md: commit, push, tag and publish only when asked; no AI attribution in commits; plain tags (`1.2.1`); work on `dev-<version>`, fast-forward `main`, delete the dev branch. The release must attach the asset the updater looks for (see Asset naming). If the repo has a release skill, use it.
 
 ## Create mode: order of work
@@ -45,7 +45,7 @@ For each line, find the evidence (file and symbol) or flag it missing.
 | Two run configs only | `ls .run` shows `Dev Run` and `Main Run` | same, npm type |
 | Main Run uses `git archive main` into `build/main-run` | Gradle `exportMain`/`runMain` | `scripts/run-main.mjs` |
 | No focus steal in test runs | flag respected | `OPERANT_BACKGROUND`, `showInactive()` |
-| MIT LICENSE, README, RELEASE_NOTES.md | files exist, format matches | same |
+| Open-source LICENSE (MIT for new apps), README, RELEASE_NOTES.md | files exist, format matches | same |
 | Free and open source | no paid or closed dependency | same |
 
 ## Asset naming the updaters expect
@@ -71,4 +71,4 @@ The Claude Agent Viewer repo was not under `F:/PROGRAMMING/REPOS` when this skil
 ## Known gaps in the user's own apps (flag when working in them)
 
 - BlockDesigner: no periodic re-check while running (startup and manual only); no install on quit; no `.run` folder.
-- Operant and Operant2: no `.run` configs. Operant is Apache-2.0.
+- Operant2: no `.run` configs.

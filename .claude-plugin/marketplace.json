@@ -14,10 +14,10 @@
       "source": "./plugins/blockdesigner"
     },
     {
-      "name": "claude-agent-viewer",
+      "name": "agent-viewer",
       "description": "Release Claude Agent Viewer: version bump, RELEASE_NOTES.md, launch check, dev branch, tag, MSI build and release check.",
       "category": "development",
-      "source": "./plugins/claude-agent-viewer"
+      "source": "./plugins/agent-viewer"
     },
     {
       "name": "operant",

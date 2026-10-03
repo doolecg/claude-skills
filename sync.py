@@ -27,12 +27,13 @@ SOURCES = {
         (REPOS / "BlockDesigner/.claude/skills/blockdesigner-plugin-release", "blockdesigner-plugin-release"),
         (REPOS / "BlockDesigner/.claude/skills/blockdesigner-plugin-new", "blockdesigner-plugin-new"),
     ],
-    "claude-agent-viewer": [
+    # The Claude Agent Viewer checkout is no longer on this PC; this repo holds the only copy of its release skill.
+    "agent-viewer": [
         (REPOS / "Claude Agent Viewer/.claude/skills/release", "release"),
     ],
     "operant": [
         (REPOS / "Operant/.claude/skills/release", "release"),
-        (HOME / ".claude/skills/operant", "operant"),
+        (REPOS / "Operant/agent-plugin/skills/operant", "operant"),
     ],
     "voxel-icons": [
         (HOME / ".claude/skills/voxel-icons", "voxel-icons"),

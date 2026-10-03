@@ -1,6 +1,6 @@
 ---
 name: repo-release
-description: General release flow for any of the user's repos - bump the version, write the RELEASE_NOTES.md section, verify build and tests, commit on dev-<version>, fast-forward main, tag, publish the GitHub release with assets, and clean up. Use when the user says "release", "ship it", "publish a release", "bump the version", "tag it", "cut a release" or "release it". If the repo has its own release skill (blockdesigner-release, blockdesigner-plugin-release, operant release, claude-agent-viewer release), use that instead; this is the general fallback and shared core.
+description: General release flow for any of the user's repos - bump the version, write the RELEASE_NOTES.md section, verify build and tests, commit on dev-<version>, fast-forward main, tag, publish the GitHub release with assets, and clean up. Use when the user says "release", "ship it", "publish a release", "bump the version", "tag it", "cut a release" or "release it". If the repo has its own release skill (blockdesigner-release, blockdesigner-plugin-release, operant release, agent-viewer release), use that instead; this is the general fallback and shared core.
 ---
 
 # Repo release
