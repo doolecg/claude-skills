@@ -34,6 +34,7 @@ SOURCES = {
     "operant": [
         (REPOS / "Operant/.claude/skills/release", "release"),
         (REPOS / "Operant/agent-plugin/skills/operant", "operant"),
+        (REPOS / "Operant/.claude/skills/learn-real-test", "learn-real-test"),
     ],
     "voxel-icons": [
         (HOME / ".claude/skills/voxel-icons", "voxel-icons"),

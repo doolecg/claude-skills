@@ -28,9 +28,15 @@ The user is often working in other windows or away on a phone. Never raise, focu
 | Operant | Start with `OPERANT_BACKGROUND=1`; use its own screenshot function or the project's capture script. |
 | Electron | Window opens with `showInactive()`; capture with `webContents.capturePage()` or Playwright `page.screenshot()`. |
 | JavaFX | `Node.snapshot(null, null)` on the scene root, written with `ImageIO`; or Win32 `PrintWindow` on the window handle. |
-| Minecraft mod | Run the dev client per the user's test setup (1920x1080, GUI scale 2, `pauseOnLostFocus:false`, Bare Bones pack, Iris + Complementary). Never press F2 or click the window (that takes focus). Use a dev-only, env-gated screenshot mode in the mod: on client tick, run camera/screen steps (`connection.sendCommand("tp ...")`, `mc.gui.setScreen(...)`), wait ~60 ticks, call `net.minecraft.client.Screenshot.grab(mc.gameDirectory, name, mc.gameRenderer.mainRenderTarget(), 1, cb)`, then `mc.stop()` (see `ClientShots.java` in F:/PROGRAMMING/REPOS/Exposed). If the window still pops up front, push it behind with SetWindowPos(HWND_BOTTOM, SWP_NOACTIVATE) and restore the previous foreground window. |
+| Minecraft mod | Dev client with a dev-only screenshot mode; see the Minecraft mod bullets below. |
 | HTML page | Playwright (`browser_navigate`, `browser_take_screenshot`) at the target size, headless. |
 | Other window | `PrintWindow` with `PW_RENDERFULLCONTENT`. Never `SetForegroundWindow`, never `Alt+Tab`. |
+
+Minecraft mod capture:
+- Run the dev client per the user's test setup (1920x1080, GUI scale 2, `pauseOnLostFocus:false`, Bare Bones pack, Iris + Complementary).
+- Never press F2 or click the window (that takes focus).
+- Use a dev-only, env-gated screenshot mode in the mod: on client tick, run camera/screen steps (`connection.sendCommand("tp ...")`, `mc.gui.setScreen(...)`), wait ~60 ticks, call `net.minecraft.client.Screenshot.grab(mc.gameDirectory, name, mc.gameRenderer.mainRenderTarget(), 1, cb)`, then `mc.stop()` (see `ClientShots.java` in F:/PROGRAMMING/REPOS/Exposed).
+- If the window still pops up front, push it behind with SetWindowPos(HWND_BOTTOM, SWP_NOACTIVATE) and restore the previous foreground window.
 
 Rules: stop only processes you started, by PID, never by name. Capture states that matter (hover, focus, disabled,
 empty, error, long text) as extra shots, not just the happy path. Name shots `before-<screen>.png` and

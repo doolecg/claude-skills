@@ -79,6 +79,7 @@ git add -A                      # or explicit paths when the tree holds unrelate
 git diff --cached --stat        # check what is going in
 git commit -m "$v: <one-line summary>" -m "<bullets>"
 git push -u origin "dev-$v"
+# If the repo has CI on dev-* pushes, wait for it to go green before touching main (see "CI check" below)
 git checkout main && git pull --ff-only
 git merge --ff-only "dev-$v" && git push origin main
 git branch -d "dev-$v" && git push origin --delete "refs/heads/dev-$v"
@@ -91,6 +92,25 @@ git tag "$v" && git push origin "refs/tags/$v"
 - Skip the tag step if the publish step creates it (the script does: GitHub tags `main`). Tag by hand only when CI
   builds from the tag push.
 - Check the commit message and author before pushing: `git log -1 --format='%an <%ae>%n%B'`. No trailers.
+
+### CI check (before main moves, and again after the tag)
+
+Local tests passing is not enough: CI builds on other operating systems and in a clean environment, and tests that
+read the machine's home folder, use Windows paths, spawn `.cmd` shims or have tight timeouts fail only there. A
+release made over a red CI has no installers and the in-app updater offers nothing.
+
+- If `.github/workflows/` runs on `dev-*` pushes, watch that run after pushing the dev branch and only fast-forward
+  `main` and publish when it is green: `gh run list --branch "dev-$v" --limit 3`, then
+  `gh run view <id> --json jobs --jq '.jobs[] | "\(.name) \(.conclusion)"'`. A red run means fix on the dev branch
+  and push again; never tag over it.
+- If CI builds installers from the tag push and uploads them to the release, then after publishing wait for that
+  tag run to finish and confirm every installer is attached:
+  `gh run list --limit 5` and `gh release view "$v" --json assets --jq '.assets[] | "\(.name) \(.size)"'`.
+  Compare against the platforms in the workflow matrix (for Operant: .msi, two .dmg, .AppImage and .deb).
+- When a job failed, read the failing step with `gh run view <id> --log-failed` (strip ANSI codes), fix the cause on
+  a new commit, and re-run the failed jobs (`gh run rerun <id> --failed`) or, if the fix needs a new commit, ask
+  before moving or re-pushing the tag (installed copies may have seen it); a patch version bump is the safe default.
+- Report which assets are attached and which are missing. Never say a release is done while assets are missing.
 
 ## 6. Publish the GitHub release
 
@@ -127,6 +147,8 @@ Report in a few lines: release URL, what is in it, that only `main` and tags rem
 
 - Version regex that misses an indented line, or a bump that touches only one of several files.
 - Tag made before the build was verified: verify first, tag last.
+- Calling it released while the Build workflow is red or still running, or without all platform installers attached
+  (3.0.0 and 3.0.1 of Operant both shipped with failing CI tests; 3.0.0 had only the .msi).
 - Releasing from a dirty tree and shipping someone else's half-done work.
 - Draft or prerelease flags: the script publishes a normal latest release; say so if the user wanted otherwise.
 - Other places the user ships to (CurseForge, Modrinth, a plugin list): not automated here; mention them as a manual

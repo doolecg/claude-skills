@@ -1,4 +1,5 @@
 ---
+name: desktop-app-baseline
 description: Baseline every desktop app (JavaFX, Electron or other) must ship with - auto-update from GitHub releases, an in-app settings page with rebindable keybinds, exactly two IntelliJ run configurations (Main Run and Dev Run), an open-source licence (MIT for new apps), README and RELEASE_NOTES.md. Use when starting a "new app" or "new desktop app", when asked to "add auto update", "add a settings page", set up "run configurations", "Main Run" or "Dev Run", or when working in an existing desktop app and checking it meets the baseline.
 ---
 
