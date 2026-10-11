@@ -1,0 +1,18 @@
+{
+  "name": "plain-english",
+  "version": "0.1.0",
+  "description": "Keeps Claude's replies in plain English: adds a short style section to the system prompt, shows a status line while it works, and checks long replies against the style with a cheap Haiku call.",
+  "author": {
+    "name": "doolecg"
+  },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showBand": {
+      "type": "boolean",
+      "title": "Show the band above the prompt",
+      "description": "Show the Plain-English verdict above the prompt after each checked reply.",
+      "default": false
+    }
+  }
+}

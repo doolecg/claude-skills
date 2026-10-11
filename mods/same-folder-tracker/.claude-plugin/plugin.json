@@ -1,0 +1,18 @@
+{
+  "name": "same-folder-tracker",
+  "version": "0.1.0",
+  "description": "Shows a line above the prompt when another Claude Code session is working in the same folder, and warns once when you are about to edit a file that session already changed.",
+  "author": {
+    "name": "doolecg"
+  },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showBand": {
+      "type": "boolean",
+      "title": "Show the band above the prompt",
+      "description": "Show a line above the prompt when another session is working in the same folder. Warnings about shared files appear either way.",
+      "default": false
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "idea-shelf",
+  "version": "0.1.0",
+  "description": "Park ideas on a per-project shelf with /idea without starting a turn, then send, edit or delete them from /ideas.",
+  "author": { "name": "doolecg" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

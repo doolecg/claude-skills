@@ -1,0 +1,7 @@
+{
+  "name": "mods-shared-lib",
+  "version": "0.1.0",
+  "description": "Test-only home of the shared services library (skills list, Hindsight, CodeGraph, paths) that the mods copy into their own hooks/lib folders. Not listed in the marketplace.",
+  "author": { "name": "doolecg" },
+  "license": "MIT"
+}

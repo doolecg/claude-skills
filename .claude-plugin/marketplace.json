@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "doole-skills",
-  "description": "doolecg's Claude Code skills: BlockDesigner, Claude Agent Viewer and Operant releases, and Minecraft modding.",
+  "description": "doolecg's Claude Code skills: BlockDesigner, Claude Agent Viewer and Operant releases, and Minecraft modding, plus Claude Code mods for the desktop app.",
   "owner": {
     "name": "doolecg",
     "email": "doolecg@gmail.com"
@@ -90,6 +90,42 @@
       "description": "How I work, as skills: team work in Operant, the UI before/after flow, Minecraft test setup, desktop app baseline, general release flow and plain writing.",
       "category": "productivity",
       "source": "./plugins/core"
+    },
+    {
+      "name": "prompt-enhancer",
+      "description": "Rewrites a rough prompt into a clear one with /enhance or a ++ prefix. You see the rewrite above the prompt and choose Use, Edit or Cancel; nothing is sent without one of them.",
+      "category": "productivity",
+      "source": "./mods/prompt-enhancer"
+    },
+    {
+      "name": "design-picker",
+      "description": "When Claude asks you to choose a design style, opens a preview page in your browser showing what each option looks like, and lists the options above the prompt.",
+      "category": "productivity",
+      "source": "./mods/design-picker"
+    },
+    {
+      "name": "idea-shelf",
+      "description": "Park ideas on a per-project shelf with /idea without starting a turn, then send, edit or delete them from /ideas.",
+      "category": "productivity",
+      "source": "./mods/idea-shelf"
+    },
+    {
+      "name": "same-folder-tracker",
+      "description": "Shows a line above the prompt when another Claude Code session is working in the same folder, and warns once when you are about to edit a file that session already changed.",
+      "category": "productivity",
+      "source": "./mods/same-folder-tracker"
+    },
+    {
+      "name": "plain-english",
+      "description": "Keeps Claude's replies in plain English: adds a short style section to the system prompt, shows a status line while it works, and checks long replies against the style with a cheap Haiku call.",
+      "category": "productivity",
+      "source": "./mods/plain-english"
+    },
+    {
+      "name": "context-view",
+      "description": "A live picture of the context window, drawn the way /context draws it: a pane with /ctx and a usage meter above the prompt.",
+      "category": "productivity",
+      "source": "./mods/context-view"
     }
   ]
 }

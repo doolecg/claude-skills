@@ -1,0 +1,8 @@
+{
+  "name": "design-picker",
+  "version": "0.1.0",
+  "description": "When Claude asks you to choose a design style, opens a preview page in your browser showing what each option looks like, and lists the options above the prompt.",
+  "author": { "name": "doolecg" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
