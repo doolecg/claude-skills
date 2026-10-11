@@ -126,6 +126,12 @@
       "description": "A live picture of the context window, drawn the way /context draws it: a pane with /ctx and a usage meter above the prompt.",
       "category": "productivity",
       "source": "./mods/context-view"
+    },
+    {
+      "name": "agents-panel",
+      "description": "A pane that shows what Claude is doing right now, the files it touched, its sub-agents and the session's MCP servers, skills and start-up messages. Observation only.",
+      "category": "productivity",
+      "source": "./mods/agents-panel"
     }
   ]
 }

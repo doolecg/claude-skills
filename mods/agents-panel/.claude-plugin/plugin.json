@@ -1,0 +1,16 @@
+{
+  "name": "agents-panel",
+  "version": "0.1.0",
+  "description": "A pane that shows what Claude is doing right now, the files it touched, its sub-agents and the session's MCP servers, skills and start-up messages. Observation only.",
+  "author": { "name": "doolecg" },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showBand": {
+      "type": "boolean",
+      "title": "Show the band above the prompt",
+      "description": "One line above the prompt: what Claude is doing, the git branch and the memory line. The /agents-panel pane works either way.",
+      "default": false
+    }
+  }
+}
