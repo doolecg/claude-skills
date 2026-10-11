@@ -1,0 +1,47 @@
+{
+  "name": "session-learner",
+  "version": "0.1.0",
+  "description": "Learns lessons when a session is marked done (/done, the completed flag, or the app closing it), saves them to Hindsight and project memory after your review in /learn, and tunes your skills from how they do over time.",
+  "author": { "name": "doolecg" },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showBand": {
+      "type": "boolean",
+      "title": "Show the band above the prompt",
+      "description": "A line above the prompt such as: Learned 3 lessons: 2 saved, 1 to review.",
+      "default": false
+    },
+    "reviewMode": {
+      "type": "string",
+      "title": "Review mode",
+      "description": "off: nothing runs. suggest: everything waits in /learn. controlled: low-risk lessons apply themselves. advanced: passing skill drafts apply themselves too.",
+      "options": ["off", "suggest", "controlled", "advanced"],
+      "default": "suggest"
+    },
+    "maxModelCalls": {
+      "type": "number",
+      "title": "Max model calls per run",
+      "description": "A run stops when it would make more model calls than this.",
+      "default": 4
+    },
+    "maxTokens": {
+      "type": "number",
+      "title": "Max tokens per run",
+      "description": "A run stops when its model calls would use more tokens than this.",
+      "default": 60000
+    },
+    "maxChanges": {
+      "type": "number",
+      "title": "Max changes per run",
+      "description": "The most lessons or skill changes one run applies by itself.",
+      "default": 5
+    },
+    "dailySpendUsd": {
+      "type": "number",
+      "title": "Daily spend cap in USD",
+      "description": "Runs stop calling the model once today's spend reaches this. 0 means no cap.",
+      "default": 0.5
+    }
+  }
+}

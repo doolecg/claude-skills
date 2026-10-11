@@ -132,6 +132,12 @@
       "description": "A pane that shows what Claude is doing right now, the files it touched, its sub-agents and the session's MCP servers, skills and start-up messages. Observation only.",
       "category": "productivity",
       "source": "./mods/agents-panel"
+    },
+    {
+      "name": "session-learner",
+      "description": "Learns lessons when a session is marked done (/done, the completed flag, or the app closing it), saves them to Hindsight and project memory after your review in /learn, and tunes your skills from how they do over time.",
+      "category": "productivity",
+      "source": "./mods/session-learner"
     }
   ]
 }
