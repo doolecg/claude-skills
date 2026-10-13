@@ -1,0 +1,40 @@
+{
+  "name": "prompt-enhancer",
+  "version": "0.3.0",
+  "description": "Enhance Prompt: a button under the prompt that rewrites what you typed, in place, with the files, memories, conversation and skills the task needs. Nothing is sent until you press Enter.",
+  "author": { "name": "doolecg" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "model": {
+      "type": "string",
+      "title": "Model",
+      "description": "The model that rewrites the prompt: an alias (haiku, sonnet, opus), a full model id, or session for the model this session uses.",
+      "default": "claude-haiku-5-5"
+    },
+    "effort": {
+      "type": "string",
+      "title": "Effort",
+      "description": "How hard the model thinks. default lets the model decide; session follows this session's effort.",
+      "options": ["default", "low", "medium", "high", "xhigh", "max", "session"],
+      "default": "default"
+    },
+    "hindsightSeconds": {
+      "type": "number",
+      "title": "Hindsight time limit (seconds)",
+      "description": "How long to wait for the Hindsight memory server before going on without it (1 to 60).",
+      "default": 5
+    },
+    "soulBank": {
+      "type": "string",
+      "title": "Soul Bank",
+      "description": "The Hindsight bank that holds facts about you and how you like Claude to work.",
+      "default": "soul"
+    },
+    "skillFolders": {
+      "type": "string",
+      "title": "Extra skill folders",
+      "description": "More folders of skills (each skill a folder with a SKILL.md), separated by commas or semicolons.",
+      "default": ""
+    }
+  }
+}

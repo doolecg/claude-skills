@@ -35,6 +35,12 @@ Plugin skills are namespaced, like `/blockdesigner:blockdesigner-release`.
 | `bottom-bar` | mod: the bar at the bottom of the terminal and the Doole's Tools pill | mine, in `mods/bottom-bar` (edited here, not synced) |
 | `clean-view` | mod: a plain-English checklist above the prompt, with the technical rows hidden | mine, in `mods/clean-view` (edited here, not synced) |
 | `flightdeck` | mod: a sidebar with the main session and every subagent working now, each with its own pixel critter | mine, in `mods/flightdeck` (edited here, not synced); idea from [scasella/claude-flightdeck](https://github.com/scasella/claude-flightdeck) (MIT) |
+| `prompt-enhancer` | mod: an Enhance Prompt button in the Bottom Bar that rewrites the prompt in the box with context from Hindsight, CodeGraph, the session, soul.md and your skills | mine, in `mods/prompt-enhancer` (edited here, not synced) |
+| `self-improve` | mod: learns from finished sessions, keeps soul.md and a Soul Bank in step, drafts and tunes skills for your approval | mine, in `mods/self-improve` (edited here, not synced) |
+| `design-picker` | mod: a browser gallery that previews the options when Claude asks you to pick a look | mine, in `mods/design-picker` (edited here, not synced) |
+| `folder-tracker` | mod: shows what another session in the same folder is doing | mine, in `mods/folder-tracker` (edited here, not synced) |
+| `idea-shelf` | mod: park ideas with `/idea` while Claude works | mine, in `mods/idea-shelf` (edited here, not synced) |
+| `plain-english` | mod: short, plain replies with a Summary and Next steps, checked after each long reply | mine, in `mods/plain-english` (edited here, not synced) |
 
 Anthropic's built-in skills (pdf, docx, xlsx, ...) and the ones synced to my claude.ai account aren't here: they already follow the account.
 

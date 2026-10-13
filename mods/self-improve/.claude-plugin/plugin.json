@@ -1,0 +1,71 @@
+{
+  "name": "self-improve",
+  "version": "2.0.0",
+  "description": "Self Improve: learns from a session when you mark it done, keeps soul.md (facts about you and how Claude should respond) in step with Hindsight, and tunes skills over time with your approval.",
+  "author": { "name": "doolecg" },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "mode": {
+      "type": "string",
+      "title": "Review mode",
+      "description": "off: nothing runs. suggest: everything waits in /learn for you. controlled: low-risk lessons apply themselves. advanced: skill drafts that pass validation apply themselves too.",
+      "options": ["off", "suggest", "controlled", "advanced"],
+      "default": "suggest"
+    },
+    "soulBank": {
+      "type": "string",
+      "title": "Soul Bank",
+      "description": "The Hindsight bank that holds the facts in soul.md. Operant users can set operant-soul to share one soul with Operant.",
+      "default": "soul"
+    },
+    "learnModel": {
+      "type": "string",
+      "title": "Learn model",
+      "description": "The model that reads a finished session (one call per run).",
+      "default": "haiku"
+    },
+    "rewriteModel": {
+      "type": "string",
+      "title": "Rewrite model",
+      "description": "The model that drafts a rewrite of a skill that keeps getting corrected.",
+      "default": "sonnet"
+    },
+    "maxCalls": {
+      "type": "number",
+      "title": "Max model calls per run",
+      "description": "0 means no limit.",
+      "default": 4
+    },
+    "maxTokens": {
+      "type": "number",
+      "title": "Max tokens per run",
+      "description": "0 means no limit.",
+      "default": 60000
+    },
+    "maxChanges": {
+      "type": "number",
+      "title": "Max changes per run",
+      "description": "Changes the mod may apply on its own in one run (controlled and advanced modes). 0 means no limit.",
+      "default": 5
+    },
+    "dailyUsd": {
+      "type": "number",
+      "title": "Daily spend cap (USD)",
+      "description": "Estimated spend on learn calls per day. 0 means no cap.",
+      "default": 0.5
+    },
+    "soulCap": {
+      "type": "number",
+      "title": "soul.md characters per session",
+      "description": "How much of soul.md each session starts with, most important first (200 to 6000).",
+      "default": 1500
+    },
+    "extraSkillDirs": {
+      "type": "string",
+      "title": "Extra skill folders",
+      "description": "More folders that hold <skill>/SKILL.md, separated by semicolons.",
+      "default": ""
+    }
+  }
+}
