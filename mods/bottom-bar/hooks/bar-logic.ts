@@ -1,4 +1,4 @@
-import type { BarFigures, BarMode, BarTool } from '../types'
+import type { BarFigures, BarMode, BarSegment, BarSegmentAction, BarSegmentState, BarTool } from '../types'
 
 export const EMPTY_FIGURES: BarFigures = {
   model: '',
@@ -106,7 +106,16 @@ export function effortLabel(effort: string | number | undefined | null): string 
 
 /** `isPress`: the one part a pickable segment's button holds, so its highlight is one colour. */
 export type Part = { text: string; color: string; bold?: boolean; isPress?: boolean }
-export type Segment = { key: string; parts: Part[] }
+/**
+ * One segment of the bar. A published one (another mod's) also carries `command`, run when its text is
+ * pressed, and `actions`, smaller presses drawn after its text.
+ */
+export type Segment = {
+  key: string
+  parts: Part[]
+  command?: string
+  actions?: Array<{ key: string; label: string; command: string }>
+}
 
 export const SEPARATOR = ' │ '
 
@@ -268,4 +277,83 @@ export function mergeModes(
     }
   }
   return next
+}
+
+// ---------------------------------------------------------------- published segments
+
+const SEGMENT_STATES: readonly BarSegmentState[] = ['idle', 'working', 'done', 'error']
+const COMMAND = /^[A-Za-z0-9_:.-]{1,64}(?: [^\n]{0,200})?$/
+
+/** A publisher's command as `name [args]`, a leading slash taken off; undefined when it is no command. */
+export function segmentCommand(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined
+  const text = raw.trim().replace(/^\//, '')
+  return COMMAND.test(text) ? text : undefined
+}
+
+/** `enhance-prompt undo` → `{ command: 'enhance-prompt', args: 'undo' }`. */
+export function splitCommand(text: string): { command: string; args: string } {
+  const at = text.indexOf(' ')
+  return at < 0 ? { command: text, args: '' } : { command: text.slice(0, at), args: text.slice(at + 1).trim() }
+}
+
+/**
+ * A mod's `segments` value read off its `state.set`: `{ [id]: { label, detail?, command, state?, actions? } }`.
+ * Its entries replace that mod's earlier ones; anything malformed is left out. The result is ordered by
+ * plugin name, then by the order the mod gave its ids, so a republish never moves a segment.
+ */
+export function mergeSegments(
+  all: Record<string, BarSegment>,
+  plugin: string,
+  value: unknown,
+): Record<string, BarSegment> {
+  const kept = Object.values(all).filter(s => s.plugin !== plugin)
+  const added: BarSegment[] = []
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [id, raw] of Object.entries(value as Record<string, unknown>).slice(0, 20)) {
+      if (added.length >= 4) break
+      const s = raw as { label?: unknown; detail?: unknown; command?: unknown; state?: unknown; actions?: unknown } | null
+      if (!s || typeof s !== 'object') continue
+      const label = typeof s.label === 'string' ? clip(s.label.trim(), 40) : ''
+      const command = segmentCommand(s.command)
+      if (!label || !command) continue
+      const actions: BarSegmentAction[] = []
+      for (const a of Array.isArray(s.actions) ? s.actions.slice(0, 3) : []) {
+        const act = a as { label?: unknown; command?: unknown } | null
+        const name = typeof act?.label === 'string' ? clip(act.label.trim(), 20) : ''
+        const run = segmentCommand(act?.command)
+        if (name && run) actions.push({ label: name, command: run })
+      }
+      added.push({
+        plugin,
+        id: clip(id, 40),
+        label,
+        detail: typeof s.detail === 'string' ? clip(s.detail.replace(/\s+/g, ' ').trim(), 60) : '',
+        command,
+        state: SEGMENT_STATES.includes(s.state as BarSegmentState) ? (s.state as BarSegmentState) : 'idle',
+        actions,
+      })
+    }
+  }
+  const order = (x: BarSegment) => x.plugin
+  const list = [...kept, ...added].sort((a, b) => (order(a) < order(b) ? -1 : order(a) > order(b) ? 1 : 0))
+  const next: Record<string, BarSegment> = {}
+  for (const s of list) next[`${s.plugin}:${s.id}`] = s
+  return next
+}
+
+/** The bar's segments for the published ones, keyed `seg:<plugin>:<id>` (actions `…:<n>`). */
+export function publishedSegments(all: Record<string, BarSegment>, pal: Palette): Segment[] {
+  return Object.values(all).map(s => {
+    const color = s.state === 'working' ? pal.warn : s.state === 'error' ? pal.bad : s.state === 'done' ? pal.text : pal.text
+    const key = `seg:${s.plugin}:${s.id}`
+    const parts: Part[] = [{ text: s.label, color, bold: true }]
+    if (s.detail) parts.push({ text: ' · ', color: pal.dim }, { text: s.detail, color: pal.dim })
+    return {
+      key,
+      parts,
+      command: s.command,
+      actions: s.actions.map((a, i) => ({ key: `${key}:${i}`, label: a.label, command: a.command })),
+    }
+  })
 }

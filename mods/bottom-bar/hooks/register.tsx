@@ -9,7 +9,10 @@ import {
   SEPARATOR,
   clip,
   mergeModes,
+  mergeSegments,
   effortLabel,
+  publishedSegments,
+  splitCommand,
   modelChoiceLabel,
   modelChoices,
   modelName,
@@ -45,6 +48,19 @@ const label = atom({ plugin: 'bottom-bar', key: 'label' } as const, LABEL)
 const settings = atom({ plugin: 'bottom-bar', key: 'settings' } as const, [])
 const view = atom({ plugin: 'bottom-bar', key: 'view' } as const, 'home')
 const mods = atom({ plugin: 'bottom-bar', key: 'mods' } as const, [])
+const published = atom({ plugin: 'bottom-bar', key: 'published' } as const, {})
+
+/**
+ * `segments` writes the bar could not hook as they landed: a publisher's command the bar itself ran
+ * writes under the bar's own call, where no hook of the bar's runs. Applied once that call returns.
+ */
+const missed: Array<{ plugin: string; value: unknown }> = []
+
+async function applyMissed($: Dollar): Promise<void> {
+  if (missed.length === 0) return
+  const writes = missed.splice(0)
+  await update($, published, all => writes.reduce((acc, w) => mergeSegments(acc, w.plugin, w.value), all ?? {}))
+}
 
 type Dollar = EngineInterface
 
@@ -193,12 +209,14 @@ async function setOwn($: Dollar, field: string, value: string): Promise<void> {
   if (set.deny !== undefined) $.ui.toast(`Could not change the ${field}: ${set.deny}`)
 }
 
-async function runCommand($: Dollar, name: string): Promise<void> {
+async function runCommand($: Dollar, text: string): Promise<void> {
+  const { command: name, args } = splitCommand(text)
   try {
-    await noteReply($, name, await $.command.run({ command: name, args: '' }))
+    await noteReply($, name, await $.command.run({ command: name, args }))
   } catch {
     $.ui.toast(`/${name} is not available. Is its mod still installed?`)
   }
+  await applyMissed($)
 }
 
 async function openPicker($: Dollar): Promise<void> {
@@ -321,6 +339,19 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  // A mod's published segments: `{ [id]: { label, detail?, command, state?, actions? } }` in its own
+  // `segments` state, drawn after the agents segment and followed live.
+  on('state.set', { key: 'segments' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const write = e as unknown as StateWrite
+    if (write.plugin !== 'bottom-bar') await update($, published, all => mergeSegments(all ?? {}, write.plugin, write.value))
+    return ran
+  }).catch(($, e, next) => {
+    const write = e as unknown as StateWrite
+    if (next.error?.kind === 're-entry' && write.plugin !== 'bottom-bar') missed.push({ plugin: write.plugin, value: write.value })
+    return next(e)
+  })
+
   on('command.run', { command: CHOOSE }, async $ => {
     await openPicker($)
     return {}
@@ -357,6 +388,28 @@ export const register: Register = (on, options) => {
 
     // One row that clips: a segment with no room wraps onto the hidden second row.
     const segs = segments(f, pal)
+    // Other mods' published segments follow the agents segment in a box of their own that gives way
+    // first: it shrinks and clips from the right before the bar's own segments give way, and the
+    // pills never do.
+    const extra = publishedSegments(await read($, published), pal)
+    const shared = extra.map(seg => (
+      <Box flexShrink={0}>
+        <Text color={pal.sep}>{SEPARATOR}</Text>
+        <Button key={seg.key} plain onPress={() => void runTool(seg.command!)}>
+          {seg.parts.map(p => (
+            <Text color={p.color} bold={p.bold}>
+              {p.text}
+            </Text>
+          ))}
+        </Button>
+        {(seg.actions ?? []).map(a => [
+          <Text color={pal.dim}>{' · '}</Text>,
+          <Button key={a.key} plain onPress={() => void runTool(a.command)}>
+            <Text color={pal.accent}>{a.label}</Text>
+          </Button>,
+        ])}
+      </Box>
+    ))
     const row = segs.map((seg, i) => (
       <Box flexShrink={0}>
         {i > 0 ? <Text color={pal.sep}>{SEPARATOR}</Text> : null}
@@ -468,8 +521,11 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column" width="100%">
         {options.length > 0 && !floats && box}
         <Box borderStyle="round" borderColor={pal.border} paddingX={1}>
-          <Box flexGrow={1} flexShrink={1} flexWrap="wrap" height={1} overflow="hidden">
+          <Box key="bottom-bar-segments" flexShrink={1} flexWrap="wrap" height={1} overflow="hidden">
             {row}
+          </Box>
+          <Box key="bottom-bar-published" flexGrow={1} flexShrink={100} height={1} overflow="hidden">
+            {shared}
           </Box>
           <Box flexShrink={0} marginLeft={1} columnGap={1}>
             {modes ? <Text color={pal.dim}>{modes}</Text> : null}

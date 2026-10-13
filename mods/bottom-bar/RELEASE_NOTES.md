@@ -1,3 +1,11 @@
+# Bottom Bar 1.4.0
+
+## New
+- Other mods can add their own segment to the bar, right after the agents segment: a name, a short detail and up to three small buttons (like Undo). Clicking it runs the mod's command. See "Segments from other mods" in the README.
+- On a narrow terminal those segments give way first, before the bar's own segments and the pills.
+
+---
+
 # Bottom Bar 1.3.0
 
 ## New

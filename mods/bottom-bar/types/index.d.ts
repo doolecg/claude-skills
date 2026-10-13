@@ -14,6 +14,26 @@ export type BarMode = {
   plugin: string
 }
 
+/** How a published segment's run is going; it picks the label's colour. */
+export type BarSegmentState = 'idle' | 'working' | 'done' | 'error'
+
+/** A smaller press after a segment's text (`Undo`, `Cancel`): a command and its words. */
+export type BarSegmentAction = { label: string; command: string }
+
+/**
+ * A segment another mod publishes in its own `segments` state, keyed by an id of its choosing,
+ * as the bar keeps it: drawn after the agents segment and pressed to run `command`.
+ */
+export type BarSegment = {
+  plugin: string
+  id: string
+  label: string
+  detail: string
+  command: string
+  state: BarSegmentState
+  actions: BarSegmentAction[]
+}
+
 export type BarTool = {
   name: string
   description: string
@@ -53,6 +73,8 @@ declare module 'claude-code' {
       tools: string[]
       toolStates: Record<string, 'on' | 'off'>
       modeStates: Record<string, BarMode>
+      /** Other mods' published segments, keyed `<plugin>:<id>`, in drawing order. */
+      published: Record<string, BarSegment>
       choices: BarTool[]
       filter: string
       /** The tools pill's name, from the `name` option; the toolbox is headed with it. */

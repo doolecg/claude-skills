@@ -70,6 +70,38 @@ await $.state.set({ plugin: 'my-mod', key: 'modes' }, { 'my-command': { label: '
 
 Declare it in the mod's `types/index.d.ts` (`modes: Record<string, { label: string; isOn: boolean }>`). The command should flip the mode when run with no argument, and reply with words like `My Mod is on.` A mod that only replies that way still gets a ● once its pill has been pressed.
 
+## Segments from other mods
+
+Another mod can put its own segment in the bar, right after the agents segment, with the same `│` divider. Clicking the segment runs a command. Prompt Enhancer uses this for its Enhance Prompt button.
+
+```
+◆ Opus 5.5 · 1M │ effort high │ ctx ▰▱▱▱▱▱▱▱▱▱ 13% │ 5h 53% │ ◆ 1 agent │ Enhance Prompt · Hindsight 6 · CodeGraph 3 · Undo
+```
+
+To add one, keep a `segments` value in your mod's plugin state, keyed by an id you choose. Write it at session start and whenever it changes:
+
+```ts
+await $.state.set({ plugin: 'my-mod', key: 'segments' }, {
+  main: {
+    label: 'My Mod',               // the segment's name, bold (40 characters at most)
+    detail: '3 found',             // optional, dim, after a "·" (60 at most)
+    command: 'my-command',         // run on click: a command name, then any arguments, no slash
+    state: 'done',                 // optional: idle, working (amber), done or error (red)
+    actions: [{ label: 'Undo', command: 'my-command undo' }], // optional, up to 3 smaller clicks
+  },
+})
+```
+
+Declare it in your mod's `types/index.d.ts` (`segments: Record<string, { label: string; detail?: string; command: string; state?: 'idle' | 'working' | 'done' | 'error'; actions?: { label: string; command: string }[] }>`).
+
+- Each mod gets up to 4 segments. Anything malformed is left out.
+- Segments are ordered by mod name, then by the order of your ids, so a rewrite never moves one.
+- Writing the value again replaces all of your mod's segments. Write `{}` to remove them.
+- On a narrow terminal, segments from other mods give way first: they are cut off from the right, before the bar's own segments. The pills always stay.
+- The bar draws each segment as a button keyed `seg:<your mod>:<id>`, and each action as `seg:<your mod>:<id>:<n>`, counting from 0.
+- The bar's row carries the key `bottom-bar-segments`. A mod that draws its own fallback button in that row can look for it and stay out of the way.
+- A command the bar runs writes its state under the bar's own call, where the bar cannot see it. The bar picks up those writes when the command returns. To show progress while the command runs (say, "working"), handle the click yourself: hook `ui.press` on your segment's key and answer `{ element }` without calling `next`. Your writes then reach the bar as they happen.
+
 Terminal only: the desktop app keeps its own footer.
 
 ## Development
