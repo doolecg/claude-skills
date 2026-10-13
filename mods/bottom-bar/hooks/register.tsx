@@ -1,8 +1,9 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, StateWrite } from 'claude-code'
+import type { Elements, EngineInterface, Register, StateWrite } from 'claude-code'
 
-import type { BarFigures, BarSetting, BarTool } from '../types'
+import type { BarFigures, BarMod, BarSetting, BarTool } from '../types'
 import {
+  ACCENTS,
   EFFORTS,
   EMPTY_FIGURES,
   SEPARATOR,
@@ -22,10 +23,12 @@ import {
   toolLabel,
 } from './bar-logic'
 import { toolboxRows, toolboxWidth } from './toolbox'
-import { settingsList } from './toolbox-logic'
+import { pickInstalls, settingsList } from './toolbox-logic'
+import type { Install } from './toolbox-logic'
 
 const LABEL = "Doole's Tools"
 const PICKER = 'bottom-bar-tools'
+const TOOLBOX = 'bottom-bar-toolbox'
 const CHOOSE = 'choose-pills'
 
 const figures = atom({ plugin: 'bottom-bar', key: 'figures' } as const, EMPTY_FIGURES)
@@ -40,6 +43,8 @@ const choices = atom({ plugin: 'bottom-bar', key: 'choices' } as const, [])
 const filter = atom({ plugin: 'bottom-bar', key: 'filter' } as const, '')
 const label = atom({ plugin: 'bottom-bar', key: 'label' } as const, LABEL)
 const settings = atom({ plugin: 'bottom-bar', key: 'settings' } as const, [])
+const view = atom({ plugin: 'bottom-bar', key: 'view' } as const, 'home')
+const mods = atom({ plugin: 'bottom-bar', key: 'mods' } as const, [])
 
 type Dollar = EngineInterface
 
@@ -138,6 +143,56 @@ async function setOption($: Dollar, s: BarSetting, value: string | number | bool
   await loadSettings($)
 }
 
+/** The installed mods, read off `claude plugin list`: plugins whose `hooks.json` names a module. */
+async function loadMods($: Dollar): Promise<void> {
+  const ran = await $.process.run(['claude', 'plugin', 'list', '--json'], { timeoutMs: 30000 })
+  if (ran.exitCode !== 0) return
+  const list = JSON.parse(ran.stdout) as Install[]
+  const out: BarMod[] = []
+  for (const p of pickInstalls(list, await $.session.root())) {
+    const name = p.id.split('@')[0]!
+    if (name === 'bottom-bar') continue
+    try {
+      const hooks = JSON.parse(await $.fs.read(`${p.installPath}/hooks/hooks.json`)) as { modules?: unknown }
+      if (!Array.isArray(hooks.modules) || hooks.modules.length === 0) continue
+    } catch {
+      continue
+    }
+    let description = ''
+    try {
+      const manifest = JSON.parse(await $.fs.read(`${p.installPath}/.claude-plugin/plugin.json`)) as { description?: unknown }
+      if (typeof manifest.description === 'string') description = manifest.description
+    } catch {}
+    out.push({ id: p.id, name, label: toolLabel(name), description, scope: p.scope, isEnabled: p.enabled === true })
+  }
+  await update($, mods, () => out)
+}
+
+async function toggleMod($: Dollar, mod: BarMod): Promise<void> {
+  const verb = mod.isEnabled ? 'disable' : 'enable'
+  try {
+    const ran = await $.process.run(['claude', 'plugin', verb, mod.id, '--scope', mod.scope], { timeoutMs: 60000 })
+    if (ran.exitCode !== 0) {
+      $.ui.toast(`Could not ${verb} ${mod.label}: ${(ran.stderr || ran.stdout).trim().split('\n')[0]}`)
+      return
+    }
+  } catch {
+    $.ui.toast(`Could not ${verb} ${mod.label}`)
+    return
+  }
+  await update($, mods, list => list.map(m => (m.id === mod.id ? { ...m, isEnabled: !mod.isEnabled } : m)))
+  try {
+    await $.command.run({ command: 'reload-plugins', args: '' })
+  } catch {
+    $.ui.toast(`${mod.label} is ${verb}d. Run /reload-plugins to apply it.`)
+  }
+}
+
+async function setOwn($: Dollar, field: string, value: string): Promise<void> {
+  const set = await $.config.set({ key: `bottom-bar.${field}`, value })
+  if (set.deny !== undefined) $.ui.toast(`Could not change the ${field}: ${set.deny}`)
+}
+
 async function runCommand($: Dollar, name: string): Promise<void> {
   try {
     await noteReply($, name, await $.command.run({ command: name, args: '' }))
@@ -153,8 +208,57 @@ async function openPicker($: Dollar): Promise<void> {
   await $.ui.open({ id: PICKER, title: await read($, label), focus: true, closeOnEscape: true })
 }
 
+async function closeTools($: Dollar): Promise<void> {
+  if ((await read($, menu)) === 'tools') await update($, menu, () => '')
+  try {
+    await $.ui.close({ id: TOOLBOX })
+  } catch {}
+}
+
+/** The toolbox's rows, for the box in the bar or the docked pane. */
+async function toolboxTree(
+  $: Dollar,
+  els: Elements['terminal'],
+  width: number,
+  colour: string,
+  hasClose = true,
+): Promise<JSX.Element[]> {
+  const loaded = await read($, models)
+  const title = await read($, label)
+  return toolboxRows({
+    els,
+    pal: paletteFor(await read($, theme), colour),
+    width,
+    title,
+    view: await read($, view),
+    colour,
+    figures: await read($, figures),
+    models: loaded.length > 0 ? loaded : modelChoices(undefined),
+    modes: await read($, modeStates),
+    mods: await read($, mods),
+    choices: await read($, choices),
+    settings: await read($, settings),
+    pickModel: alias => void pickModel($, alias, true),
+    pickEffort: level => void pickEffort($, level, true),
+    flip: command => void runCommand($, command),
+    toggleMod: mod => void toggleMod($, mod),
+    setOption: (s, value) => void setOption($, s, value),
+    setName: value => {
+      if (!value) return
+      void update($, label, () => value).then(() => setOwn($, 'name', value))
+    },
+    setColour: value => void setOwn($, 'colour', value),
+    setView: page => void update($, view, () => page),
+    close: () => void closeTools($),
+    hasClose,
+    launch: command => void closeTools($).then(() => runCommand($, command)),
+    choosePills: () => void openPicker($),
+  })
+}
+
 export const register: Register = (on, options) => {
   const name = typeof options.name === 'string' && options.name.trim() ? options.name.trim() : LABEL
+  const colour = typeof options.colour === 'string' && ACCENTS[options.colour] ? options.colour : 'Coral'
 
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
@@ -167,6 +271,7 @@ export const register: Register = (on, options) => {
     try {
       await loadModels($)
     } catch {}
+    void loadMods($).catch(() => {})
     $.clock.every(4000, () => void refresh($))
     await $.command.register({ name: CHOOSE, description: 'Choose which mods get a pill in the bottom bar' })
     return ran
@@ -234,7 +339,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     if (e.surface !== 'terminal') return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
-    const pal = paletteFor(await read($, theme))
+    const pal = paletteFor(await read($, theme), colour)
     const f = await read($, figures)
     const chosen = await read($, tools)
     const shown = await read($, menu)
@@ -242,7 +347,13 @@ export const register: Register = (on, options) => {
     const modelList = loaded.length > 0 ? loaded : modelChoices(undefined)
 
     const modes = e.props.modes.length > 0 ? `${e.props.modes.join(' & ')}  ` : ''
-    const toggleMenu = (which: string) => update($, menu, now => (now === which ? '' : which))
+    // Fullscreen docks the toolbox as a pane beside the transcript, so the prompt and bar stay put;
+    // the main screen has no dock, so there it opens in the bar.
+    const docks = e.viewport?.isFullscreen === true
+    const toggleMenu = async (which: string) => {
+      if ((await read($, menu)) === 'tools') await closeTools($)
+      await update($, menu, now => (now === which ? '' : which))
+    }
 
     // One row that clips: a segment with no room wraps onto the hidden second row.
     const segs = segments(f, pal)
@@ -272,11 +383,15 @@ export const register: Register = (on, options) => {
     }
     const openTools = async () => {
       if ((await read($, menu)) !== 'tools') {
+        await update($, view, () => 'home')
+        void loadMods($).catch(() => {})
         try {
           await Promise.all([loadChoices($), loadSettings($)])
         } catch {}
       }
-      await toggleMenu('tools')
+      if ((await read($, menu)) === 'tools') return closeTools($)
+      await update($, menu, () => 'tools')
+      if (docks) await $.ui.open({ id: TOOLBOX, title: await read($, label), closeOnEscape: true, columns: 66 })
     }
     const title = await read($, label)
 
@@ -321,31 +436,14 @@ export const register: Register = (on, options) => {
           )
         : shown === 'effort'
           ? EFFORTS.map(level => choice(`set-effort:${level}`, level, f.effort === level, () => pickEffort($, level)))
-          : shown === 'tools'
-            ? toolboxRows({
-                els: $.ui.resolve(e),
-                pal,
-                width: toolboxWidth(e.viewport?.columns ?? 80) - 4,
-                title,
-                figures: f,
-                models: modelList,
-                modes: onOff,
-                choices: await read($, choices),
-                settings: await read($, settings),
-                pickModel: alias => void pickModel($, alias, true),
-                pickEffort: level => void pickEffort($, level, true),
-                flip: command => void runCommand($, command),
-                setOption: (s, value) => void setOption($, s, value),
-                launch: command => void runTool(command),
-                choosePills: () => void openPicker($),
-              })
+          : shown === 'tools' && !docks
+            ? await toolboxTree($, $.ui.resolve(e), toolboxWidth(e.viewport?.columns ?? 80) - 4, colour)
             : []
 
     // Fullscreen paints a small box over the rows above the bar; the main screen clips
     // a placed box to the site, so there it sits in the flow and pushes the bar down.
-    // The toolbox is taller than the rows a float may paint over, so it always sits in the flow.
     const atRight = shown === 'tools'
-    const floats = !atRight && e.viewport?.isFullscreen === true && !(await read($, isWorking))
+    const floats = !atRight && docks && !(await read($, isWorking))
     const offset = atRight ? 0 : segmentOffset(segs, shown)
     const box = (
       <Box
@@ -388,11 +486,41 @@ export const register: Register = (on, options) => {
     )
   })
 
+  on('ui.render', { component: 'Pane', requestId: TOOLBOX }, async ($, e) => {
+    if (e.surface !== 'terminal') {
+      const { Text } = $.ui.resolve(e)
+      return <Text>The toolbox opens from the bar in the terminal.</Text>
+    }
+    const els = $.ui.resolve(e)
+    const { Box } = els
+    const pal = paletteFor(await read($, theme), colour)
+    const rows = await toolboxTree($, els, e.props.bodyColumns - 4, colour, false)
+    return (
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={pal.border}
+        backgroundColor={pal.panel}
+        paddingX={1}
+        width={e.props.bodyColumns}
+      >
+        {rows}
+      </Box>
+    )
+  })
+
+  // The person's own close of the docked toolbox (Escape, its close mark) closes it in the bar too.
+  on('ui.close', async ($, e, next) => {
+    const ran = await next(e)
+    if (e.id === TOOLBOX && e.origin.kind !== 'plugin' && (await read($, menu)) === 'tools') await update($, menu, () => '')
+    return ran
+  })
+
   on('ui.render', { component: 'Pane', requestId: PICKER }, async ($, e) => {
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
     const Input = 'Input' in els ? els.Input : undefined
-    const pal = paletteFor(await read($, theme))
+    const pal = paletteFor(await read($, theme), colour)
     const all = await read($, choices)
     const chosen = await read($, tools)
     const query = await read($, filter)

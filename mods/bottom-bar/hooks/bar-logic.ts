@@ -59,8 +59,22 @@ export const LIGHT: Palette = {
   ink: '#FBF8F3',
 }
 
-export const paletteFor = (theme: unknown): Palette =>
-  typeof theme === 'string' && theme.startsWith('light') ? LIGHT : DARK
+/** The `colour` option's accents, each as `[dark, light]`; Coral is the palettes' own. */
+export const ACCENTS: Record<string, readonly [string, string]> = {
+  Coral: [DARK.accent, LIGHT.accent],
+  Amber: ['#E5A84B', '#9A6B10'],
+  Sage: ['#8FBF8F', '#4E7D57'],
+  Sky: ['#6FB3E0', '#2F6FA3'],
+  Lilac: ['#B39DDB', '#6A4FB0'],
+  Rose: ['#E07A9A', '#B0446A'],
+}
+
+export function paletteFor(theme: unknown, colour?: string): Palette {
+  const isLight = typeof theme === 'string' && theme.startsWith('light')
+  const base = isLight ? LIGHT : DARK
+  const accent = colour && colour !== 'Coral' ? ACCENTS[colour]?.[isLight ? 1 : 0] : undefined
+  return accent ? { ...base, accent } : base
+}
 
 const FAMILIES = ['opus', 'sonnet', 'haiku', 'fable'] as const
 

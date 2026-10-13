@@ -32,6 +32,16 @@ export type BarSetting = {
   isLocked: boolean
 }
 
+/** An installed mod (a plugin with a hooks module), as `claude plugin list` reports it. */
+export type BarMod = {
+  id: string
+  name: string
+  label: string
+  description: string
+  scope: string
+  isEnabled: boolean
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'bottom-bar': {
@@ -48,6 +58,9 @@ declare module 'claude-code' {
       /** The tools pill's name, from the `name` option; the toolbox is headed with it. */
       label: string
       settings: BarSetting[]
+      /** The toolbox page shown: `home` or `settings`. */
+      view: string
+      mods: BarMod[]
     }
   }
 }

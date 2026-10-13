@@ -1,4 +1,4 @@
-import type { BarMode, BarSetting, BarTool } from '../types'
+import type { BarMod, BarMode, BarSetting, BarTool } from '../types'
 import { isModCommand, type Palette } from './bar-logic'
 
 /** `xhigh` → `XHigh`, `low` → `Low`. */
@@ -64,3 +64,44 @@ export function nextOption(options: readonly string[], value: unknown): string |
 export const ICONS = ['✦', '◆', '★', '▦', '●', '▲'] as const
 export const iconColor = (i: number, pal: Palette): string =>
   [pal.accent, pal.info, pal.good, pal.warn][i % 4]!
+
+/** One `claude plugin list --json` entry. */
+export type Install = { id: string; scope: string; enabled: boolean; installPath: string; projectPath?: string }
+
+const plainPath = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+const samePath = (a: string, b: string) => plainPath(a) === plainPath(b)
+
+/** One install per plugin: the user scope's, else this project's; other projects' left out. */
+export function pickInstalls(list: readonly Install[], projectRoot: string): Install[] {
+  const out = new Map<string, Install>()
+  for (const p of list) {
+    if (p.scope === 'project' || p.scope === 'local') {
+      if (!p.projectPath || !samePath(p.projectPath, projectRoot)) continue
+    }
+    const had = out.get(p.id)
+    if (!had || (had.scope !== 'user' && p.scope === 'user')) out.set(p.id, p)
+  }
+  return [...out.values()]
+}
+
+/** A row of the toolbox's Mods list: a mod's on/off mode while it is running, else the plugin itself. */
+export type ModLine = { key: string; label: string; about: string; isOn: boolean; command?: string; mod?: BarMod }
+
+export function modLines(mods: readonly BarMod[], modes: Record<string, BarMode>): ModLine[] {
+  const out: ModLine[] = []
+  const used = new Set<string>()
+  for (const mod of mods) {
+    const entry = Object.entries(modes).find(([, m]) => m.plugin === mod.name)
+    if (entry && mod.isEnabled) {
+      const [command, mode] = entry
+      used.add(command)
+      out.push({ key: `tb-mode:${command}`, label: mode.label, about: mod.description, isOn: mode.isOn, command })
+    } else {
+      out.push({ key: `tb-mod:${mod.id}`, label: mod.label, about: mod.description, isOn: mod.isEnabled, mod })
+    }
+  }
+  for (const [command, mode] of Object.entries(modes)) {
+    if (!used.has(command)) out.push({ key: `tb-mode:${command}`, label: mode.label, about: '', isOn: mode.isOn, command })
+  }
+  return out
+}

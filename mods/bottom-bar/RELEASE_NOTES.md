@@ -1,3 +1,17 @@
+# Bottom Bar 1.3.0
+
+## New
+- The toolbox has a Mods list: every mod you have installed, each with an On/Off switch.
+- A Settings page in the toolbox (⚙ Settings): change the name and the colour, and every other mod's options.
+- A `Colour` option for the accent colour: Coral, Amber, Sage, Sky, Lilac or Rose.
+- A ✕ to close the toolbox.
+
+## Changed
+- In fullscreen the toolbox opens as a panel down the right of the screen, so the prompt and the bar no longer move when it opens.
+- A tidier toolbox: clear section headings, launchers three to a row, and the mods' options moved to the Settings page.
+
+---
+
 # Bottom Bar 1.2.0
 
 ## New

@@ -33,24 +33,30 @@ The bar replaces a `statusLine` script. If you have one in `~/.claude/settings.j
 
 ## The toolbox
 
-The Doole's Tools pill opens a toolbox right above it. Click the pill again to close it.
+The Doole's Tools pill opens the toolbox. In fullscreen it opens as a panel down the right of the screen, so the prompt and the bar stay where they are; on the main screen (no fullscreen) it opens right above the pill. Click the pill again, press Esc or click ✕ to close it.
 
 ```
-╭──────────────────────────────────────────────────────────────────╮
-│ ◆ D O O L E ' S   T O O L S                      Opus 5.5 · High │
-│ MODEL   Sonnet  Opus 5.5  Haiku  Fable                           │
-│ EFFORT  Low  Medium  High  XHigh  Max                            │
-│ S E T T I N G S                                                  │
-│ ● Clean View      Turn Clean View on or off (no argume…   ● On   │
-│ ○ Tools name      The name on the tools p…  Doole's Tools        │
-│ L A U N C H                                                      │
-│ ✎ Choose pills                  ✦ Guard                          │
-╰──────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────╮
+│ ◆ D O O L E ' S   T O O L S                       ⚙ Settings │
+│ Model      Sonnet  Opus 5.5  Haiku  Fable                    │
+│ Effort     Low  Medium  High  XHigh  Max                     │
+│ MODS ─────────────────────────────────────────────────────── │
+│ ● Clean View        A calm, plain-English checkli…    ● On   │
+│ ○ Road Trip         A small driving game in a pan…    ○ Off  │
+│ LAUNCH ───────────────────────────────────────────────────── │
+│ ✎ Choose pills      ✦ Guard             ◆ Diff               │
+╰──────────────────────────────────────────────────────────────╯
 ```
 
 - **Model** and **Effort**: click one to switch. The toolbox stays open.
-- **Settings**: an On/Off switch for every mod with an on/off mode (below), and every mod's own options: switches for yes/no options, a button that steps through pick-one options, and a text box for names and numbers (press Enter to save).
+- **Mods**: every mod you have installed, with an On/Off switch. For a mod with an on/off mode (below), the switch flips the mode. For any other mod it turns the mod itself on or off (`claude plugin enable` / `disable`) and reloads the plugins.
 - **Launch**: `Choose pills`, then every other command a mod adds. Clicking one closes the toolbox and runs it.
+- **⚙ Settings** opens the settings page:
+  - **Name**: the name on the pill and the toolbox. Type it and press Enter.
+  - **Colour**: the accent colour of the bar, the pill and the toolbox (Coral, Amber, Sage, Sky, Lilac or Rose).
+  - **Mod options**: every other mod's own options: switches for yes/no options, a button that steps through pick-one options, and a text box for names and numbers (press Enter to save).
+
+Name and Colour are also the `Tools name` and `Colour` options in `/config` and `/plugin`.
 
 ## On/off modes
 

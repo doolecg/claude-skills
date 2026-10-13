@@ -1,6 +1,7 @@
 import { test, expect, mock } from 'claude-code/testing'
 
 import {
+  ACCENTS,
   EFFORTS,
   EMPTY_FIGURES,
   DARK,
@@ -23,9 +24,19 @@ import {
   windowLabel,
 } from '../hooks/bar-logic'
 import { toolboxWidth } from '../hooks/toolbox'
-import { currentAlias, effortName, launchList, nextOption, settingsList, spaced } from '../hooks/toolbox-logic'
+import {
+  currentAlias,
+  effortName,
+  launchList,
+  modLines,
+  nextOption,
+  pickInstalls,
+  settingsList,
+  spaced,
+} from '../hooks/toolbox-logic'
 
 const PICKER = 'bottom-bar-tools'
+const TOOLBOX = 'bottom-bar-toolbox'
 
 const cmd = (name: string, plugin: string, source: string, description = `${name} command`) => ({
   name,
@@ -810,7 +821,7 @@ test('an open model box is swapped for the toolbox by the pill', async ($, on) =
   expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
 })
 
-test('toolbox: the header spells the name out and shows the model and effort', async ($, on) => {
+test('toolbox: the header spells the name out and the rows are labelled', async ($, on) => {
   world(on)
   registerCommands(on)
   seedModel(on)
@@ -819,9 +830,9 @@ test('toolbox: the header spells the name out and shows the model and effort', a
   await bar.press({ key: 'pill' })
 
   expect(await bar.find({ type: 'Text', text: "◆ D O O L E ' S   T O O L S" })).toBeDefined()
-  expect(await bar.find({ type: 'Text', text: 'Opus 5.5 · High' })).toBeDefined()
-  expect(await bar.find({ type: 'Text', text: 'MODEL  ' })).toBeDefined()
-  expect(await bar.find({ type: 'Text', text: 'EFFORT ' })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'Opus 5.5 · High' })).toBeUndefined()
+  expect(await bar.find({ type: 'Text', text: 'Model     ' })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'Effort    ' })).toBeDefined()
 })
 
 test('toolbox: a configured name is spelled out in the header', { options: { name: "Tristen's Tools" } }, async ($, on) => {
@@ -863,6 +874,9 @@ test('toolbox: the model and effort chips mark what is in use', async ($, on) =>
   const filled = async (key: string) => findProp(await bar.find({ key }), 'backgroundColor', DARK.accent)
   expect(await filled('tb-model:opus')).toBeDefined()
   expect(await filled('tb-model:sonnet')).toBeUndefined()
+  const inUse = async (key: string) => findProp(await bar.find({ key }), 'backgroundColor', DARK.info)
+  expect(await inUse('tb-effort:high')).toBeDefined()
+  expect(await inUse('tb-effort:low')).toBeUndefined()
 })
 
 test('toolbox: an effort chip runs /effort and the box stays open', async ($, on) => {
@@ -876,7 +890,8 @@ test('toolbox: an effort chip runs /effort and the box stays open', async ($, on
   await bar.press({ key: 'tb-effort:max' })
   expect(seen.runs).toEqual([{ command: 'effort', args: 'max' }])
   expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
-  expect(await bar.find({ type: 'Text', text: 'Opus 5.5 · Max' })).toBeDefined()
+  expect(findProp(await bar.find({ key: 'tb-effort:max' }), 'backgroundColor', DARK.info)).toBeDefined()
+  expect(findProp(await bar.find({ key: 'tb-effort:high' }), 'backgroundColor', DARK.info)).toBeUndefined()
   expect((await bar.find({ key: 'effort' }))?.text).toContain('max')
 })
 
@@ -892,7 +907,8 @@ test('toolbox: a model chip sets the model through config.set and the box stays 
   expect(engine.configSets).toEqual([{ key: 'model', value: 'sonnet' }])
   expect(seen.toasts).toEqual([])
   expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
-  expect(await bar.find({ type: 'Text', text: 'Sonnet · High' })).toBeDefined()
+  expect(findProp(await bar.find({ key: 'tb-model:sonnet' }), 'backgroundColor', DARK.accent)).toBeDefined()
+  expect(findProp(await bar.find({ key: 'tb-model:opus' }), 'backgroundColor', DARK.accent)).toBeUndefined()
 })
 
 test('toolbox: a refused model change shows a toast and keeps the box open', async ($, on) => {
@@ -906,7 +922,7 @@ test('toolbox: a refused model change shows a toast and keeps the box open', asy
   await bar.press({ key: 'tb-model:haiku' })
   expect(seen.toasts.join(' ')).toContain('Could not change the model: managed by your organisation')
   expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
-  expect(await bar.find({ type: 'Text', text: 'Opus 5.5 · High' })).toBeDefined()
+  expect(findProp(await bar.find({ key: 'tb-model:opus' }), 'backgroundColor', DARK.accent)).toBeDefined()
 })
 
 // A plugin's own /config rows, as the engine lists them, and some of the engine's.
@@ -938,6 +954,7 @@ test("toolbox: a plugin's /config rows get a control each; the engine's are left
   await startSession($)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
+  await bar.press({ key: 'tb-settings' })
 
   expect(await bar.find({ key: 'tb-set:demo.enabled' })).toBeDefined()
   expect(await bar.find({ key: 'tb-set:demo.style' })).toBeDefined()
@@ -960,7 +977,8 @@ test('toolbox: with no plugin setting the box says so', async ($, on) => {
   await startSession($)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
-  expect(await bar.find({ type: 'Text', text: 'No mod has a setting yet.' })).toBeDefined()
+  await bar.press({ key: 'tb-settings' })
+  expect(await bar.find({ type: 'Text', text: 'No mod has options yet.' })).toBeDefined()
 })
 
 test('toolbox: a boolean setting flips through config.set', async ($, on) => {
@@ -970,11 +988,12 @@ test('toolbox: a boolean setting flips through config.set', async ($, on) => {
   await startSession($)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
+  await bar.press({ key: 'tb-settings' })
 
   await bar.press({ key: 'tb-set:demo.enabled' })
   expect(engine.configSets).toEqual([{ key: 'demo.enabled', value: true }])
   expect((await bar.find({ key: 'tb-set:demo.enabled' }))?.text).toContain('On')
-  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-back' })).toBeDefined()
 
   await bar.press({ key: 'tb-set:demo.enabled' })
   expect(engine.configSets.at(-1)).toEqual({ key: 'demo.enabled', value: false })
@@ -988,13 +1007,14 @@ test('toolbox: a choice setting steps to the next option, round to the first', a
   await startSession($)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
+  await bar.press({ key: 'tb-settings' })
 
   await bar.press({ key: 'tb-set:demo.style' })
   expect(engine.configSets).toEqual([{ key: 'demo.style', value: 'c' }])
   expect((await bar.find({ key: 'tb-set:demo.style' }))?.text).toContain('c ▸')
   await bar.press({ key: 'tb-set:demo.style' })
   expect(engine.configSets.at(-1)).toEqual({ key: 'demo.style', value: 'a' })
-  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-back' })).toBeDefined()
 })
 
 test('toolbox: a text or number setting is an input that submits through config.set', async ($, on) => {
@@ -1004,6 +1024,7 @@ test('toolbox: a text or number setting is an input that submits through config.
   await startSession($)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
+  await bar.press({ key: 'tb-settings' })
 
   await bar.input({ key: 'tb-set:demo.title', text: '  new title ', kind: 'submit' })
   expect(engine.configSets).toEqual([{ key: 'demo.title', value: 'new title' }])
@@ -1021,6 +1042,7 @@ test('toolbox: a refused setting shows a toast', async ($, on) => {
   await startSession($)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
+  await bar.press({ key: 'tb-settings' })
   await bar.press({ key: 'tb-set:demo.enabled' })
   expect(seen.toasts.join(' ')).toContain('Could not change enabled: locked by policy')
 })
@@ -1032,6 +1054,7 @@ test('toolbox: a locked setting shows its value and no control', async ($, on) =
   await startSession($)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
+  await bar.press({ key: 'tb-settings' })
   expect(await bar.find({ key: 'tb-set:demo.enabled' })).toBeUndefined()
   expect(await bar.find({ type: 'Text', text: 'true (locked)' })).toBeDefined()
 })
@@ -1302,4 +1325,330 @@ test('a command that is no mode and no pill leaves the mode pills alone', { plug
   await $.command.run({ command: 'compact', args: '' })
   expect(seen.ran).toContain('compact')
   expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('● Quiet Mode')
+})
+
+// ------------------------------------------------- settings page, colour, mods
+
+const openSettings = async (bar: any) => {
+  await bar.press({ key: 'pill' })
+  await bar.press({ key: 'tb-settings' })
+}
+
+test('settings page: the gear opens it, Back returns home, the cross closes the box', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ key: 'tb-settings' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-close' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-back' })).toBeUndefined()
+
+  await bar.press({ key: 'tb-settings' })
+  expect(await bar.find({ type: 'Text', text: '◆ S E T T I N G S' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-back' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-name' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-model:opus' })).toBeUndefined()
+
+  await bar.press({ key: 'tb-back' })
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-back' })).toBeUndefined()
+
+  await bar.press({ key: 'tb-settings' })
+  await bar.press({ key: 'tb-close' })
+  expect(await bar.find({ key: 'tb-back' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
+  expect((await bar.find({ key: 'pill' }))?.text).toContain('▲')
+
+  // Opening the box again starts on the home page.
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+})
+
+test("settings page: the bar's own options are left out of the mod options", async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on, { rows: [configRow('bottom-bar.name', 'text', 'x'), configRow('demo.enabled', 'boolean', true)] })
+  await startSession($)
+  const bar = await mountBar($)
+  await openSettings(bar)
+  expect(await bar.find({ key: 'tb-set:bottom-bar.name' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-set:demo.enabled' })).toBeDefined()
+})
+
+test('settings page: a colour chip sets bottom-bar.colour', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  const engine = seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await openSettings(bar)
+  expect(await keysOf(bar, 'tb-colour:')).toEqual([
+    'tb-colour:Coral',
+    'tb-colour:Amber',
+    'tb-colour:Sage',
+    'tb-colour:Sky',
+    'tb-colour:Lilac',
+    'tb-colour:Rose',
+  ])
+  await bar.press({ key: 'tb-colour:Lilac' })
+  expect(engine.configSets).toEqual([{ key: 'bottom-bar.colour', value: 'Lilac' }])
+})
+
+test('the colour option recolours the filled model chip', { options: { colour: 'Sky' } }, async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  const chip = await bar.find({ key: 'tb-model:opus' })
+  expect(findProp(chip, 'backgroundColor', ACCENTS.Sky![0])).toBeDefined()
+  expect(findProp(chip, 'backgroundColor', DARK.accent)).toBeUndefined()
+})
+
+test('paletteFor swaps the accent for a colour, keeping Coral and unknown names as they are', () => {
+  expect(paletteFor('dark', 'Sky')).toEqual({ ...DARK, accent: ACCENTS.Sky![0] })
+  expect(paletteFor('light', 'Sky')).toEqual({ ...LIGHT, accent: ACCENTS.Sky![1] })
+  expect(paletteFor('light-daltonized', 'Rose').accent).toBe(ACCENTS.Rose![1])
+  expect(paletteFor('dark', 'Coral')).toBe(DARK)
+  expect(paletteFor('light', 'Coral')).toBe(LIGHT)
+  expect(paletteFor('dark', 'Nope')).toBe(DARK)
+  expect(paletteFor('dark', undefined)).toBe(DARK)
+})
+
+test('settings page: the name input sets bottom-bar.name, trimmed, and blank is ignored', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  const engine = seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await openSettings(bar)
+
+  await bar.input({ key: 'tb-name', text: '   ', kind: 'submit' })
+  expect(engine.configSets).toEqual([])
+  expect((await bar.find({ key: 'pill' }))?.text).toContain("Doole's Tools")
+
+  await bar.input({ key: 'tb-name', text: '  Mine  ', kind: 'submit' })
+  expect(engine.configSets).toEqual([{ key: 'bottom-bar.name', value: 'Mine' }])
+  expect((await bar.find({ key: 'pill' }))?.text).toContain('Mine')
+})
+
+// A fake `claude plugin list --json` and the files beneath each install.
+const plugin = (id: string, enabled: boolean, extra: Record<string, unknown> = {}) => ({
+  id,
+  scope: 'user',
+  enabled,
+  installPath: `/p/${id.split('@')[0]}`,
+  ...extra,
+})
+const PLUGIN_LIST = [
+  plugin('demo@mk', true),
+  plugin('plain@mk', true),
+  plugin('bottom-bar@mk', true),
+  plugin('off@mk', false),
+  plugin('elsewhere@mk', true, { scope: 'project', projectPath: '/other' }),
+]
+const MOD_FILES: Record<string, string> = {
+  '/p/demo/hooks/hooks.json': JSON.stringify({ modules: ['hooks/index.ts'] }),
+  '/p/demo/.claude-plugin/plugin.json': JSON.stringify({ description: 'Demo mod' }),
+  '/p/plain/hooks/hooks.json': JSON.stringify({ hooks: {} }),
+  '/p/bottom-bar/hooks/hooks.json': JSON.stringify({ modules: ['hooks/index.ts'] }),
+  '/p/off/hooks/hooks.json': JSON.stringify({ modules: ['hooks/index.ts'] }),
+  '/p/off/.claude-plugin/plugin.json': JSON.stringify({ description: 'Off mod' }),
+  '/p/elsewhere/hooks/hooks.json': JSON.stringify({ modules: ['hooks/index.ts'] }),
+}
+
+// Answers the engine calls the mods list is built from, and the enable/disable the rows run.
+function modsWorld(on: any, opts: { list?: unknown[]; files?: Record<string, string>; fail?: boolean } = {}) {
+  const seen = { argvs: [] as string[][] }
+  const done = { isStdoutTruncated: false, isStderrTruncated: false }
+  on('session.root', () => ({ value: '/work' }))
+  on('process.run', (_$: any, e: any) => {
+    seen.argvs.push([...e.argv])
+    const isList = e.argv[2] === 'list'
+    if (!isList && opts.fail) return { value: { exitCode: 1, stdout: '', stderr: 'boom\nmore', ...done } }
+    return { value: { exitCode: 0, stdout: isList ? JSON.stringify(opts.list ?? PLUGIN_LIST) : '', stderr: '', ...done } }
+  })
+  on('fs.read', (_$: any, e: any) => {
+    // The engine resolves a rooted path against the drive on Windows; match on the tail.
+    const path = String(e.path).replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+    const text = (opts.files ?? MOD_FILES)[path]
+    if (text === undefined) throw new Error(`no such file: ${e.path}`)
+    return { value: text }
+  })
+  return seen
+}
+
+test('toolbox: the mods list shows installed mods only, with an on/off toggle each', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  const seen = modsWorld(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  expect(seen.argvs[0]).toEqual(['claude', 'plugin', 'list', '--json'])
+  expect(await keysOf(bar, 'tb-mod:')).toEqual(['tb-mod:demo@mk', 'tb-mod:off@mk'])
+  expect(await bar.find({ type: 'Text', text: 'MODS' })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'No mods installed.' })).toBeUndefined()
+  expect((await bar.find({ key: 'tb-mod:demo@mk' }))?.text).toContain('On')
+  expect((await bar.find({ key: 'tb-mod:off@mk' }))?.text).toContain('Off')
+})
+
+test('toolbox: with no mod installed the list says so', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  modsWorld(on, { list: [plugin('plain@mk', true)] })
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ type: 'Text', text: 'No mods installed.' })).toBeDefined()
+  expect(await keysOf(bar, 'tb-mod:')).toEqual([])
+})
+
+test('toolbox: pressing a disabled mod enables it, then reloads plugins', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  seedModel(on)
+  const proc = modsWorld(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  await bar.press({ key: 'tb-mod:off@mk' })
+  expect(proc.argvs.at(-1)).toEqual(['claude', 'plugin', 'enable', 'off@mk', '--scope', 'user'])
+  expect(seen.runs).toEqual([{ command: 'reload-plugins', args: '' }])
+  expect(seen.toasts).toEqual([])
+  expect((await bar.find({ key: 'tb-mod:off@mk' }))?.text).toContain('On')
+
+  await bar.press({ key: 'tb-mod:off@mk' })
+  expect(proc.argvs.at(-1)).toEqual(['claude', 'plugin', 'disable', 'off@mk', '--scope', 'user'])
+})
+
+test('toolbox: a failing enable shows a toast and does not reload', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  seedModel(on)
+  modsWorld(on, { fail: true })
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  await bar.press({ key: 'tb-mod:off@mk' })
+  expect(seen.toasts.join(' ')).toContain('Could not enable Off: boom')
+  expect(seen.runs).toEqual([])
+  expect((await bar.find({ key: 'tb-mod:off@mk' }))?.text).toContain('Off')
+})
+
+test('toolbox: a mod with a published mode is a tb-mode toggle in the MODS list', { plugins: [DEMO_MOD] }, async ($, on) => {
+  world(on, {}, [cmd('demo', 'demo-mode', 'plugin', 'Flip the demo mode'), COMPACT])
+  registerCommands(on)
+  seedModel(on)
+  modsWorld(on, {
+    list: [plugin('demo-mode@mk', true)],
+    files: {
+      '/p/demo-mode/hooks/hooks.json': JSON.stringify({ modules: ['hooks/index.ts'] }),
+      '/p/demo-mode/.claude-plugin/plugin.json': JSON.stringify({ description: 'Flips a demo mode' }),
+    },
+  })
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  expect(await keysOf(bar, 'tb-mode:')).toEqual(['tb-mode:demo'])
+  expect(await keysOf(bar, 'tb-mod:')).toEqual([])
+  expect((await bar.find({ key: 'tb-mode:demo' }))?.text).toContain('On')
+})
+
+// ------------------------------------------------------ pickInstalls, modLines
+
+test('pickInstalls: the user install wins, other projects are dropped, paths match loosely', () => {
+  const user = { id: 'a@mk', scope: 'user', enabled: true, installPath: '/u/a' }
+  const mine = { id: 'a@mk', scope: 'project', enabled: false, installPath: '/m/a', projectPath: '/work' }
+  const theirs = { id: 'b@mk', scope: 'project', enabled: true, installPath: '/t/b', projectPath: '/other' }
+
+  expect(pickInstalls([mine, user], '/work')).toEqual([user])
+  expect(pickInstalls([user, mine], '/work')).toEqual([user])
+  expect(pickInstalls([theirs], '/work')).toEqual([])
+  expect(pickInstalls([{ ...theirs, projectPath: undefined }], '/work')).toEqual([])
+  expect(pickInstalls([mine], '/work')).toEqual([mine])
+  expect(pickInstalls([], '/work')).toEqual([])
+
+  // Windows paths: case, slash direction and a trailing slash do not matter.
+  const win = { id: 'w@mk', scope: 'local', enabled: true, installPath: 'C:\\p\\w', projectPath: 'C:\\Users\\Me\\Proj' }
+  expect(pickInstalls([win], 'c:/users/me/proj/')).toEqual([win])
+  expect(pickInstalls([win], 'C:/Users/Me/Other')).toEqual([])
+})
+
+test('modLines: a running mode becomes a tb-mode row, other mods a tb-mod row, orphan modes follow', () => {
+  const mod = (name: string, isEnabled: boolean) => ({
+    id: `${name}@mk`,
+    name,
+    label: toolLabel(name),
+    description: `${name} mod`,
+    scope: 'user',
+    isEnabled,
+  })
+  const modes = {
+    demo: { label: 'Demo Mode', isOn: false, plugin: 'demo-mode' },
+    stray: { label: 'Stray', isOn: true, plugin: 'stray-mod' },
+  }
+  const out = modLines([mod('demo-mode', true), mod('plain', false)], modes)
+  expect(out.map(l => l.key)).toEqual(['tb-mode:demo', 'tb-mod:plain@mk', 'tb-mode:stray'])
+  expect(out[0]).toMatchObject({ label: 'Demo Mode', about: 'demo-mode mod', isOn: false, command: 'demo' })
+  expect(out[1]).toMatchObject({ label: 'Plain', isOn: false })
+  expect(out[1]!.mod?.id).toBe('plain@mk')
+  expect(out[2]).toMatchObject({ about: '', isOn: true, command: 'stray' })
+
+  // A disabled mod keeps its plugin row even when its mode is still published.
+  expect(modLines([mod('demo-mode', false)], { demo: modes.demo }).map(l => l.key)).toEqual([
+    'tb-mod:demo-mode@mk',
+    'tb-mode:demo',
+  ])
+  expect(modLines([], {})).toEqual([])
+})
+
+// ------------------------------------------------------------------ fullscreen
+
+test('toolbox: in fullscreen the pill opens a docked pane; the main screen keeps the box in the bar', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const mountAt = (isFullscreen: boolean) =>
+    $.ui.mount({
+      plugin: 'bottom-bar',
+      surface: 'terminal',
+      component: 'SessionMode',
+      props: BAR_PROPS,
+      viewport: { columns: 120, rows: 40, isFullscreen },
+    } as any)
+
+  const full = await mountAt(true)
+  await full.press({ key: 'pill' })
+  expect(seen.opened).toContain(TOOLBOX)
+  expect(await full.find({ key: 'tb-choose' })).toBeUndefined()
+
+  const pane = await $.ui.mount({
+    plugin: 'bottom-bar',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: TOOLBOX,
+    props: PANE_PROPS,
+  })
+  expect(await pane.find({ key: 'tb-choose' })).toBeDefined()
+
+  await full.press({ key: 'pill' })
+  expect(seen.closed).toContain(TOOLBOX)
+
+  const before = seen.opened.length
+  const main = await mountAt(false)
+  await main.press({ key: 'pill' })
+  expect(seen.opened.length).toBe(before)
+  expect(await main.find({ key: 'tb-choose' })).toBeDefined()
 })
