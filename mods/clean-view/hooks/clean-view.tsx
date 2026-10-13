@@ -1,12 +1,16 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Timer } from 'claude-code'
 
-import type { CvChecklist } from '../types'
+import type { CvAsk, CvChecklist } from '../types'
 import {
+  ASKED_IN_BAND,
+  EMPTY_ASK,
   EMPTY_CHECKLIST,
   HAS_QUESTION,
   KEEPS_FAILING,
   METER,
+  OTHER_HINT,
+  SKIPPED,
   NEEDS_OK,
   PLAN_FIRST,
   PLAN_RULES,
@@ -15,21 +19,30 @@ import {
   USER_DENIED,
   WAITING_REPLY,
   addTask,
+  answerOther,
+  answersMessage,
+  askLayout,
   classifyError,
   clampPercent,
+  confirmPicks,
   easeToward,
   ensureJob,
   formatElapsed,
+  fitOption,
   fromTodos,
   gradientText,
   hasRealPlan,
+  isAnswered,
   isLive,
   overall,
   padTo,
   paletteFor,
+  parseAsk,
+  pickQuestion,
   pixelMeter,
   pixelRuns,
   pixelSweep,
+  pressOption,
   planSteps,
   rasterCells,
   reportProgress,
@@ -48,6 +61,7 @@ type Dollar = EngineInterface
 
 const enabledAtom = atom({ plugin: 'clean-view', key: 'cleanViewEnabled' } as const, true)
 const checklistAtom = atom({ plugin: 'clean-view', key: 'checklist' } as const, EMPTY_CHECKLIST)
+const askAtom = atom({ plugin: 'clean-view', key: 'ask' } as const, EMPTY_ASK)
 const tickAtom = atom({ plugin: 'clean-view', key: 'tick' } as const, 0)
 const themeAtom = atom({ plugin: 'clean-view', key: 'theme' } as const, 'dark')
 const modesAtom = atom({ plugin: 'clean-view', key: 'modes' } as const, {})
@@ -58,6 +72,8 @@ const ALWAYS_ALLOWED = new Set(['ToolSearch', 'TodoWrite', 'TaskCreate', 'TaskUp
 
 let ticker: Timer | undefined
 let failures = 0
+/** The main turn has ended while background helpers were still running. */
+let isWaitingForHelpers = false
 let taskCount = 0
 /** Each meter's build-up: the fraction it eases from, the one it eases to, and since when. */
 const shown = new Map<string, { from: number; to: number; at: number }>()
@@ -80,6 +96,64 @@ async function change($: Dollar, fn: (cl: CvChecklist) => CvChecklist): Promise<
   const cl = await read($, checklistAtom)
   syncTicker($, cl)
   return cl
+}
+
+/** Takes the questions off the band. With `reply`, sends it to Claude as the person's next message. */
+async function closeAsk($: Dollar, reply?: string): Promise<void> {
+  if (!(await read($, askAtom)).isOpen) return
+  await update($, askAtom, () => EMPTY_ASK)
+  if (reply === undefined) return
+  await change($, whileLive(c => (c.phase === 'needs-you' ? { ...c, phase: 'working', needsYouReason: '' } : c)))
+  void $.prompt.submit({ text: reply }).catch(() => {})
+}
+
+/** How many background helpers (subagents) are still working, not counting `except`. */
+async function runningHelpers($: Dollar, except?: string): Promise<number> {
+  try {
+    const list = await $.agent.list()
+    return list.filter(a => a.id !== except && (a.status === 'running' || a.status === 'pending')).length
+  } catch {
+    return 0
+  }
+}
+
+/** The main turn is over and nothing is running: done, or waiting for the person's reply. */
+async function finishTurn($: Dollar): Promise<void> {
+  isWaitingForHelpers = false
+  const cl = await read($, checklistAtom)
+  if (!isLive(cl)) return
+  if (unfinished(cl)) {
+    await change($, c => ({ ...c, phase: 'needs-you', needsYouReason: WAITING_REPLY, stuckReason: '', helpers: 0 }))
+    return
+  }
+  const now = await $.clock.now()
+  await change($, c => ({
+    ...c,
+    phase: 'done',
+    finishedAt: now,
+    isCollapsed: false,
+    stuckReason: '',
+    needsYouReason: '',
+    helpers: 0,
+    tasks: c.tasks.map(t => ({ ...t, status: 'done' as const, percent: 100 })),
+  }))
+  $.clock.after(5000, () => {
+    void change($, c => (c.phase === 'done' && c.finishedAt === now ? { ...c, isCollapsed: true } : c)).catch(() => {})
+  })
+}
+
+/** The ✕: clears the band. A question still up is skipped, so Claude is not left waiting. */
+async function dismissBand($: Dollar): Promise<void> {
+  isWaitingForHelpers = false
+  await closeAsk($, SKIPPED)
+  await change($, () => EMPTY_CHECKLIST)
+}
+
+/** A press or a typed answer: update the questions, and send the answers to Claude once every one has one. */
+async function changeAsk($: Dollar, fn: (a: CvAsk) => CvAsk): Promise<void> {
+  await update($, askAtom, fn)
+  const a = await read($, askAtom)
+  if (isAnswered(a)) await closeAsk($, answersMessage(a))
 }
 
 const whileLive = (fn: (cl: CvChecklist) => CvChecklist) => (cl: CvChecklist) => (isLive(cl) ? fn(cl) : cl)
@@ -192,6 +266,9 @@ export function registerCleanView(on: On): void {
   })
 
   on('turn.start', async ($, e, next) => {
+    if ((e as { agentId?: string }).agentId !== undefined) return next(e)
+    isWaitingForHelpers = false
+    if ((await read($, checklistAtom)).helpers > 0) await change($, c => ({ ...c, helpers: 0 }))
     const text = e.text.trim()
     if (text !== '' && !text.startsWith('/') && (await read($, enabledAtom)) && !isLive(await read($, checklistAtom))) {
       const now = await $.clock.now()
@@ -204,6 +281,7 @@ export function registerCleanView(on: On): void {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    await closeAsk($)
     await change($, cl =>
       cl.phase === 'needs-you' || cl.phase === 'stuck'
         ? { ...cl, phase: 'working', needsYouReason: '', stuckReason: '' }
@@ -254,6 +332,13 @@ export function registerCleanView(on: On): void {
     const isQuestion = tool === 'AskUserQuestion'
     await change($, whileLive(c => (isQuestion ? { ...c, phase: 'needs-you', needsYouReason: HAS_QUESTION } : c.phase === 'needs-you' ? { ...c, phase: 'working', needsYouReason: '' } : c)))
 
+    // The questions are asked in the band, so the engine's own dialog never opens. A hook may wait only
+    // 10 seconds of its own time, so the call answers at once and the answers come back as the next message.
+    const ask = isQuestion ? parseAsk(args.questions, e.tool_use_id) : undefined
+    if (ask) {
+      await update($, askAtom, () => ask)
+      return { deny: ASKED_IN_BAND }
+    }
     const ran = await next(e)
 
     if (tool === 'TaskCreate' && ran.deny === undefined) {
@@ -286,33 +371,36 @@ export function registerCleanView(on: On): void {
   })
 
   on('turn.complete', async ($, e, next) => {
-    if (e.agentId !== undefined) return next(e)
+    if (e.agentId !== undefined) {
+      // A helper finished: when the main turn already ended and it was the last one, wrap up shortly after
+      // unless Claude starts another turn to report back.
+      if (isWaitingForHelpers && (await runningHelpers($, e.agentId)) === 0) {
+        $.clock.after(3000, () => {
+          if (isWaitingForHelpers) void finishTurn($).catch(() => {})
+        })
+      }
+      return next(e)
+    }
     const cl = await read($, checklistAtom)
     if (isLive(cl)) {
       const now = await $.clock.now()
       if (e.reason === 'aborted') {
-        await change($, c => ({ ...c, phase: 'stopped', finishedAt: now }))
+        isWaitingForHelpers = false
+        await change($, c => ({ ...c, phase: 'stopped', finishedAt: now, helpers: 0 }))
       } else if (e.reason === 'error') {
-        await change($, c => ({ ...c, phase: 'stuck', stuckReason: classifyError(e.answer), needsYouReason: '' }))
+        await change($, c => ({ ...c, phase: 'stuck', stuckReason: classifyError(e.answer), needsYouReason: '', helpers: 0 }))
       } else if (e.reason === 'refusal') {
-        await change($, c => ({ ...c, phase: 'stuck', stuckReason: REFUSED, needsYouReason: '' }))
+        await change($, c => ({ ...c, phase: 'stuck', stuckReason: REFUSED, needsYouReason: '', helpers: 0 }))
       } else if (cl.phase === 'stuck' && cl.stuckReason === SAID_NO) {
         // Claude paused on the person's no: the stuck line says why.
-      } else if (unfinished(cl)) {
-        await change($, c => ({ ...c, phase: 'needs-you', needsYouReason: WAITING_REPLY, stuckReason: '' }))
       } else {
-        await change($, c => ({
-          ...c,
-          phase: 'done',
-          finishedAt: now,
-          isCollapsed: false,
-          stuckReason: '',
-          needsYouReason: '',
-          tasks: c.tasks.map(t => ({ ...t, status: 'done' as const, percent: 100 })),
-        }))
-        $.clock.after(5000, () => {
-          void change($, c => (c.phase === 'done' && c.finishedAt === now ? { ...c, isCollapsed: true } : c)).catch(() => {})
-        })
+        const helpers = await runningHelpers($)
+        if (helpers > 0) {
+          isWaitingForHelpers = true
+          await change($, c => ({ ...c, phase: 'working', needsYouReason: '', stuckReason: '', helpers }))
+        } else {
+          await finishTurn($)
+        }
       }
     }
     return next(e)
@@ -332,7 +420,7 @@ export function registerCleanView(on: On): void {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     const els = $.ui.resolve(e)
-    const { Box, Text } = els
+    const { Box, Text, Button } = els
     const Raster = e.surface === 'terminal' && 'Raster' in els ? els.Raster : undefined
     const pal = paletteFor(await read($, themeAtom))
     const isOn = await read($, enabledAtom)
@@ -348,12 +436,25 @@ export function registerCleanView(on: On): void {
       ))
 
     // On and off live in the bottom bar's pill and /simple; the band shows only a job.
-    if (!isOn || cl.phase === 'idle') return next(e)
+    const ask = await read($, askAtom)
+    if (!isOn || (cl.phase === 'idle' && !ask.isOpen)) return next(e)
+    // A question with no job on screen: the checklist side only says it is waiting.
+    const isBare = ask.isOpen && (cl.phase === 'idle' || cl.phase === 'done')
 
     const cols = e.props.bodyColumns
     const took = formatElapsed((cl.finishedAt > 0 ? cl.finishedAt : now) - cl.startedAt)
 
-    if (cl.phase === 'done' && cl.isCollapsed) {
+    // Shown once the job is no longer running (finished, stopped, stuck, waiting) or a question is up.
+    const closeButton =
+      cl.phase !== 'working' || ask.isOpen || cl.helpers > 0 ? (
+        <Box flexShrink={0} marginLeft={1}>
+          <Button key="close" plain dimColor onPress={() => void dismissBand($).catch(() => {})}>
+            ✕
+          </Button>
+        </Box>
+      ) : null
+
+    if (cl.phase === 'done' && cl.isCollapsed && !ask.isOpen) {
       return (
         <Box width="100%">
           <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
@@ -364,6 +465,7 @@ export function registerCleanView(on: On): void {
               <Text color={pal.dim}>{` · ${cl.title} · took ${took}`}</Text>
             </Text>
           </Box>
+          {closeButton}
         </Box>
       )
     }
@@ -388,8 +490,9 @@ export function registerCleanView(on: On): void {
 
     const warm = [pal.warmFrom, pal.warmTo]
     const good = [pal.goodFrom, pal.goodTo]
-    const border =
-      cl.phase === 'done'
+    const border = isBare
+      ? pal.warn
+      : cl.phase === 'done'
         ? pal.good
         : cl.phase === 'needs-you'
           ? pal.warn
@@ -399,8 +502,14 @@ export function registerCleanView(on: On): void {
               ? pal.idle
               : pal.border
 
-    const header =
-      cl.phase === 'needs-you' ? (
+    const header = isBare ? (
+      <Text wrap="truncate-end">
+        <Text backgroundColor={pal.warn} color={pal.badgeText} bold>
+          {' Needs you '}
+        </Text>
+        <Text color={pal.text}>{'  Waiting for your answer'}</Text>
+      </Text>
+    ) : cl.phase === 'needs-you' ? (
         <Text wrap="truncate-end">
           <Text backgroundColor={pal.warn} color={pal.badgeText} bold>
             {' Needs you '}
@@ -432,11 +541,14 @@ export function registerCleanView(on: On): void {
         <Text wrap="truncate-end">
           <Text color={pal.warmFrom}>{'✶ '}</Text>
           {runs(gradientText(cl.title, [pal.warmFrom, pal.warmTo, pal.titleTo]), 't', true)}
+          {cl.helpers > 0 ? <Text color={pal.dim}>{` · Waiting for ${cl.helpers} ${cl.helpers === 1 ? 'helper' : 'helpers'}`}</Text> : null}
         </Text>
       )
-    const timeText = cl.phase === 'done' ? `took ${took}` : cl.phase === 'stopped' ? '' : took
+    const timeText = isBare ? '' : cl.phase === 'done' ? `took ${took}` : cl.phase === 'stopped' ? '' : took
 
-    const inner = Math.max(10, cols - 4)
+    const layout = askLayout(Math.max(10, cols - 4))
+    const isAsking = ask.isOpen
+    const inner = isAsking && layout.isSplit ? layout.left : Math.max(10, cols - 4)
     const sum = overall(cl)
     const stepLabel = cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total}`
     const pctText = `${sum.percent}%`.padStart(4)
@@ -474,8 +586,8 @@ export function registerCleanView(on: On): void {
       )
     })
 
-    return (
-      <Box flexDirection="column" borderStyle="round" borderColor={border} paddingX={1} width="100%">
+    const checklist = (
+      <Box flexDirection="column" width={isAsking && layout.isSplit ? layout.left : undefined} flexShrink={0}>
         <Box>
           <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
             {header}
@@ -485,15 +597,119 @@ export function registerCleanView(on: On): void {
               <Text color={pal.dim}>{timeText}</Text>
             </Box>
           ) : null}
+          {closeButton}
         </Box>
-        {sum.total > 0 ? (
+        {sum.total > 0 && !isBare ? (
           <Box>
             <Text color={pal.dim}>{`${stepLabel} `}</Text>
             {meter('bar', bar)}
             <Text color={cl.phase === 'done' ? pal.good : pal.accent} bold>{` ${pctText}`}</Text>
           </Box>
         ) : null}
-        {rows}
+        {isBare ? null : rows}
+      </Box>
+    )
+
+    let panel = null
+    if (isAsking) {
+      const Input = 'Input' in els ? els.Input : undefined
+      const q = ask.questions[ask.current]!
+      const W = layout.right
+      const tabW = Math.max(8, Math.min(16, Math.floor(W / 3)))
+      const optW = Math.max(8, W - tabW - 8)
+      const ticked = ask.picks[ask.current] ?? []
+      const given = ask.answers[ask.current]
+      panel = (
+        <Box flexDirection="column" width={layout.isSplit ? W : undefined} marginTop={layout.isSplit ? 0 : 1} flexShrink={0}>
+          <Box borderStyle="round" borderColor={pal.accent} paddingX={1} width="100%">
+            <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
+              <Text wrap="truncate-end">
+                <Text color={pal.accent} bold>
+                  {'? '}
+                </Text>
+                <Text color={pal.text} bold>
+                  {q.question}
+                </Text>
+              </Text>
+            </Box>
+            <Box flexShrink={0} marginLeft={1}>
+              <Button key="skip" plain dimColor onPress={() => void closeAsk($, SKIPPED).catch(() => {})}>
+                Skip
+              </Button>
+            </Box>
+          </Box>
+          <Box>
+            <Box flexDirection="column" borderStyle="round" borderColor={pal.faint} paddingX={1} width={tabW} flexShrink={0}>
+              {ask.questions.map((t, i) => {
+                const isNow = i === ask.current
+                const mark = ask.answers[i] !== null ? '✓' : isNow ? '▶' : '○'
+                const color = ask.answers[i] !== null ? pal.good : isNow ? pal.accent : pal.faint
+                return (
+                  <Button key={`q${i}`} plain onPress={() => void update($, askAtom, a => pickQuestion(a, i)).catch(() => {})}>
+                    <Text color={color}>{`${mark} `}</Text>
+                    <Text color={isNow ? pal.text : pal.dim} bold={isNow}>
+                      {padTo(t.header, tabW - 6).trimEnd()}
+                    </Text>
+                  </Button>
+                )
+              })}
+            </Box>
+            <Box flexDirection="column" flexGrow={1} marginLeft={1}>
+              {q.options.map((o, i) => {
+                const isOn = q.multiSelect ? ticked.includes(o.label) : given === o.label
+                const fit = fitOption(o.label, o.description, optW - 6)
+                const mark = q.multiSelect ? (isOn ? '◼' : '◻') : isOn ? '●' : '○'
+                return (
+                  <Button
+                    key={`o${i}`}
+                    plain
+                    hotkey={String(i + 1)}
+                    onPress={() => void changeAsk($, a => pressOption(a, o.label)).catch(() => {})}
+                  >
+                    <Text color={isOn ? pal.good : pal.accent}>{`${mark} `}</Text>
+                    <Text color={isOn ? pal.good : pal.text} bold>
+                      {fit.label}
+                    </Text>
+                    {fit.description ? <Text color={pal.dim}>{` · ${fit.description}`}</Text> : null}
+                  </Button>
+                )
+              })}
+              <Box>
+                <Box flexGrow={1}>
+                  {Input ? (
+                    <Input
+                      key="other"
+                      placeholder={OTHER_HINT}
+                      submitLabel="answer"
+                      onSubmit={(value: string) => void changeAsk($, a => answerOther(a, value)).catch(() => {})}
+                    />
+                  ) : null}
+                </Box>
+                {q.multiSelect ? (
+                  <Button key="done" plain hotkey="d" onPress={() => void changeAsk($, a => confirmPicks(a)).catch(() => {})}>
+                    <Text color={ticked.length > 0 ? pal.good : pal.faint} bold>{' d: Done'}</Text>
+                  </Button>
+                ) : null}
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      )
+    }
+
+    return (
+      <Box flexDirection="column" borderStyle="round" borderColor={border} paddingX={1} width="100%">
+        {panel && layout.isSplit ? (
+          <Box>
+            {checklist}
+            <Box marginLeft={1}>{panel}</Box>
+          </Box>
+        ) : (
+          <>
+            {checklist}
+            {panel}
+          </>
+        )}
       </Box>
     )
   })

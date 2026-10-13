@@ -22,6 +22,30 @@ export type CvChecklist = {
   startedAt: number
   finishedAt: number
   isCollapsed: boolean
+  /** Background helpers (subagents) still running after the main turn ended. */
+  helpers: number
+}
+
+export type CvAskOption = { label: string; description: string }
+
+export type CvAskQuestion = {
+  header: string
+  question: string
+  multiSelect: boolean
+  options: CvAskOption[]
+}
+
+/** The questions Claude is asking, shown in the band beside the checklist; `isOpen` is false when none are. */
+export type CvAsk = {
+  isOpen: boolean
+  toolUseId: string
+  questions: CvAskQuestion[]
+  /** The question tab showing. */
+  current: number
+  /** Per question, the answer given (the labels comma-joined, or typed text), or null. */
+  answers: (string | null)[]
+  /** Per multi-select question, the labels ticked so far. */
+  picks: string[][]
 }
 
 declare module 'claude-code' {
@@ -29,6 +53,7 @@ declare module 'claude-code' {
     'clean-view': {
       cleanViewEnabled: boolean
       checklist: CvChecklist
+      ask: CvAsk
       tick: number
       theme: string
       modes: Record<string, CvMode>

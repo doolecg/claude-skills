@@ -2,7 +2,16 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 import {
+  EMPTY_ASK,
   EMPTY_CHECKLIST,
+  answerOther,
+  answersMessage,
+  askAnswers,
+  askLayout,
+  confirmPicks,
+  isAnswered,
+  parseAsk,
+  pressOption,
   cleanName,
   easeToward,
   overall,
@@ -26,16 +35,22 @@ const BAND = {
   view: {},
 } as any
 
+const sent: string[] = []
+let helpers: { id: string; status: string }[] = []
+
 function world(on: On) {
+  sent.length = 0
+  helpers = []
   const clock = mock.clock(on, { now: 1_000_000 })
   mock.store(on)
   on('tool.register', (_$, e) => ({ value: { tool: `mcp__clean-view__${e.name}` } }) as any)
   on('command.register', (_$, e) => ({ value: { command: e.name } }) as any)
+  on('agent.list', () => ({ value: helpers }) as any)
   on('settings.read', () => ({ value: { theme: 'dark' } }) as any)
   on('session.start', (_$, e) => ({ cwd: e.cwd }) as any)
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
-  on('prompt.submit', (_$, e) => e as any)
+  on('prompt.submit', (_$, e) => (sent.push(e.text), e) as any)
   on('classic.Notification', () => ({}) as any)
   on('ui.toast', () => ({ value: undefined }) as any)
   // The engine's own band, with nothing of its own to show.
@@ -299,4 +314,233 @@ test('the terminal draws meters as pixel Rasters, the desktop as text, and they 
   const after = await warmCells(later)
   await later.unmount()
   expect(after).toBeGreaterThan(before)
+})
+
+// ---- questions in the band ---------------------------------------------------
+
+const QUESTIONS = [
+  {
+    question: 'Which colour should the page be?',
+    header: 'Colour',
+    multiSelect: false,
+    options: [
+      { label: 'Warm', description: 'Coral and cream' },
+      { label: 'Cool', description: 'Blue and grey' },
+    ],
+  },
+  {
+    question: 'Which sections do you want?',
+    header: 'Sections',
+    multiSelect: true,
+    options: [
+      { label: 'Pricing', description: 'Plans and costs' },
+      { label: 'Contact', description: 'A form' },
+      { label: 'FAQ', description: 'Common questions' },
+    ],
+  },
+]
+
+test('questions parse, answer one at a time, and finish with an answer for each', () => {
+  const ask = parseAsk(QUESTIONS, 'u1')!
+  expect(ask.questions).toHaveLength(2)
+  expect(parseAsk([], 'u1')).toBeUndefined()
+  expect(parseAsk('nope', 'u1')).toBeUndefined()
+  let a = pressOption(ask, 'Cool')
+  expect(a.answers).toEqual(['Cool', null])
+  expect(a.current).toBe(1)
+  a = pressOption(a, 'Pricing')
+  a = pressOption(a, 'FAQ')
+  expect(a.picks[1]).toEqual(['Pricing', 'FAQ'])
+  expect(isAnswered(a)).toBe(false)
+  a = pressOption(a, 'Pricing')
+  expect(a.picks[1]).toEqual(['FAQ'])
+  a = pressOption(a, 'Pricing')
+  a = confirmPicks(a)
+  expect(isAnswered(a)).toBe(true)
+  expect(askAnswers(a)).toEqual({ 'Which colour should the page be?': 'Cool', 'Which sections do you want?': 'FAQ, Pricing' })
+  expect(isAnswered(EMPTY_ASK)).toBe(false)
+})
+
+test('typing under Other answers a question, after the ticked labels on a multi-select one', () => {
+  let a = answerOther(parseAsk(QUESTIONS, 'u1')!, '  Green  ')
+  expect(a.answers[0]).toBe('Green')
+  a = pressOption(a, 'Contact')
+  a = answerOther(a, 'A map')
+  expect(a.answers[1]).toBe('Contact, A map')
+  expect(answerOther(a, '   ')).toBe(a)
+})
+
+test('the panel sits beside the checklist from 110 columns and under it below', () => {
+  expect(askLayout(150).isSplit).toBe(true)
+  expect(askLayout(150).left + askLayout(150).right + 1).toBe(150)
+  expect(askLayout(80).isSplit).toBe(false)
+  expect(askLayout(106).isSplit).toBe(true)
+  expect(askLayout(105).isSplit).toBe(false)
+})
+
+/** Lets a pending tool call reach the point where it waits for the person. */
+async function waitForAsk($: any) {
+  for (let i = 0; i < 20; i++) await new Promise(r => (globalThis as any).setTimeout(r, 5))
+}
+
+async function planned($: any) {
+  await startJob($)
+  await $.tool.call({ tool: PLAN, steps: ['Read your brand notes', 'Build the pricing section'] } as any)
+}
+
+const mountBand = ($: any, cols: number) =>
+  $.ui.mount({ plugin: 'clean-view', surface: 'terminal', component: 'AbovePrompt', props: { ...BAND, bodyColumns: cols } })
+
+test('a question splits the band in two; answering it sends the answers and brings the single checklist back', async ($, on) => {
+  world(on)
+  await planned($)
+  const before = await band($, 'terminal')
+  expect(await before.ui.find({ key: 'o0' })).toBeUndefined()
+  await before.ui.unmount()
+
+  const ran: any = await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS.slice(0, 1) } as any)
+  expect(ran.deny).toContain('end your turn')
+  const wide = await mountBand($, 140)
+  expect(String((await wide.find({ key: 'p0' }))?.text)).toContain('Read your brand notes')
+  expect(await wide.find({ key: 'o0' })).toBeDefined()
+  expect(await wide.find({ key: 'o1' })).toBeDefined()
+  expect(await wide.find({ key: 'q0' })).toBeDefined()
+  expect(await wide.find({ key: 'other' })).toBeDefined()
+  const texts = (await wide.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join(' ')
+  expect(texts).toContain('Which colour should the page be?')
+  await wide.press({ key: 'o1' })
+  await wide.unmount()
+  expect(sent).toEqual(['Here are my answers:\n- Which colour should the page be? Cool'])
+
+  const after = await band($, 'terminal')
+  expect(await after.ui.find({ key: 'o0' })).toBeUndefined()
+  expect(after.all).toContain('Step 1 of 2')
+  await after.ui.unmount()
+})
+
+test('a multi-select question ticks options and finishes on Done; Other types an answer; Skip dismisses', async ($, on) => {
+  world(on)
+  await planned($)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS } as any)
+  const narrow = await mountBand($, 90)
+  expect(await narrow.find({ key: 'p0' })).toBeDefined()
+  expect(await narrow.find({ key: 'o0' })).toBeDefined()
+  await narrow.press({ key: 'q1' })
+  await narrow.press({ key: 'o0' })
+  await narrow.press({ key: 'o2' })
+  expect(String((await narrow.find({ key: 'o0' }))?.text)).toContain('◼')
+  expect(await narrow.find({ key: 'done' })).toBeDefined()
+  await narrow.press({ key: 'done' })
+  expect(sent).toEqual([])
+  await narrow.press({ key: 'q0' })
+  await narrow.input({ key: 'other', text: 'Green' })
+  expect(sent).toEqual(['Here are my answers:\n- Which colour should the page be? Green\n- Which sections do you want? Pricing, FAQ'])
+  await narrow.unmount()
+
+  sent.length = 0
+  await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS.slice(0, 1) } as any)
+  const ui = await mountBand($, 140)
+  await ui.press({ key: 'skip' })
+  expect(sent[0]).toContain('Skip those questions')
+  await ui.unmount()
+})
+
+test('a question with no job running still gets the panel, beside a waiting line', async ($, on) => {
+  world(on)
+  await $.session.start({ cwd: '.' } as any)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS.slice(0, 1) } as any)
+  const ui = await mountBand($, 140)
+  const texts = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join(' ')
+  expect(texts).toContain('Waiting for your answer')
+  expect(await ui.find({ key: 'o0' })).toBeDefined()
+  await ui.press({ key: 'o0' })
+  await ui.unmount()
+  expect(sent).toHaveLength(1)
+  expect(await mountBand($, 140).then(async (b: any) => (await b.find({ key: 'o0' })) === undefined)).toBe(true)
+})
+
+test('the answers read as a short message', () => {
+  const a = pressOption(parseAsk(QUESTIONS.slice(0, 1), 'u1')!, 'Warm')
+  expect(answersMessage(a)).toBe('Here are my answers:\n- Which colour should the page be? Warm')
+})
+
+test('the close button clears a job left waiting for a reply, and has no place on a job that is still working', async ($, on) => {
+  world(on)
+  await planned($)
+  const working = await band($, 'terminal')
+  expect(await working.ui.find({ key: 'close' })).toBeUndefined()
+  await working.ui.unmount()
+
+  await $.turn.complete(complete('t1', 'answer'))
+  const done = await band($, 'terminal')
+  expect(done.all).toContain('waiting for your reply')
+  await done.ui.press({ key: 'close' })
+  await done.ui.unmount()
+  const gone = await band($, 'terminal')
+  expect(gone.all).toBe('')
+  await gone.ui.unmount()
+})
+
+test('the close button on a waiting job with a question up skips the question and clears the band', async ($, on) => {
+  world(on)
+  await planned($)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS.slice(0, 1) } as any)
+  const ui = await mountBand($, 140)
+  expect(await ui.find({ key: 'close' })).toBeDefined()
+  await ui.press({ key: 'close' })
+  await ui.unmount()
+  expect(sent[0]).toContain('Skip those questions')
+  const gone = await band($, 'terminal')
+  expect(gone.all).toBe('')
+  expect(await gone.ui.find({ key: 'o0' })).toBeUndefined()
+  await gone.ui.unmount()
+})
+
+test('with helpers still running the band says so, and finishes only after the last one', async ($, on) => {
+  const clock = world(on)
+  await planned($)
+  helpers = [{ id: 'a1', status: 'running' }, { id: 'a2', status: 'running' }]
+  await $.turn.complete(complete('t1', 'answer'))
+  const waiting = await band($, 'terminal')
+  expect(waiting.all).toContain('Waiting for 2 helpers')
+  expect(waiting.all).not.toContain('Needs you')
+  expect(waiting.all).not.toContain('All done')
+  expect(await waiting.ui.find({ key: 'close' })).toBeDefined()
+  await waiting.ui.unmount()
+
+  helpers = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'running' }]
+  await $.turn.complete({ ...complete('h1', 'answer'), agentId: 'a1' })
+  await clock.advance(4_000)
+  expect((await band($, 'terminal')).all).toContain('Waiting for 2 helpers')
+
+  helpers = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'completed' }]
+  await $.turn.complete({ ...complete('h2', 'answer'), agentId: 'a2' })
+  await clock.advance(4_000)
+  const finished = await band($, 'terminal')
+  expect(finished.all).not.toContain('Waiting for')
+  expect(finished.all).toContain('waiting for your reply')
+  await finished.ui.unmount()
+})
+
+test("a helper's own turns leave the main job alone", async ($, on) => {
+  const clock = world(on)
+  await planned($)
+  await $.turn.start({ text: 'Read the notes', turnId: 'h0', agentId: 'a1' } as any)
+  await $.turn.complete({ ...complete('h1', 'answer'), agentId: 'a1' })
+  await clock.advance(4_000)
+  const ui = await band($, 'terminal')
+  expect(ui.all).toContain('Step 1 of 2')
+  expect(ui.all).not.toContain('Needs you')
+  expect(ui.all).not.toContain('All done')
+  await ui.ui.unmount()
+})
+
+test("a helper's question keeps the engine's own dialog", async ($, on) => {
+  world(on)
+  await planned($)
+  const ran: any = await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS.slice(0, 1), agentId: 'a1' } as any)
+  expect(ran.deny).toBeUndefined()
+  const ui = await mountBand($, 140)
+  expect(await ui.find({ key: 'o0' })).toBeUndefined()
+  await ui.unmount()
 })

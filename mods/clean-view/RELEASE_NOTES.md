@@ -1,3 +1,19 @@
+# Clean View 1.1.0
+
+## New
+- When Claude asks you a question, the band splits in two: the checklist stays on the left and a question panel opens on the right, in Clean View's own look. The question runs across the top, the questions sit in a column of tabs (✓ answered, ▶ current, ○ waiting) and the options are laid out beside them.
+- Answer from the band: press an option's number (or click it) to pick it. Multi-select questions tick options and finish with Done (`d`). Type your own answer in the Other row, or press Skip.
+- Claude's own question dialog no longer opens over it, so there is only one place to answer.
+- On a narrow terminal (under 110 columns) the question panel sits under the checklist instead of beside it.
+- A question gets the panel even when no job is on screen; the checklist side then just says Waiting for your answer.
+- Your answer goes back to Claude as your next message, and the band goes back to the single checklist.
+- A small ✕ at the top right of the band clears it when it is stale (a finished job, Claude waiting for a reply you have already given, a question left up). A question still showing is skipped.
+
+## Fixed
+- While background helpers (subagents) are still running after Claude's turn ends, the band says Waiting for N helpers instead of Needs you or All done, and wraps up only when the last one finishes. A helper's own turns never touch your checklist.
+
+---
+
 # Clean View 1.0.0
 
 ## New

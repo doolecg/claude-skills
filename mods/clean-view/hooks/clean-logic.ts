@@ -1,4 +1,4 @@
-import type { CvChecklist, CvTask } from '../types'
+import type { CvAsk, CvAskQuestion, CvChecklist, CvTask } from '../types'
 
 export const EMPTY_CHECKLIST: CvChecklist = {
   title: '',
@@ -9,6 +9,7 @@ export const EMPTY_CHECKLIST: CvChecklist = {
   startedAt: 0,
   finishedAt: 0,
   isCollapsed: false,
+  helpers: 0,
 }
 
 export const MAX_NAME = 40
@@ -499,4 +500,117 @@ export function rasterCells(pixels: readonly Pixel[]): string {
 export function easeToward(from: number, to: number, elapsed: number, ms = 900): number {
   const k = Math.max(0, Math.min(1, elapsed / ms))
   return k >= 1 ? to : from + (to - from) * (1 - (1 - k) ** 3)
+}
+
+// ---- questions in the band --------------------------------------------------
+
+export const EMPTY_ASK: CvAsk = { isOpen: false, toolUseId: '', questions: [], current: 0, answers: [], picks: [] }
+
+/** Narrower than this, the question panel stacks under the checklist instead of beside it. */
+export const SPLIT_COLUMNS = 110
+
+export const OTHER_HINT = '✎ Other: type your own'
+
+const text = (v: unknown): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '')
+
+/** The AskUserQuestion tool's `questions` as the band shows them, or undefined when there is nothing to ask. */
+export function parseAsk(raw: unknown, toolUseId: string): CvAsk | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const questions: CvAskQuestion[] = []
+  for (const q of raw.slice(0, 4) as Record<string, unknown>[]) {
+    const question = text(q?.question)
+    if (question === '' || !Array.isArray(q.options)) continue
+    const options = (q.options as Record<string, unknown>[])
+      .slice(0, 4)
+      .map(o => ({ label: text(o?.label), description: text(o?.description) }))
+      .filter(o => o.label !== '')
+    if (options.length === 0) continue
+    questions.push({ header: text(q.header) || `Question ${questions.length + 1}`, question, multiSelect: q.multiSelect === true, options })
+  }
+  if (questions.length === 0) return undefined
+  return { isOpen: true, toolUseId, questions, current: 0, answers: questions.map(() => null), picks: questions.map(() => []) }
+}
+
+export const isAnswered = (a: CvAsk): boolean => a.isOpen && a.answers.every(x => x !== null)
+
+/** Moves to the next unanswered question after the current one (wrapping), or stays when all are answered. */
+function advance(a: CvAsk): CvAsk {
+  const n = a.questions.length
+  for (let step = 1; step < n; step++) {
+    const i = (a.current + step) % n
+    if (a.answers[i] === null) return { ...a, current: i }
+  }
+  return a
+}
+
+const setAnswer = (a: CvAsk, value: string | null): CvAsk => ({
+  ...a,
+  answers: a.answers.map((x, i) => (i === a.current ? value : x)),
+})
+
+export function pickQuestion(a: CvAsk, i: number): CvAsk {
+  return a.isOpen && i >= 0 && i < a.questions.length ? { ...a, current: i } : a
+}
+
+/** Pressing an option: a single-select question is answered; a multi-select one ticks or unticks it. */
+export function pressOption(a: CvAsk, label: string): CvAsk {
+  const q = a.questions[a.current]
+  if (!a.isOpen || !q || !q.options.some(o => o.label === label)) return a
+  if (!q.multiSelect) return advance(setAnswer(a, label))
+  const had = (a.picks[a.current] ?? []).includes(label)
+  const picks = a.picks.map((p, i) => (i !== a.current ? p : had ? p.filter(x => x !== label) : [...p, label]))
+  const next = { ...a, picks }
+  return setAnswer(next, null)
+}
+
+/** Done on a multi-select question: the ticked labels become its answer. */
+export function confirmPicks(a: CvAsk): CvAsk {
+  const picks = a.picks[a.current] ?? []
+  if (!a.isOpen || !a.questions[a.current]?.multiSelect || picks.length === 0) return a
+  return advance(setAnswer(a, picks.join(', ')))
+}
+
+/** Typed text under Other: the whole answer, or after the ticked labels on a multi-select question. */
+export function answerOther(a: CvAsk, raw: string): CvAsk {
+  const typed = raw.trim()
+  if (!a.isOpen || typed === '' || !a.questions[a.current]) return a
+  const ticked = a.questions[a.current]?.multiSelect ? (a.picks[a.current] ?? []) : []
+  return advance(setAnswer(a, [...ticked, typed].join(', ')))
+}
+
+/** The `answers` the AskUserQuestion tool returns: the question's text to the answer given. */
+export function askAnswers(a: CvAsk): Record<string, string> {
+  const out: Record<string, string> = {}
+  a.questions.forEach((q, i) => {
+    out[q.question] = a.answers[i] ?? ''
+  })
+  return out
+}
+
+/** Widths of the checklist and the question panel inside the band, side by side or stacked. */
+export function askLayout(inner: number): { isSplit: boolean; left: number; right: number } {
+  if (inner + 4 < SPLIT_COLUMNS) return { isSplit: false, left: inner, right: inner }
+  const left = Math.floor((inner - 1) / 2)
+  return { isSplit: true, left, right: inner - 1 - left }
+}
+
+/** An option's label and description cut to fit `width` cells together. */
+export function fitOption(label: string, description: string, width: number): { label: string; description: string } {
+  const l = [...label]
+  if (l.length >= width) return { label: padTo(label, Math.max(1, width)).trimEnd(), description: '' }
+  const room = width - l.length - 3
+  if (description === '' || description === label || room < 4) return { label, description: '' }
+  const d = [...description]
+  return { label, description: d.length > room ? `${d.slice(0, room - 1).join('')}…` : description }
+}
+
+export const SKIPPED = 'Skip those questions: carry on without answers, or ask again in other words.'
+
+export const ASKED_IN_BAND =
+  "The questions are on the person's screen now. Their answers will arrive as their next message. Do not ask again: say nothing more and end your turn."
+
+/** The answers as the person's next message to Claude. */
+export function answersMessage(a: CvAsk): string {
+  const lines = a.questions.map((q, i) => `- ${q.question} ${a.answers[i] ?? ''}`)
+  return ['Here are my answers:', ...lines].join('\n')
 }
