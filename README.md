@@ -34,6 +34,7 @@ Plugin skills are namespaced, like `/blockdesigner:blockdesigner-release`.
 | `minecraft-mod-dev` | `minecraft-mod-dev` | mcpmarket (copy) |
 | `bottom-bar` | mod: the bar at the bottom of the terminal and the Doole's Tools pill | mine, in `mods/bottom-bar` (edited here, not synced) |
 | `clean-view` | mod: a plain-English checklist above the prompt, with the technical rows hidden | mine, in `mods/clean-view` (edited here, not synced) |
+| `flightdeck` | mod: a sidebar with the main session and every subagent working now, each with its own pixel critter | mine, in `mods/flightdeck` (edited here, not synced); idea from [scasella/claude-flightdeck](https://github.com/scasella/claude-flightdeck) (MIT) |
 
 Anthropic's built-in skills (pdf, docx, xlsx, ...) and the ones synced to my claude.ai account aren't here: they already follow the account.
 

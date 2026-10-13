@@ -1,0 +1,8 @@
+{
+  "name": "flightdeck",
+  "version": "1.0.0",
+  "description": "A Flightdeck-style sidebar with the main session's vitals and every subagent working now, each with its own pixel critter and pixel progress bar.",
+  "author": { "name": "doolecg" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

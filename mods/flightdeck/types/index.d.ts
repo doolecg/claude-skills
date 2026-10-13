@@ -1,0 +1,57 @@
+export type FdStatus = 'running' | 'waiting' | 'done' | 'failed' | 'stopped'
+
+/** One subagent of this session, as the sidebar keeps it. */
+export type FdAgent = {
+  id: string
+  description: string
+  type: string
+  status: FdStatus
+  startedAt: number
+  /** 0 while it runs. */
+  endedAt: number
+  model: string
+  /** Tokens in its context after its latest response. */
+  ctxTokens: number
+  /** Requests it has made. */
+  steps: number
+  /** Summed over its responses at list prices; 0 with isCostKnown false when its model has no price here. */
+  costUsd: number
+  isCostKnown: boolean
+}
+
+/** The main loop. */
+export type FdMain = {
+  model: string
+  effort: string
+  steps: number
+  isRunning: boolean
+  turnStartedAt: number
+  turnEndedAt: number
+}
+
+export type FdLimit = { kind: string; pct: number }
+
+export type FdUsage = {
+  ctxPct: number | null
+  ctxTokens: number | null
+  window: number
+  costUsd: number | null
+  limits: FdLimit[]
+}
+
+/** An on/off mode as the bottom bar reads it, keyed by the command that flips it. */
+export type FdMode = { label: string; isOn: boolean }
+
+declare module 'claude-code' {
+  interface PluginState {
+    'flightdeck': {
+      isOpen: boolean
+      main: FdMain
+      usage: FdUsage
+      agents: FdAgent[]
+      tick: number
+      theme: string
+      modes: Record<string, FdMode>
+    }
+  }
+}

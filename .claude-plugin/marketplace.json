@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "doole-skills",
-  "description": "doolecg's Claude Code plugins: BlockDesigner, Claude Agent Viewer and Operant releases, Minecraft modding, and the Bottom Bar and Clean View mods.",
+  "description": "doolecg's Claude Code plugins: BlockDesigner, Claude Agent Viewer and Operant releases, Minecraft modding, and the Bottom Bar, Clean View and Flightdeck mods.",
   "owner": {
     "name": "doolecg",
     "email": "doolecg@gmail.com"
@@ -102,6 +102,12 @@
       "description": "A calm, plain-English checklist above the prompt while Claude works, with the tool calls, diffs and command output hidden.",
       "category": "productivity",
       "source": "./mods/clean-view"
+    },
+    {
+      "name": "flightdeck",
+      "description": "A Flightdeck-style sidebar: the main session's vitals and every subagent working now, each with a pixel critter and a pixel progress bar, in the Bottom Bar's colours.",
+      "category": "productivity",
+      "source": "./mods/flightdeck"
     }
   ]
 }
