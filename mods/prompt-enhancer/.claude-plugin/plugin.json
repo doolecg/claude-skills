@@ -1,8 +1,0 @@
-{
-  "name": "prompt-enhancer",
-  "version": "0.1.0",
-  "description": "Rewrites a rough prompt into a clear one with /enhance or a ++ prefix. You see the rewrite above the prompt and choose Use, Edit or Cancel; nothing is sent without one of them.",
-  "author": { "name": "doolecg" },
-  "license": "MIT",
-  "types": "./types/index.d.ts"
-}
