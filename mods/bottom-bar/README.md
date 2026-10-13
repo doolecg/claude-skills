@@ -30,6 +30,18 @@ The bar replaces a `statusLine` script. If you have one in `~/.claude/settings.j
 - The Doole's Tools pill opens a small box with `✎ choose pills`, which picks them. Mods' own commands are listed first; type in the search box to find any other command.
 - Your picks are saved and come back in every session.
 
+## On/off modes
+
+A mod that can be turned on and off shows its state in its pill: a green ● when on, a grey ○ when off, live. Clean View does this for `/simple`.
+
+To make another mod do it, keep a `modes` value in its plugin state, keyed by the command that flips it, and write it at session start and whenever it changes:
+
+```ts
+await $.state.set({ plugin: 'my-mod', key: 'modes' }, { 'my-command': { label: 'My Mod', isOn: true } })
+```
+
+Declare it in the mod's `types/index.d.ts` (`modes: Record<string, { label: string; isOn: boolean }>`). The command should flip the mode when run with no argument, and reply with words like `My Mod is on.` A mod that only replies that way still gets a ● once its pill has been pressed.
+
 Terminal only: the desktop app keeps its own footer.
 
 ## Development

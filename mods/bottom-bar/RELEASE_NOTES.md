@@ -1,3 +1,12 @@
+# Bottom Bar 1.1.0
+
+## New
+- Mods with an on/off mode show it in their pill: a green ● when on, a grey ○ when off. It follows the mod live, whether you press the pill, type the command or use the mod's own button.
+- Those pills use the mod's own name (Clean View, not Simple).
+- In `✎ choose pills`, a mod's on/off command says so, with whether it is on now.
+
+---
+
 # Bottom Bar 1.0.0
 
 ## New

@@ -1,4 +1,4 @@
-import type { BarFigures, BarTool } from '../types'
+import type { BarFigures, BarMode, BarTool } from '../types'
 
 export const EMPTY_FIGURES: BarFigures = {
   model: '',
@@ -228,4 +228,26 @@ export function pickerSections(all: BarTool[], chosen: string[], query: string) 
   const mods = all.filter(c => isModCommand(c) && !chosen.includes(c.name) && hit(c))
   const others = q ? all.filter(c => !isModCommand(c) && !chosen.includes(c.name) && hit(c)).slice(0, 30) : []
   return { inPill, mods, others }
+}
+
+/**
+ * A mod's `modes` value read off its `state.set`: `{ [command]: { label, isOn } }`.
+ * Its entries replace that mod's earlier ones; anything malformed is left out.
+ */
+export function mergeModes(
+  all: Record<string, BarMode>,
+  plugin: string,
+  value: unknown,
+): Record<string, BarMode> {
+  const next: Record<string, BarMode> = {}
+  for (const [command, mode] of Object.entries(all)) if (mode.plugin !== plugin) next[command] = mode
+  if (value && typeof value === 'object') {
+    for (const [command, raw] of Object.entries(value as Record<string, unknown>)) {
+      const m = raw as { label?: unknown; isOn?: unknown } | null
+      if (!m || typeof m.isOn !== 'boolean') continue
+      const label = typeof m.label === 'string' && m.label.trim() ? m.label.trim() : toolLabel(command)
+      next[command] = { label, isOn: m.isOn, plugin }
+    }
+  }
+  return next
 }

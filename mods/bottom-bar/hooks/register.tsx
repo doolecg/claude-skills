@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
 import type { BarFigures, BarTool } from '../types'
 import {
@@ -7,6 +7,7 @@ import {
   EMPTY_FIGURES,
   SEPARATOR,
   clip,
+  mergeModes,
   effortLabel,
   modelChoiceLabel,
   modelChoices,
@@ -31,6 +32,7 @@ const isWorking = atom({ plugin: 'bottom-bar', key: 'isWorking' } as const, fals
 const models = atom({ plugin: 'bottom-bar', key: 'models' } as const, [])
 const tools = atom({ plugin: 'bottom-bar', key: 'tools' } as const, [])
 const toolStates = atom({ plugin: 'bottom-bar', key: 'toolStates' } as const, {})
+const modeStates = atom({ plugin: 'bottom-bar', key: 'modeStates' } as const, {})
 const choices = atom({ plugin: 'bottom-bar', key: 'choices' } as const, [])
 const filter = atom({ plugin: 'bottom-bar', key: 'filter' } as const, '')
 
@@ -105,7 +107,13 @@ async function pickEffort($: Dollar, level: string): Promise<void> {
 async function noteReply($: Dollar, command: string, ran: unknown): Promise<void> {
   const text = (ran as { text?: unknown } | undefined)?.text
   const state = typeof text === 'string' ? stateFromReply(text) : undefined
-  if (state) await update($, toolStates, all => ({ ...all, [command]: state }))
+  if (!state) return
+  await update($, toolStates, all => ({ ...all, [command]: state }))
+  // The mod's own `modes` write lands under this call, where the bar's state.set hook is not run.
+  const mode = (await read($, modeStates))[command]
+  if (mode && mode.isOn !== (state === 'on')) {
+    await update($, modeStates, all => ({ ...all, [command]: { ...mode, isOn: state === 'on' } }))
+  }
 }
 
 async function saveTools($: Dollar, list: string[]): Promise<void> {
@@ -162,6 +170,15 @@ export const register: Register = on => {
     void refresh($, { settings: true })
     return ran
   })
+
+  // A mod with an on/off mode publishes it as its `modes` state; the pill follows it live.
+  // Another mod's key, which this contract does not declare: the write is read untyped.
+  on('state.set', { key: 'modes' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const write = e as unknown as StateWrite
+    if (write.plugin !== 'bottom-bar') await update($, modeStates, all => mergeModes(all ?? {}, write.plugin, write.value))
+    return ran
+  }).catch(($, e, next) => next(e))
 
   on('command.run', async ($, e, next) => {
     const ran = await next(e)
@@ -221,10 +238,11 @@ export const register: Register = on => {
     }
 
     const states = await read($, toolStates)
+    const onOff = await read($, modeStates)
     const pill = (key: string, label: string, onPress: () => void, opts: { mark?: string; state?: string } = {}) => {
-      const lead = opts.mark ?? (opts.state === 'on' ? '✓' : '')
+      const lead = opts.mark ?? (opts.state === 'on' ? '●' : opts.state === 'off' ? '○' : '')
       const [left, right] = pillPad([...label].length + (lead ? 2 : 0))
-      const leadColor = opts.mark ? pal.accent : pal.good
+      const leadColor = opts.mark ? pal.accent : opts.state === 'on' ? pal.good : pal.dim
       return (
         <Button key={key} plain onPress={onPress}>
           <Text color={pal.pillBg}>◖</Text>
@@ -301,7 +319,11 @@ export const register: Register = on => {
           </Box>
           <Box flexShrink={0} marginLeft={1} columnGap={1}>
             {modes ? <Text color={pal.dim}>{modes}</Text> : null}
-            {chosen.map(name => pill(`tool:${name}`, toolLabel(name), () => void runTool(name), { state: states[name] }))}
+            {chosen.map(name => {
+              const mode = onOff[name]
+              const state = mode ? (mode.isOn ? 'on' : 'off') : states[name]
+              return pill(`tool:${name}`, mode?.label ?? toolLabel(name), () => void runTool(name), { state })
+            })}
             {pill('pill', `${LABEL} ${shown === 'tools' ? '▼' : '▲'}`, () => void toggleMenu('tools'), { mark: '✻' })}
           </Box>
         </Box>
@@ -324,13 +346,18 @@ export const register: Register = on => {
     const toggle = (name: string) =>
       saveTools($, chosen.includes(name) ? chosen.filter(n => n !== name) : [...chosen, name])
 
-    const item = (c: BarTool, isIn: boolean) => (
-      <Button key={`pick:${c.name}`} plain onPress={() => void toggle(c.name)}>
-        <Text color={isIn ? pal.good : pal.dim}>{isIn ? '● ' : '○ '}</Text>
-        <Text color={pal.text}>{`/${c.name}`}</Text>
-        <Text color={pal.dim}>{clip(c.description ? `  ${c.description}` : '', width - c.name.length - 6)}</Text>
-      </Button>
-    )
+    const onOff = await read($, modeStates)
+    const item = (c: BarTool, isIn: boolean) => {
+      const mode = onOff[c.name]
+      const about = mode ? `  ${mode.label} on/off button, now ${mode.isOn ? 'on' : 'off'}` : c.description ? `  ${c.description}` : ''
+      return (
+        <Button key={`pick:${c.name}`} plain onPress={() => void toggle(c.name)}>
+          <Text color={isIn ? pal.good : pal.dim}>{isIn ? '● ' : '○ '}</Text>
+          <Text color={pal.text}>{`/${c.name}`}</Text>
+          <Text color={pal.dim}>{clip(about, width - c.name.length - 6)}</Text>
+        </Button>
+      )
+    }
     const heading = (text: string) => (
       <Box marginTop={1}>
         <Text color={pal.accent} bold>

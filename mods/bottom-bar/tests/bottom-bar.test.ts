@@ -9,6 +9,7 @@ import {
   clip,
   effortLabel,
   isModCommand,
+  mergeModes,
   modelChoiceLabel,
   modelChoices,
   modelName,
@@ -674,4 +675,48 @@ test('stateFromReply reads on and off from a command reply', () => {
   expect(stateFromReply('collision-guard: Collision Guard is on. Before an edit, it asks')).toBe('on')
   expect(stateFromReply('Clean View is now off.')).toBe('off')
   expect(stateFromReply('Ran the report.')).toBeUndefined()
+})
+
+test('mergeModes keeps each mod\'s own entries and drops malformed ones', () => {
+  const first = mergeModes({}, 'clean-view', { simple: { label: 'Clean View', isOn: true }, bad: { isOn: 'yes' } })
+  expect(first).toEqual({ simple: { label: 'Clean View', isOn: true, plugin: 'clean-view' } })
+  const both = mergeModes(first, 'guard', { guard: { isOn: false } })
+  expect(both.guard).toEqual({ label: 'Guard', isOn: false, plugin: 'guard' })
+  expect(mergeModes(both, 'clean-view', {})).toEqual({ guard: { label: 'Guard', isOn: false, plugin: 'guard' } })
+})
+
+// A stand-in mod with an on/off mode: `/demo` flips it and publishes it as its `modes` state.
+const DEMO_MOD = {
+  name: 'demo-mode',
+  register: ((on: any) => {
+    let isOn = true
+    on('session.start', async ($: any, e: any, next: any) => {
+      const ran = await next(e)
+      await $.command.register({ name: 'demo', description: 'Flip the demo mode' })
+      await $.state.set({ plugin: 'demo-mode', key: 'modes' }, { demo: { label: 'Demo Mode', isOn } })
+      return ran
+    })
+    on('command.run', { command: 'demo' }, async ($: any) => {
+      isOn = !isOn
+      await $.state.set({ plugin: 'demo-mode', key: 'modes' }, { demo: { label: 'Demo Mode', isOn } })
+      return { text: isOn ? 'Demo is on.' : 'Demo is off.' }
+    })
+  }) as any,
+}
+
+test('a mod that publishes its mode shows on and off in its pill, live', { plugins: [DEMO_MOD] }, async ($, on) => {
+  const DEMO = cmd('demo', 'demo-mode', 'plugin', 'Flip the demo mode')
+  world(on, { tools: ['demo'] }, [DEMO, COMPACT])
+  on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }) as any)
+  await startSession($)
+  const bar = await mountBar($)
+  expect((await bar.find({ key: 'tool:demo' }))?.text).toContain('● Demo Mode')
+
+  await bar.press({ key: 'tool:demo' })
+  expect((await bar.find({ key: 'tool:demo' }))?.text).toContain('○ Demo Mode')
+
+  await bar.press({ key: 'pill' })
+  await bar.press({ key: 'choose' })
+  const pane = await mountPane($)
+  expect((await pane.find({ key: 'pick:demo' }))?.text).toContain('Demo Mode on/off button, now off')
 })
