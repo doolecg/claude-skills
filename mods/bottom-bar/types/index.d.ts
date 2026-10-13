@@ -21,6 +21,17 @@ export type BarTool = {
   source: string
 }
 
+/** A plugin's `userConfig` field as `/config` lists it, for the toolbox. */
+export type BarSetting = {
+  key: string
+  label: string
+  description: string
+  kind: 'boolean' | 'choice' | 'text' | 'number'
+  value: string | number | boolean
+  options: string[]
+  isLocked: boolean
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'bottom-bar': {
@@ -34,6 +45,9 @@ declare module 'claude-code' {
       modeStates: Record<string, BarMode>
       choices: BarTool[]
       filter: string
+      /** The tools pill's name, from the `name` option; the toolbox is headed with it. */
+      label: string
+      settings: BarSetting[]
     }
   }
 }

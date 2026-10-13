@@ -93,7 +93,7 @@
     },
     {
       "name": "bottom-bar",
-      "description": "A compact rounded bar at the bottom of the terminal (model, effort, context, 5h usage, agents) with a Doole's Tools pill that holds the mods you pick.",
+      "description": "A compact rounded bar at the bottom of the terminal (model, effort, context, 5h usage, agents) with a Doole's Tools pill that holds the mods you pick and opens a toolbox.",
       "category": "productivity",
       "source": "./mods/bottom-bar"
     },

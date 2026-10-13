@@ -22,6 +22,8 @@ export type Palette = {
   pillBg: string
   pillFg: string
   panel: string
+  /** Text on a filled chip. */
+  ink: string
 }
 
 // Claude's warm coral, cream and sage, softened for a dark terminal.
@@ -38,6 +40,7 @@ export const DARK: Palette = {
   pillBg: '#1F2C3D',
   pillFg: '#C9D3E0',
   panel: '#24201D',
+  ink: '#1A1714',
 }
 
 export const LIGHT: Palette = {
@@ -53,6 +56,7 @@ export const LIGHT: Palette = {
   pillBg: '#E3E9F1',
   pillFg: '#2B3A4C',
   panel: '#FBF8F3',
+  ink: '#FBF8F3',
 }
 
 export const paletteFor = (theme: unknown): Palette =>

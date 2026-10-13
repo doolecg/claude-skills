@@ -27,8 +27,30 @@ The bar replaces a `statusLine` script. If you have one in `~/.claude/settings.j
 ## Doole's Tools
 
 - The mods you pick sit as filled, round-ended pills at the right end of the bar. Click one to run it. When its reply says it is on (`Diff panel shown`, `Guard is on`), the pill shows a ✓ until a reply says it is off.
-- The Doole's Tools pill opens a small box with `✎ choose pills`, which picks them. Mods' own commands are listed first; type in the search box to find any other command.
+- `✎ Choose pills` in the toolbox (or `/choose-pills`) picks them. Mods' own commands are listed first; type in the search box to find any other command.
 - Your picks are saved and come back in every session.
+- The pill's name is the `Tools name` option ("Doole's Tools" by default). Change it in the toolbox, `/config` or `/plugin`.
+
+## The toolbox
+
+The Doole's Tools pill opens a toolbox right above it. Click the pill again to close it.
+
+```
+╭──────────────────────────────────────────────────────────────────╮
+│ ◆ D O O L E ' S   T O O L S                      Opus 5.5 · High │
+│ MODEL   Sonnet  Opus 5.5  Haiku  Fable                           │
+│ EFFORT  Low  Medium  High  XHigh  Max                            │
+│ S E T T I N G S                                                  │
+│ ● Clean View      Turn Clean View on or off (no argume…   ● On   │
+│ ○ Tools name      The name on the tools p…  Doole's Tools        │
+│ L A U N C H                                                      │
+│ ✎ Choose pills                  ✦ Guard                          │
+╰──────────────────────────────────────────────────────────────────╯
+```
+
+- **Model** and **Effort**: click one to switch. The toolbox stays open.
+- **Settings**: an On/Off switch for every mod with an on/off mode (below), and every mod's own options: switches for yes/no options, a button that steps through pick-one options, and a text box for names and numbers (press Enter to save).
+- **Launch**: `Choose pills`, then every other command a mod adds. Clicking one closes the toolbox and runs it.
 
 ## On/off modes
 

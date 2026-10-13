@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
-import type { BarFigures, BarTool } from '../types'
+import type { BarFigures, BarSetting, BarTool } from '../types'
 import {
   EFFORTS,
   EMPTY_FIGURES,
@@ -21,9 +21,12 @@ import {
   segments,
   toolLabel,
 } from './bar-logic'
+import { toolboxRows, toolboxWidth } from './toolbox'
+import { settingsList } from './toolbox-logic'
 
 const LABEL = "Doole's Tools"
 const PICKER = 'bottom-bar-tools'
+const CHOOSE = 'choose-pills'
 
 const figures = atom({ plugin: 'bottom-bar', key: 'figures' } as const, EMPTY_FIGURES)
 const theme = atom({ plugin: 'bottom-bar', key: 'theme' } as const, 'dark')
@@ -35,6 +38,8 @@ const toolStates = atom({ plugin: 'bottom-bar', key: 'toolStates' } as const, {}
 const modeStates = atom({ plugin: 'bottom-bar', key: 'modeStates' } as const, {})
 const choices = atom({ plugin: 'bottom-bar', key: 'choices' } as const, [])
 const filter = atom({ plugin: 'bottom-bar', key: 'filter' } as const, '')
+const label = atom({ plugin: 'bottom-bar', key: 'label' } as const, LABEL)
+const settings = atom({ plugin: 'bottom-bar', key: 'settings' } as const, [])
 
 type Dollar = EngineInterface
 
@@ -87,15 +92,16 @@ async function loadModels($: Dollar): Promise<void> {
   await update($, models, () => list)
 }
 
-async function pickModel($: Dollar, alias: string): Promise<void> {
-  await update($, menu, () => '')
+/** `keepOpen`: the toolbox stays up after a pick; the small pickers close. */
+async function pickModel($: Dollar, alias: string, keepOpen = false): Promise<void> {
+  if (!keepOpen) await update($, menu, () => '')
   const set = await $.config.set({ key: 'model', value: alias })
   if (set.deny !== undefined) $.ui.toast(`Could not change the model: ${set.deny}`)
   await refresh($, { settings: true })
 }
 
-async function pickEffort($: Dollar, level: string): Promise<void> {
-  await update($, menu, () => '')
+async function pickEffort($: Dollar, level: string, keepOpen = false): Promise<void> {
+  if (!keepOpen) await update($, menu, () => '')
   try {
     await $.command.run({ command: 'effort', args: level })
     await setFigures($, f => ({ ...f, effort: level }))
@@ -121,9 +127,38 @@ async function saveTools($: Dollar, list: string[]): Promise<void> {
   await $.store.set('tools', list)
 }
 
-export const register: Register = on => {
+async function loadSettings($: Dollar): Promise<void> {
+  const list = settingsList(await $.config.list())
+  await update($, settings, () => list)
+}
+
+async function setOption($: Dollar, s: BarSetting, value: string | number | boolean): Promise<void> {
+  const set = await $.config.set({ key: s.key, value })
+  if (set.deny !== undefined) $.ui.toast(`Could not change ${s.label}: ${set.deny}`)
+  await loadSettings($)
+}
+
+async function runCommand($: Dollar, name: string): Promise<void> {
+  try {
+    await noteReply($, name, await $.command.run({ command: name, args: '' }))
+  } catch {
+    $.ui.toast(`/${name} is not available. Is its mod still installed?`)
+  }
+}
+
+async function openPicker($: Dollar): Promise<void> {
+  await update($, menu, () => '')
+  await update($, filter, () => '')
+  await loadChoices($)
+  await $.ui.open({ id: PICKER, title: await read($, label), focus: true, closeOnEscape: true })
+}
+
+export const register: Register = (on, options) => {
+  const name = typeof options.name === 'string' && options.name.trim() ? options.name.trim() : LABEL
+
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
+    if ((await read($, label)) !== name) await update($, label, () => name)
     const saved = await $.store.get('tools')
     if (Array.isArray(saved)) {
       await update($, tools, () => saved.filter((x): x is string => typeof x === 'string'))
@@ -133,6 +168,7 @@ export const register: Register = on => {
       await loadModels($)
     } catch {}
     $.clock.every(4000, () => void refresh($))
+    await $.command.register({ name: CHOOSE, description: 'Choose which mods get a pill in the bottom bar' })
     return ran
   })
 
@@ -180,10 +216,18 @@ export const register: Register = on => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  on('command.run', { command: CHOOSE }, async $ => {
+    await openPicker($)
+    return {}
+  })
+
   on('command.run', async ($, e, next) => {
     const ran = await next(e)
     if (['model', 'effort', 'config', 'theme'].includes(e.command)) void refresh($, { settings: true })
-    if ((await read($, tools)).includes(e.command)) await noteReply($, e.command, ran)
+    // A mode's own write lands under this hook too (the toolbox runs it), so its reply is read here.
+    if ((await read($, tools)).includes(e.command) || (await read($, modeStates))[e.command]) {
+      await noteReply($, e.command, ran)
+    }
     return ran
   }).catch(($, e, next) => next(e))
 
@@ -224,18 +268,17 @@ export const register: Register = on => {
 
     const runTool = async (name: string) => {
       await update($, menu, () => '')
-      try {
-        await noteReply($, name, await $.command.run({ command: name, args: '' }))
-      } catch {
-        $.ui.toast(`/${name} is not available. Is its mod still installed?`)
+      await runCommand($, name)
+    }
+    const openTools = async () => {
+      if ((await read($, menu)) !== 'tools') {
+        try {
+          await Promise.all([loadChoices($), loadSettings($)])
+        } catch {}
       }
+      await toggleMenu('tools')
     }
-    const openPicker = async () => {
-      await update($, menu, () => '')
-      await update($, filter, () => '')
-      await loadChoices($)
-      await $.ui.open({ id: PICKER, title: LABEL, focus: true, closeOnEscape: true })
-    }
+    const title = await read($, label)
 
     const states = await read($, toolStates)
     const onOff = await read($, modeStates)
@@ -279,18 +322,30 @@ export const register: Register = on => {
         : shown === 'effort'
           ? EFFORTS.map(level => choice(`set-effort:${level}`, level, f.effort === level, () => pickEffort($, level)))
           : shown === 'tools'
-            ? [
-                <Button key="choose" plain onPress={() => void openPicker()}>
-                  <Text color={pal.accent}>{'✎ '}</Text>
-                  <Text color={pal.text}>choose pills</Text>
-                </Button>,
-              ]
+            ? toolboxRows({
+                els: $.ui.resolve(e),
+                pal,
+                width: toolboxWidth(e.viewport?.columns ?? 80) - 4,
+                title,
+                figures: f,
+                models: modelList,
+                modes: onOff,
+                choices: await read($, choices),
+                settings: await read($, settings),
+                pickModel: alias => void pickModel($, alias, true),
+                pickEffort: level => void pickEffort($, level, true),
+                flip: command => void runCommand($, command),
+                setOption: (s, value) => void setOption($, s, value),
+                launch: command => void runTool(command),
+                choosePills: () => void openPicker($),
+              })
             : []
 
-    // Fullscreen paints the box over the rows above the bar; the main screen clips
+    // Fullscreen paints a small box over the rows above the bar; the main screen clips
     // a placed box to the site, so there it sits in the flow and pushes the bar down.
-    const floats = e.viewport?.isFullscreen === true && !(await read($, isWorking))
+    // The toolbox is taller than the rows a float may paint over, so it always sits in the flow.
     const atRight = shown === 'tools'
+    const floats = !atRight && e.viewport?.isFullscreen === true && !(await read($, isWorking))
     const offset = atRight ? 0 : segmentOffset(segs, shown)
     const box = (
       <Box
@@ -305,6 +360,7 @@ export const register: Register = on => {
         borderColor={pal.border}
         backgroundColor={pal.panel}
         paddingX={1}
+        width={atRight ? toolboxWidth(e.viewport?.columns ?? 80) : undefined}
       >
         {options}
       </Box>
@@ -324,7 +380,7 @@ export const register: Register = on => {
               const state = mode ? (mode.isOn ? 'on' : 'off') : states[name]
               return pill(`tool:${name}`, mode?.label ?? toolLabel(name), () => void runTool(name), { state })
             })}
-            {pill('pill', `${LABEL} ${shown === 'tools' ? '▼' : '▲'}`, () => void toggleMenu('tools'), { mark: '✻' })}
+            {pill('pill', `${title} ${shown === 'tools' ? '▼' : '▲'}`, () => void openTools(), { mark: '✻' })}
           </Box>
         </Box>
         {options.length > 0 && floats && box}

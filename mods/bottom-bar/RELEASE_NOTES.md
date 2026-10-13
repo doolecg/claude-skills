@@ -1,3 +1,15 @@
+# Bottom Bar 1.2.0
+
+## New
+- The Doole's Tools pill opens a toolbox right above it: switch the model and effort, turn mods on and off, change every mod's options, and launch mods' commands.
+- A `Tools name` option renames the pill and the toolbox ("Doole's Tools" by default). Change it in the toolbox, `/config` or `/plugin`.
+- `/choose-pills` opens the pill picker. It is also in the toolbox, under Launch.
+
+## Fixed
+- A mod's on/off pill now follows the mode when something else flips it (the toolbox, or the command typed out).
+
+---
+
 # Bottom Bar 1.1.0
 
 ## New

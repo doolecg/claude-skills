@@ -22,6 +22,8 @@ import {
   toolLabel,
   windowLabel,
 } from '../hooks/bar-logic'
+import { toolboxWidth } from '../hooks/toolbox'
+import { currentAlias, effortName, launchList, nextOption, settingsList, spaced } from '../hooks/toolbox-logic'
 
 const PICKER = 'bottom-bar-tools'
 
@@ -69,6 +71,7 @@ function world(on: any, saved: Record<string, unknown> = {}, commands: any[] = A
     ran: [] as string[],
     runs: [] as { command: string; args: string }[],
     opened: [] as string[],
+    titles: [] as string[],
     closed: [] as string[],
     toasts: [] as string[],
     unknownCommands: false,
@@ -83,6 +86,7 @@ function world(on: any, saved: Record<string, unknown> = {}, commands: any[] = A
   on('command.list', () => ({ value: commands }))
   on('ui.open', (_$: any, e: any) => {
     seen.opened.push(e.id)
+    seen.titles.push(e.title)
     return { value: { isPlaced: true as const } }
   })
   on('ui.close', (_$: any, e: any) => {
@@ -114,7 +118,10 @@ const MODEL_ROWS = (options: readonly string[]) => [
 
 // Answers what the bar reads to fill its model and effort segments (session.start refreshes
 // from these) and what the pickers write (config.set), recording each write.
-function seedModel(on: any, opts: { model?: string; effort?: string; options?: readonly string[] } = {}) {
+function seedModel(
+  on: any,
+  opts: { model?: string; effort?: string; options?: readonly string[]; rows?: any[] } = {},
+) {
   const engine = {
     model: opts.model ?? 'claude-opus-5-5',
     effort: opts.effort ?? 'high',
@@ -127,11 +134,14 @@ function seedModel(on: any, opts: { model?: string; effort?: string; options?: r
   on('session.model', () => ({ value: engine.model }))
   on('agent.list', () => ({ value: [] }))
   on('settings.read', () => ({ value: { effortLevel: engine.effort } }))
-  on('config.list', () => ({ value: MODEL_ROWS(opts.options ?? MODEL_OPTIONS) }))
+  const extra = opts.rows ?? []
+  on('config.list', () => ({ value: [...MODEL_ROWS(opts.options ?? MODEL_OPTIONS), ...extra] }))
   on('config.set', (_$: any, e: any) => {
     engine.configSets.push({ key: e.key, value: e.value })
     if (engine.denyModel !== undefined) return { deny: engine.denyModel }
-    engine.model = String(e.value)
+    const found = extra.find(r => r.key === e.key)
+    if (found) found.value = e.value
+    else engine.model = String(e.value)
     return { value: e.value }
   })
   return engine
@@ -330,14 +340,14 @@ test('terminal: the bar draws a pill and the pill opens the tools box', async ($
   expect(await bar.find({ key: 'pill' })).toBeDefined()
   expect(await bar.find({ type: 'Text', text: /Doole's Tools/ })).toBeDefined()
   expect(await bar.find({ type: 'Text', text: '0 agents' })).toBeDefined()
-  expect(await bar.find({ key: 'choose' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
 
   await bar.press({ key: 'pill' })
-  expect(await bar.find({ key: 'choose' })).toBeDefined()
-  expect(await bar.find({ type: 'Text', text: 'choose pills' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'Choose pills' })).toBeDefined()
 
   await bar.press({ key: 'pill' })
-  expect(await bar.find({ key: 'choose' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
 
   // On the terminal the mod draws the bar itself and never asks the engine for one.
   expect(engine).toBe(0)
@@ -374,7 +384,7 @@ test('desktop: the hook defers to the engine and draws no pill', async ($, on) =
   expect(asked).toEqual(['desktop'])
   expect(await bar.find({ type: 'Text', text: 'engine footer' })).toBeDefined()
   expect(await bar.find({ key: 'pill' })).toBeUndefined()
-  expect(await bar.find({ key: 'choose' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
 })
 
 // ------------------------------------------------------------------ picker
@@ -385,7 +395,7 @@ test('picker: choose opens the pane and pick:<name> toggles a command in the sto
   // Pressing "choose" loads the command list into state and opens the pane.
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
-  await bar.press({ key: 'choose' })
+  await bar.press({ key: 'tb-choose' })
   expect(seen.opened).toEqual([PICKER])
 
   const pane = await mountPane($)
@@ -424,7 +434,7 @@ test('picker: the chosen commands become buttons in the bar and run when pressed
 
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
-  await bar.press({ key: 'choose' })
+  await bar.press({ key: 'tb-choose' })
   const pane = await mountPane($)
   await pane.press({ key: 'pick:clean-view' })
   await pane.press({ key: 'pick:prompt-upgrade' })
@@ -439,14 +449,14 @@ test('picker: the chosen commands become buttons in the bar and run when pressed
   // Pressing one runs the command and closes the row.
   await bar.press({ key: 'tool:clean-view' })
   expect(seen.ran).toEqual(['clean-view'])
-  expect(await bar.find({ key: 'choose' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
 })
 
 test('picker: a search lists other commands and they can be added too', async ($, on) => {
   const seen = world(on)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
-  await bar.press({ key: 'choose' })
+  await bar.press({ key: 'tb-choose' })
   const pane = await mountPane($)
 
   await pane.input({ key: 'filter', text: 'brain', kind: 'change' })
@@ -637,11 +647,11 @@ test('pickers: the pill closes the box, and a box closes the pill row', async ($
   await bar.press({ key: 'pill' })
   expect(await keysOf(bar, 'set-')).toEqual([])
   // ... and the pill opened its own row.
-  expect(await bar.find({ key: 'choose' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
 
   await bar.press({ key: 'effort' })
   expect((await keysOf(bar, 'set-effort:')).length).toBe(5)
-  expect(await bar.find({ key: 'choose' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
 })
 
 test('pickers: the box sits above the segment it belongs to', async ($, on) => {
@@ -716,7 +726,580 @@ test('a mod that publishes its mode shows on and off in its pill, live', { plugi
   expect((await bar.find({ key: 'tool:demo' }))?.text).toContain('○ Demo Mode')
 
   await bar.press({ key: 'pill' })
-  await bar.press({ key: 'choose' })
+  await bar.press({ key: 'tb-choose' })
   const pane = await mountPane($)
   expect((await pane.find({ key: 'pick:demo' }))?.text).toContain('Demo Mode on/off button, now off')
+})
+
+// ------------------------------------------------------- 1.2.0: name, /choose-pills
+
+const registerCommands = (on: any) => on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }) as any)
+// The label state is what titles the picker pane.
+const paneTitle = async ($: any, seen: ReturnType<typeof world>) => {
+  await $.command.run({ command: 'choose-pills', args: '' })
+  return seen.titles.at(-1)
+}
+
+test('the pill shows the default name when no name is configured', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  expect((await bar.find({ key: 'pill' }))?.text).toContain("Doole's Tools")
+  expect(await paneTitle($, seen)).toBe("Doole's Tools")
+})
+
+test('the pill shows the configured name and publishes it as the label', { options: { name: "Tristen's Tools" } }, async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  const pill = (await bar.find({ key: 'pill' }))?.text
+  expect(pill).toContain("Tristen's Tools")
+  expect(pill).not.toContain("Doole's Tools")
+  expect(await paneTitle($, seen)).toBe("Tristen's Tools")
+})
+
+test('a blank configured name falls back to the default', { options: { name: '   ' } }, async ($, on) => {
+  world(on)
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  expect((await bar.find({ key: 'pill' }))?.text).toContain("Doole's Tools")
+})
+
+test('the configured name is trimmed and titles the picker pane', { options: { name: " Tristen's Tools " } }, async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  expect((await bar.find({ key: 'pill' }))?.text).toContain("Tristen's Tools")
+  await $.command.run({ command: 'choose-pills', args: '' })
+  expect(seen.opened).toEqual([PICKER])
+  expect(seen.titles).toEqual(["Tristen's Tools"])
+})
+
+test('the pill opens the toolbox box, and pressing it again closes it', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  expect((await bar.find({ key: 'pill' }))?.text).toContain('▼')
+  // The toolbox is the bar's own box: no command runs to open it.
+  expect(seen.runs).toEqual([])
+
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
+  expect((await bar.find({ key: 'pill' }))?.text).toContain('▲')
+})
+
+test('an open model box is swapped for the toolbox by the pill', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'model' })
+  expect((await keysOf(bar, 'set-model:')).length).toBe(4)
+  await bar.press({ key: 'pill' })
+  expect(await keysOf(bar, 'set-')).toEqual([])
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+})
+
+test('toolbox: the header spells the name out and shows the model and effort', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  expect(await bar.find({ type: 'Text', text: "◆ D O O L E ' S   T O O L S" })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'Opus 5.5 · High' })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'MODEL  ' })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'EFFORT ' })).toBeDefined()
+})
+
+test('toolbox: a configured name is spelled out in the header', { options: { name: "Tristen's Tools" } }, async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ type: 'Text', text: "◆ T R I S T E N ' S   T O O L S" })).toBeDefined()
+})
+
+test('toolbox: the model and effort chips mark what is in use', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  expect(await keysOf(bar, 'tb-model:')).toEqual([
+    'tb-model:sonnet',
+    'tb-model:opus',
+    'tb-model:haiku',
+    'tb-model:fable',
+  ])
+  expect(await keysOf(bar, 'tb-effort:')).toEqual([
+    'tb-effort:low',
+    'tb-effort:medium',
+    'tb-effort:high',
+    'tb-effort:xhigh',
+    'tb-effort:max',
+  ])
+  // The model in use shows its full name; the others a family name.
+  expect((await bar.find({ key: 'tb-model:opus' }))?.text).toContain('Opus 5.5')
+  expect((await bar.find({ key: 'tb-model:sonnet' }))?.text).toContain('Sonnet')
+  expect((await bar.find({ key: 'tb-effort:xhigh' }))?.text).toContain('XHigh')
+  // Only the one in use is filled.
+  const filled = async (key: string) => findProp(await bar.find({ key }), 'backgroundColor', DARK.accent)
+  expect(await filled('tb-model:opus')).toBeDefined()
+  expect(await filled('tb-model:sonnet')).toBeUndefined()
+})
+
+test('toolbox: an effort chip runs /effort and the box stays open', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  await bar.press({ key: 'tb-effort:max' })
+  expect(seen.runs).toEqual([{ command: 'effort', args: 'max' }])
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'Opus 5.5 · Max' })).toBeDefined()
+  expect((await bar.find({ key: 'effort' }))?.text).toContain('max')
+})
+
+test('toolbox: a model chip sets the model through config.set and the box stays open', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  const engine = seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  await bar.press({ key: 'tb-model:sonnet' })
+  expect(engine.configSets).toEqual([{ key: 'model', value: 'sonnet' }])
+  expect(seen.toasts).toEqual([])
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'Sonnet · High' })).toBeDefined()
+})
+
+test('toolbox: a refused model change shows a toast and keeps the box open', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  const engine = seedModel(on)
+  engine.denyModel = 'managed by your organisation'
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  await bar.press({ key: 'tb-model:haiku' })
+  expect(seen.toasts.join(' ')).toContain('Could not change the model: managed by your organisation')
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: 'Opus 5.5 · High' })).toBeDefined()
+})
+
+// A plugin's own /config rows, as the engine lists them, and some of the engine's.
+const configRow = (key: string, kind: string, value: unknown, extra: Record<string, unknown> = {}) => ({
+  key,
+  label: key.split('.')[1] ?? key,
+  description: `${key} setting`,
+  kind,
+  value,
+  provider: { plugin: key.split('.')[0] },
+  isLocked: false,
+  ...extra,
+})
+const ENGINE = { provider: { plugin: 'engine' } }
+const SETTING_ROWS = () => [
+  configRow('demo.enabled', 'boolean', false),
+  configRow('demo.style', 'choice', 'b', { options: ['a', 'b', 'c'] }),
+  configRow('demo.title', 'text', 'hello'),
+  configRow('demo.limit', 'number', 5),
+  configRow('engine.spinner', 'boolean', true, ENGINE),
+  configRow('engine.shape', 'choice', 'x', { ...ENGINE, options: ['x', 'y'] }),
+  configRow('plain', 'boolean', true),
+]
+
+test("toolbox: a plugin's /config rows get a control each; the engine's are left out", async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on, { rows: SETTING_ROWS() })
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  expect(await bar.find({ key: 'tb-set:demo.enabled' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-set:demo.style' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-set:demo.title' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-set:demo.limit' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-set:engine.spinner' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-set:engine.shape' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-set:plain' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-set:theme' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-set:model' })).toBeUndefined()
+  // A boolean is an on/off button, a choice shows its value.
+  expect((await bar.find({ key: 'tb-set:demo.enabled' }))?.text).toContain('Off')
+  expect((await bar.find({ key: 'tb-set:demo.style' }))?.text).toContain('b ▸')
+})
+
+test('toolbox: with no plugin setting the box says so', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on, { rows: [configRow('engine.spinner', 'boolean', true, ENGINE)] })
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ type: 'Text', text: 'No mod has a setting yet.' })).toBeDefined()
+})
+
+test('toolbox: a boolean setting flips through config.set', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  const engine = seedModel(on, { rows: SETTING_ROWS() })
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  await bar.press({ key: 'tb-set:demo.enabled' })
+  expect(engine.configSets).toEqual([{ key: 'demo.enabled', value: true }])
+  expect((await bar.find({ key: 'tb-set:demo.enabled' }))?.text).toContain('On')
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+
+  await bar.press({ key: 'tb-set:demo.enabled' })
+  expect(engine.configSets.at(-1)).toEqual({ key: 'demo.enabled', value: false })
+  expect((await bar.find({ key: 'tb-set:demo.enabled' }))?.text).toContain('Off')
+})
+
+test('toolbox: a choice setting steps to the next option, round to the first', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  const engine = seedModel(on, { rows: SETTING_ROWS() })
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  await bar.press({ key: 'tb-set:demo.style' })
+  expect(engine.configSets).toEqual([{ key: 'demo.style', value: 'c' }])
+  expect((await bar.find({ key: 'tb-set:demo.style' }))?.text).toContain('c ▸')
+  await bar.press({ key: 'tb-set:demo.style' })
+  expect(engine.configSets.at(-1)).toEqual({ key: 'demo.style', value: 'a' })
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+})
+
+test('toolbox: a text or number setting is an input that submits through config.set', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  const engine = seedModel(on, { rows: SETTING_ROWS() })
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  await bar.input({ key: 'tb-set:demo.title', text: '  new title ', kind: 'submit' })
+  expect(engine.configSets).toEqual([{ key: 'demo.title', value: 'new title' }])
+  await bar.input({ key: 'tb-set:demo.limit', text: '12', kind: 'submit' })
+  expect(engine.configSets.at(-1)).toEqual({ key: 'demo.limit', value: 12 })
+  await bar.input({ key: 'tb-set:demo.limit', text: 'abc', kind: 'submit' })
+  expect(engine.configSets.at(-1)).toEqual({ key: 'demo.limit', value: 0 })
+})
+
+test('toolbox: a refused setting shows a toast', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  const engine = seedModel(on, { rows: SETTING_ROWS() })
+  engine.denyModel = 'locked by policy'
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  await bar.press({ key: 'tb-set:demo.enabled' })
+  expect(seen.toasts.join(' ')).toContain('Could not change enabled: locked by policy')
+})
+
+test('toolbox: a locked setting shows its value and no control', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on, { rows: [configRow('demo.enabled', 'boolean', true, { isLocked: true })] })
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ key: 'tb-set:demo.enabled' })).toBeUndefined()
+  expect(await bar.find({ type: 'Text', text: 'true (locked)' })).toBeDefined()
+})
+
+test('toolbox: an on/off mode is a toggle that runs its command', { plugins: [DEMO_MOD] }, async ($, on) => {
+  const DEMO = cmd('demo', 'demo-mode', 'plugin', 'Flip the demo mode')
+  const seen = world(on, {}, [DEMO, CLEAN, COMPACT])
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  expect((await bar.find({ key: 'tb-mode:demo' }))?.text).toContain('On')
+  // A mode is a toggle, not a launcher.
+  expect(await bar.find({ key: 'tb-launch:demo' })).toBeUndefined()
+  expect(await bar.find({ key: 'tb-launch:clean-view' })).toBeDefined()
+
+  await bar.press({ key: 'tb-mode:demo' })
+  expect((await bar.find({ key: 'tb-mode:demo' }))?.text).toContain('Off')
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  await bar.press({ key: 'tb-mode:demo' })
+  expect((await bar.find({ key: 'tb-mode:demo' }))?.text).toContain('On')
+  expect(seen.toasts).toEqual([])
+})
+
+test("toolbox: the launchers are the mods' own commands, and one closes the box and runs", async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+
+  expect(await keysOf(bar, 'tb-launch:')).toEqual(['tb-launch:clean-view', 'tb-launch:prompt-upgrade'])
+  expect((await bar.find({ key: 'tb-launch:clean-view' }))?.text).toContain('Clean View')
+
+  await bar.press({ key: 'tb-launch:clean-view' })
+  expect(seen.runs).toEqual([{ command: 'clean-view', args: '' }])
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
+  expect((await bar.find({ key: 'pill' }))?.text).toContain('▲')
+})
+
+test('toolbox: a launcher whose command is gone shows a toast', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  seen.unknownCommands = true
+  await bar.press({ key: 'tb-launch:prompt-upgrade' })
+  expect(seen.toasts.join(' ')).toContain('/prompt-upgrade is not available')
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
+})
+
+test('toolbox: Choose pills opens the picker pane and closes the box', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  expect((await bar.find({ key: 'tb-choose' }))?.text).toContain('Choose pills')
+
+  await bar.press({ key: 'tb-choose' })
+  expect(seen.opened).toEqual([PICKER])
+  expect(seen.runs).toEqual([])
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
+
+  const pane = await mountPane($)
+  expect(await pane.find({ key: 'pick:clean-view' })).toBeDefined()
+})
+
+test('toolbox: the box has a fixed width that follows the terminal width', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const mountAt = (columns: number) =>
+    $.ui.mount({
+      plugin: 'bottom-bar',
+      surface: 'terminal',
+      component: 'SessionMode',
+      props: BAR_PROPS,
+      viewport: { columns, rows: 40 },
+    } as any)
+  for (const columns of [100, 50]) {
+    const bar = await mountAt(columns)
+    // The open box is shared state: the second mount finds it already open.
+    if (!(await bar.find({ key: 'tb-choose' }))) await bar.press({ key: 'pill' })
+    const box = findProp(await bar.drawn(), 'borderStyle', 'round')
+    expect(box.props.width).toBe(toolboxWidth(columns))
+    // Every row of the toolbox is as wide as the box inside its border and padding.
+    expect(findProp(box, 'key', 'head').props.width).toBe(toolboxWidth(columns) - 4)
+    expect(box.props.alignSelf).toBe('flex-end')
+  }
+})
+
+test('toolboxWidth stays between 40 and 68 columns and clear of the edge', () => {
+  expect(toolboxWidth(200)).toBe(68)
+  expect(toolboxWidth(80)).toBe(68)
+  expect(toolboxWidth(60)).toBe(56)
+  expect(toolboxWidth(20)).toBe(40)
+})
+
+// ------------------------------------------------------------ toolbox-logic
+
+test('spaced spells a name out in capitals, or falls back to plain capitals', () => {
+  expect(spaced("Doole's Tools", 60)).toBe("D O O L E ' S   T O O L S")
+  expect(spaced('ab', 3)).toBe('A B')
+  expect(spaced('ab', 2)).toBe('AB')
+  expect(spaced("Doole's Tools", 10)).toBe("DOOLE'S TOOLS")
+  expect(spaced('', 5)).toBe('')
+})
+
+test('effortName capitalises a level, with xhigh as XHigh', () => {
+  expect(effortName('low')).toBe('Low')
+  expect(effortName('high')).toBe('High')
+  expect(effortName('xhigh')).toBe('XHigh')
+  expect(effortName('')).toBe('')
+})
+
+test('currentAlias finds the alias of the model in use', () => {
+  const aliases = ['sonnet', 'opus', 'haiku', 'fable']
+  expect(currentAlias(aliases, 'Opus 5.5')).toBe('opus')
+  expect(currentAlias(aliases, 'sonnet')).toBe('sonnet')
+  expect(currentAlias(aliases, 'Haiku 4.5')).toBe('haiku')
+  expect(currentAlias(aliases, 'some-other-model')).toBe('')
+  expect(currentAlias(aliases, '')).toBe('')
+})
+
+test("launchList keeps the mods' commands and drops the ones with an on/off mode", () => {
+  const modes = { 'prompt-upgrade': { label: 'Prompt', isOn: true, plugin: 'prompt-upgrade' } }
+  expect(launchList(ALL, {}).map(c => c.name)).toEqual(['clean-view', 'prompt-upgrade'])
+  expect(launchList(ALL, modes).map(c => c.name)).toEqual(['clean-view'])
+  expect(launchList([], modes)).toEqual([])
+})
+
+test("settingsList keeps the plugins' dotted rows of a usable kind, and not the engine's", () => {
+  const rows = [
+    configRow('demo.enabled', 'boolean', true),
+    configRow('demo.style', 'choice', 'a', { options: ['a', 'b'] }),
+    configRow('demo.title', 'text', undefined),
+    configRow('demo.limit', 'number', 3),
+    configRow('demo.other', 'list', 'x'),
+    configRow('engine.spinner', 'boolean', true, ENGINE),
+    configRow('theme', 'choice', 'dark', ENGINE),
+    configRow('plain', 'boolean', true),
+  ] as any[]
+  const out = settingsList(rows)
+  expect(out.map(s => s.key)).toEqual(['demo.enabled', 'demo.style', 'demo.title', 'demo.limit'])
+  expect(out[0]).toEqual({
+    key: 'demo.enabled',
+    label: 'enabled',
+    description: 'demo.enabled setting',
+    kind: 'boolean',
+    value: true,
+    options: [],
+    isLocked: false,
+  })
+  expect(out[1]!.options).toEqual(['a', 'b'])
+  // A missing value reads as an empty string; a number stays a number.
+  expect(out[2]!.value).toBe('')
+  expect(out[3]!.value).toBe(3)
+  expect(settingsList([])).toEqual([])
+})
+
+test('nextOption steps on and wraps round to the first', () => {
+  expect(nextOption(['a', 'b', 'c'], 'a')).toBe('b')
+  expect(nextOption(['a', 'b', 'c'], 'c')).toBe('a')
+  // An unknown value starts the round at the first option.
+  expect(nextOption(['a', 'b', 'c'], 'zzz')).toBe('a')
+  expect(nextOption(['a'], 'a')).toBe('a')
+  expect(nextOption([], 'a')).toBeUndefined()
+  expect(nextOption(['1', '2'], 1)).toBe('2')
+})
+
+test('/choose-pills is registered at session start', async ($, on) => {
+  world(on)
+  const registered: { name: string; description?: string }[] = []
+  on('command.register', (_$: any, e: any) => {
+    registered.push({ name: e.name, description: e.description })
+    return { value: { command: e.name } } as any
+  })
+  expect(registered).toEqual([])
+  await startSession($)
+  expect(registered.map(r => r.name)).toEqual(['choose-pills'])
+  expect(registered[0].description).toBeTruthy()
+})
+
+test('/choose-pills opens the picker pane, with every mod listed', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const reply = await $.command.run({ command: 'choose-pills', args: '' })
+  expect(seen.opened).toEqual([PICKER])
+  // The mod answers it itself; nothing underneath ran.
+  expect(seen.ran).toEqual([])
+  expect(reply).toEqual({})
+
+  const pane = await mountPane($)
+  expect(await pane.find({ key: 'pick:clean-view' })).toBeDefined()
+  expect(await pane.find({ key: 'pick:prompt-upgrade' })).toBeDefined()
+  expect(await pane.find({ key: 'done' })).toBeDefined()
+})
+
+test('/choose-pills closes an open box on the bar', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+  await $.command.run({ command: 'choose-pills', args: '' })
+  expect(seen.opened).toEqual([PICKER])
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
+})
+
+// A mod that publishes an on/off mode once, at session start; its command's reply is the only
+// sign of a later flip (it does not republish the mode).
+const QUIET_MOD = {
+  name: 'quiet-mode',
+  register: ((on: any) => {
+    on('session.start', async ($: any, e: any, next: any) => {
+      const ran = await next(e)
+      await $.state.set({ plugin: 'quiet-mode', key: 'modes' }, { quiet: { label: 'Quiet Mode', isOn: true } })
+      return ran
+    })
+    on('command.run', { command: 'quiet' }, async () => ({ text: 'Quiet is off.' }))
+  }) as any,
+}
+const QUIET = cmd('quiet', 'quiet-mode', 'plugin', 'Flip the quiet mode')
+
+test(
+  "a mode command run by someone else updates the mode's state from its reply",
+  { plugins: [QUIET_MOD] },
+  async ($, on) => {
+    // Not a chosen pill: only the mode state marks the command.
+    world(on, {}, [QUIET, COMPACT])
+    registerCommands(on)
+    await startSession($)
+    await $.command.run({ command: 'choose-pills', args: '' })
+    const pane = await mountPane($)
+    expect((await pane.find({ key: 'pick:quiet' }))?.text).toContain('now on')
+
+    await $.command.run({ command: 'quiet', args: '' })
+    expect((await pane.find({ key: 'pick:quiet' }))?.text).toContain('Quiet Mode on/off button, now off')
+  },
+)
+
+test('a chosen mode pill follows a reply from a command someone else ran', { plugins: [QUIET_MOD] }, async ($, on) => {
+  world(on, { tools: ['quiet'] }, [QUIET, COMPACT])
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('● Quiet Mode')
+
+  await $.command.run({ command: 'quiet', args: '' })
+  expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('○ Quiet Mode')
+})
+
+test('a command that is no mode and no pill leaves the mode pills alone', { plugins: [QUIET_MOD] }, async ($, on) => {
+  const seen = world(on, { tools: ['quiet'] }, [QUIET, COMPACT])
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+
+  // The world's catch-all replies "ran compact": no state in it, and compact is no mode.
+  await $.command.run({ command: 'compact', args: '' })
+  expect(seen.ran).toContain('compact')
+  expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('● Quiet Mode')
 })

@@ -1,7 +1,15 @@
 {
   "name": "bottom-bar",
-  "version": "1.1.0",
-  "description": "A compact rounded bar at the bottom of the terminal (model, effort, context, 5h usage, agents) with a Doole's Tools pill that holds the mods you pick.",
+  "version": "1.2.0",
+  "description": "A compact rounded bar at the bottom of the terminal (model, effort, context, 5h usage, agents) with a Doole's Tools pill that holds the mods you pick and opens a toolbox.",
   "author": { "name": "doolecg" },
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "name": {
+      "type": "string",
+      "title": "Tools name",
+      "description": "The name on the tools pill and at the top of the toolbox.",
+      "default": "Doole's Tools"
+    }
+  }
 }
