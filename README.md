@@ -32,6 +32,7 @@ Plugin skills are namespaced, like `/blockdesigner:blockdesigner-release`.
 | `minecraft-modding` | `fabric-modding`, `neoforge-modding`, `minecraft-26-1-migration` | [siredvin/minecraft-modding-skills](https://github.com/siredvin/minecraft-modding-skills) (MIT), pinned to a commit |
 | `minecraft-multiloader` | `minecraft-multiloader` | [jahrome907/minecraft-agent-skills](https://github.com/jahrome907/minecraft-agent-skills) (MIT), pinned to a commit |
 | `minecraft-mod-dev` | `minecraft-mod-dev` | mcpmarket (copy) |
+| `bottom-bar` | mod: the bar at the bottom of the terminal and the Doole's Tools pill | mine, in `mods/bottom-bar` (edited here, not synced) |
 
 Anthropic's built-in skills (pdf, docx, xlsx, ...) and the ones synced to my claude.ai account aren't here: they already follow the account.
 

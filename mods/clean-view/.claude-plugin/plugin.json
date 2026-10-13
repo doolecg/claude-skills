@@ -1,6 +1,0 @@
-{
-  "name": "clean-view",
-  "version": "1.0.0",
-  "description": "Calm checklist view that hides tool noise, plus an Agent Dock that splits every request across a chosen team of helpers.",
-  "types": "./types/index.d.ts"
-}

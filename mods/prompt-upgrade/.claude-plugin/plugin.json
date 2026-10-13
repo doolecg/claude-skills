@@ -1,7 +1,0 @@
-{
-  "name": "prompt-upgrade",
-  "version": "1.0.0",
-  "description": "Turns a rough prompt into a great one before it is sent: quick questions, a rewrite, and a side-by-side review in a pane. Nothing runs until you press Run.",
-  "author": { "name": "doolecg" },
-  "types": "./types/index.d.ts"
-}

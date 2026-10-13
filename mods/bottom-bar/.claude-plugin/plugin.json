@@ -1,0 +1,7 @@
+{
+  "name": "bottom-bar",
+  "version": "1.0.0",
+  "description": "A compact rounded bar at the bottom of the terminal (model, effort, context, 5h usage, agents) with a Doole's Tools pill that holds the mods you pick.",
+  "author": { "name": "doolecg" },
+  "types": "./types/index.d.ts"
+}

@@ -1,7 +1,0 @@
-{
-  "name": "road-trip",
-  "version": "1.0.0",
-  "description": "A small driving game in a pane above the prompt: coins roll in as Claude finishes steps, and the game pauses on an Arrived card when the job is done.",
-  "author": { "name": "doolecg" },
-  "types": "./types/index.d.ts"
-}

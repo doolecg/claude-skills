@@ -1,6 +1,0 @@
-{
-  "name": "work-report",
-  "version": "1.0.0",
-  "description": "A pane showing what Claude has done for you: tasks finished, estimated hours saved and what that time is worth.",
-  "types": "./types/index.d.ts"
-}
