@@ -1,0 +1,5 @@
+{
+  "name": "road-trip",
+  "owner": { "name": "doolecg" },
+  "plugins": [{ "name": "road-trip", "source": "./" }]
+}

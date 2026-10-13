@@ -1,0 +1,5 @@
+{
+  "name": "daily-challenge",
+  "owner": { "name": "doolecg" },
+  "plugins": [{ "name": "daily-challenge", "source": "./" }]
+}

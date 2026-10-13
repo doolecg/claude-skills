@@ -1,0 +1,130 @@
+{
+  "name": "self-improve",
+  "version": "1.0.0",
+  "description": "A self-learning loop: saves durable facts to Hindsight and a local store, proposes reusable skills for your approval, improves them from use, and recalls past knowledge.",
+  "author": {
+    "name": "doolecg"
+  },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn the whole learner on or off.",
+      "default": true
+    },
+    "nudgeModel": {
+      "type": "string",
+      "title": "Memory model",
+      "description": "Model that picks durable facts to keep (a small one is enough).",
+      "default": "haiku"
+    },
+    "skillModel": {
+      "type": "string",
+      "title": "Skill model",
+      "description": "Model that drafts, rewrites and merges skills.",
+      "default": "haiku"
+    },
+    "nudgeEveryTurns": {
+      "type": "number",
+      "title": "Memory nudge every N turns",
+      "description": "Ask what is worth keeping after this many turns (1 to 200).",
+      "default": 6
+    },
+    "minToolCallsForSkill": {
+      "type": "number",
+      "title": "Tool calls that count as a complex task",
+      "description": "A task with at least this many tool calls may become a skill proposal (1 to 200).",
+      "default": 8
+    },
+    "approvalMode": {
+      "type": "string",
+      "title": "Skill approval",
+      "description": "ask: proposals wait in the pane. auto: they are written at once.",
+      "options": [
+        "ask",
+        "auto"
+      ],
+      "default": "ask"
+    },
+    "maxInjectTokens": {
+      "type": "number",
+      "title": "Injected context budget (tokens)",
+      "description": "Most tokens the learner adds to the system prompt (50 to 4000).",
+      "default": 600
+    },
+    "dailyTokenCap": {
+      "type": "number",
+      "title": "Daily learner token cap",
+      "description": "The learner stops for the day when its tokens reach this. 0 means no cap.",
+      "default": 200000
+    },
+    "nudgeMaxInputTokens": {
+      "type": "number",
+      "title": "Memory job: max input tokens",
+      "default": 4000,
+      "description": "Token limit for this learner job."
+    },
+    "nudgeMaxOutputTokens": {
+      "type": "number",
+      "title": "Memory job: max output tokens",
+      "default": 500,
+      "description": "Token limit for this learner job."
+    },
+    "skillMaxInputTokens": {
+      "type": "number",
+      "title": "Skill job: max input tokens",
+      "default": 6000,
+      "description": "Token limit for this learner job."
+    },
+    "skillMaxOutputTokens": {
+      "type": "number",
+      "title": "Skill job: max output tokens",
+      "default": 1200,
+      "description": "Token limit for this learner job."
+    },
+    "rewriteMaxInputTokens": {
+      "type": "number",
+      "title": "Rewrite job: max input tokens",
+      "default": 6000,
+      "description": "Token limit for this learner job."
+    },
+    "rewriteMaxOutputTokens": {
+      "type": "number",
+      "title": "Rewrite job: max output tokens",
+      "default": 1200,
+      "description": "Token limit for this learner job."
+    },
+    "hindsightEnabled": {
+      "type": "boolean",
+      "title": "Use Hindsight",
+      "description": "Save to and recall from your Hindsight server. Off keeps everything local.",
+      "default": true
+    },
+    "hindsightBaseUrl": {
+      "type": "string",
+      "title": "Hindsight base URL",
+      "description": "For example https://hindsight.example.com. Empty means local only.",
+      "default": ""
+    },
+    "hindsightApiKeyEnv": {
+      "type": "string",
+      "title": "Hindsight key variable",
+      "description": "Name of the environment variable that holds the API key. The key itself is never stored.",
+      "default": "HINDSIGHT_API_KEY"
+    },
+    "hindsightBank": {
+      "type": "string",
+      "title": "Hindsight bank",
+      "description": "Memory bank id.",
+      "default": "self-improve"
+    },
+    "codegraphEnabled": {
+      "type": "boolean",
+      "title": "Use CodeGraph",
+      "description": "In a repo with a .codegraph folder, ground learning in real symbols.",
+      "default": true
+    }
+  }
+}

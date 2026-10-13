@@ -1,0 +1,12 @@
+{
+  "name": "higgsfield-photos",
+  "owner": {
+    "name": "doolecg"
+  },
+  "plugins": [
+    {
+      "name": "higgsfield-photos",
+      "source": "./"
+    }
+  ]
+}

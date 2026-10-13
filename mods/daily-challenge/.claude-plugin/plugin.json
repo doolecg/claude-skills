@@ -1,0 +1,6 @@
+{
+  "name": "daily-challenge",
+  "version": "1.0.0",
+  "description": "One small Claude Code exercise a day, with a streak and a 365-challenge year. Adds /challenge.",
+  "types": "./types/index.d.ts"
+}

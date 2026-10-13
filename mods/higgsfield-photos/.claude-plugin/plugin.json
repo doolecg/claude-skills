@@ -1,0 +1,11 @@
+{
+  "name": "higgsfield-photos",
+  "version": "1.0.0",
+  "description": "Generate photos and videos with Higgsfield from a short idea: a prompt writer turns it into a model-ready prompt, and the generator quotes, waits for your yes, then saves the results.",
+  "author": {
+    "name": "doolecg"
+  },
+  "repository": "https://github.com/doolecg/higgsfield-photos",
+  "license": "MIT",
+  "keywords": ["photos", "image", "higgsfield", "prompt", "generation"]
+}

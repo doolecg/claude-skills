@@ -94,58 +94,37 @@
     {
       "name": "clean-view",
       "description": "Calm checklist view that hides tool noise, plus an Agent Dock that splits every request across a chosen team of helpers.",
-      "source": {
-        "source": "github",
-        "repo": "doolecg/clean-view"
-      }
+      "source": "./mods/clean-view"
     },
     {
       "name": "daily-challenge",
       "description": "One small Claude Code exercise a day, with a streak and a 365-challenge year. Adds /challenge.",
-      "source": {
-        "source": "github",
-        "repo": "doolecg/daily-challenge"
-      }
+      "source": "./mods/daily-challenge"
     },
     {
       "name": "higgsfield-photos",
       "description": "Generate photos and videos with Higgsfield from a short idea: a prompt writer turns it into a model-ready prompt, and the generator quotes, waits for your yes, then saves the results.",
-      "source": {
-        "source": "github",
-        "repo": "doolecg/higgsfield-photos"
-      }
+      "source": "./mods/higgsfield-photos"
     },
     {
       "name": "prompt-upgrade",
       "description": "Turns a rough prompt into a great one before it is sent: quick questions, a rewrite, and a side-by-side review in a pane. Nothing runs until you press Run.",
-      "source": {
-        "source": "github",
-        "repo": "doolecg/prompt-upgrade"
-      }
+      "source": "./mods/prompt-upgrade"
     },
     {
       "name": "road-trip",
       "description": "A small driving game in a pane above the prompt: coins roll in as Claude finishes steps, and the game pauses on an Arrived card when the job is done.",
-      "source": {
-        "source": "github",
-        "repo": "doolecg/road-trip"
-      }
+      "source": "./mods/road-trip"
     },
     {
       "name": "self-improve",
       "description": "A self-learning loop: saves durable facts to Hindsight and a local store, proposes reusable skills for your approval, improves them from use, and recalls past knowledge.",
-      "source": {
-        "source": "github",
-        "repo": "doolecg/self-improve"
-      }
+      "source": "./mods/self-improve"
     },
     {
       "name": "work-report",
       "description": "A pane showing what Claude has done for you: tasks finished, estimated hours saved and what that time is worth.",
-      "source": {
-        "source": "github",
-        "repo": "doolecg/work-report"
-      }
+      "source": "./mods/work-report"
     }
   ]
 }
