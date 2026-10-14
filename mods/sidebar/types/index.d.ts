@@ -3,7 +3,6 @@ export type SbTab = { id: string; icon: string; name: string; label?: string; ba
 
 /** The Context mod's `footer`, drawn at the bottom of every tab. */
 export type SbFooter = {
-  context: { percent: number | null; tokens: number | null; window: number | null }
   hindsight: 'up' | 'down' | 'off' | 'checking'
   codegraph: 'indexed' | 'none'
   git: { branch: string; changed: number; ahead: number; behind: number } | null
@@ -13,8 +12,8 @@ export type SbFooter = {
 /** A tool call Rule Guard stopped. */
 export type SbBlock = { at: number; rule: string; label: string; what: string }
 
-/** What every mod's tab pane reads to draw the strip: the tabs, the open one, whether the sidebar is up, whether it shows that mod's settings page rather than its tab, and the Context footer. */
-export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; isSettings?: boolean; footer?: SbFooter | null }
+/** What every mod's tab pane reads to draw the strip: the tabs, the open one, whether the sidebar is up, and the Context footer. */
+export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; footer?: SbFooter | null }
 
 /** A step of Clean View's checklist, as the Clean View tab mirrors it. */
 export type SbStep = { id: string; name: string; status: string; percent: number; hasReported: boolean }
@@ -34,21 +33,9 @@ declare module 'claude-code' {
     'rule-guard': { blocks: unknown }
     sidebar: {
       strip: SbStrip
-      /** What the sidebar's own pane shows: a mod's id, `sidebar` for its own settings, or `settings:<id>`. */
+      /** What the sidebar's own pane shows: a mod's id, or `sidebar` for its own page. */
       view: string
       tick: number
-      /** Every mod's options, from `$.config.list()`. */
-      settings: {
-        key: string
-        label: string
-        description: string
-        kind: 'boolean' | 'choice' | 'text' | 'number'
-        value: string | number | boolean
-        options: string[]
-        isLocked: boolean
-      }[]
-      /** Other mods' published modes, keyed by plugin, then by command. */
-      modModes: Record<string, Record<string, SbMode>>
       /** The sidebar's own on/off mode, as the bottom bar reads it, keyed by its command. */
       modes: Record<string, SbMode>
       /** Other mods' published badges (a count on their tab icon), keyed by plugin. */

@@ -1,4 +1,4 @@
-import type { BarMod, BarMode, BarSetting, BarTool } from '../types'
+import type { BarMod, BarMode, BarTool } from '../types'
 import { isModCommand, type Palette } from './bar-logic'
 
 /** `xhigh` → `XHigh`, `low` → `Low`. */
@@ -21,44 +21,6 @@ export const pad = (text: string, width: number): string => text + ' '.repeat(Ma
 /** What the toolbox launches: the mods' own commands, less the ones with an on/off mode. */
 export const launchList = (all: readonly BarTool[], modes: Record<string, BarMode>): BarTool[] =>
   all.filter(c => isModCommand(c) && !modes[c.name])
-
-type Row = {
-  key: string
-  label: string
-  description?: string
-  kind: string
-  value: unknown
-  options?: readonly string[]
-  provider: { plugin: string }
-  isLocked: boolean
-}
-
-/** The plugins' own `/config` rows (`<plugin>.<field>`), the engine's left out. */
-export function settingsList(rows: readonly Row[]): BarSetting[] {
-  const out: BarSetting[] = []
-  for (const r of rows) {
-    if (!r.key.includes('.') || r.provider.plugin === 'engine') continue
-    if (r.kind !== 'boolean' && r.kind !== 'choice' && r.kind !== 'text' && r.kind !== 'number') continue
-    const value = typeof r.value === 'boolean' || typeof r.value === 'number' ? r.value : String(r.value ?? '')
-    out.push({
-      key: r.key,
-      label: r.label,
-      description: r.description ?? '',
-      kind: r.kind,
-      value,
-      options: [...(r.options ?? [])],
-      isLocked: r.isLocked,
-    })
-  }
-  return out
-}
-
-/** The option after `value`, round to the first. */
-export function nextOption(options: readonly string[], value: unknown): string | undefined {
-  if (options.length === 0) return undefined
-  const at = options.indexOf(String(value))
-  return options[(at + 1) % options.length]
-}
 
 /** A launcher's mark and its colour, taken in turn. */
 export const ICONS = ['✦', '◆', '★', '▦', '●', '▲'] as const

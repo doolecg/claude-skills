@@ -227,11 +227,7 @@ export const register: Register = on => {
       const k = sbKit(els, e.surface, sbPalette(strip.theme, strip.colour), e.props.bodyColumns, 0, sbRows(e.props))
       const ask = sbAsker(args => askSidebar($, args), 'idea-shelf', () => closePane($))
       const body: unknown[] = [
-        sbTitle(
-          k,
-          { icon: '◇', name: 'Idea Shelf', status: `${ideas.length} ${ideas.length === 1 ? 'idea' : 'ideas'} · ${folder}` },
-          { label: 'Settings', onPress: () => ask('settings idea-shelf') },
-        ),
+        sbTitle(k, { icon: '◇', name: 'Idea Shelf', status: `${ideas.length} ${ideas.length === 1 ? 'idea' : 'ideas'} · ${folder}` }),
       ]
       if (e.surface !== 'mobile') {
         const { Input } = els

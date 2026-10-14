@@ -1,9 +1,9 @@
 import type { Elements } from 'claude-code'
 
-import type { BarFigures, BarMod, BarMode, BarSetting, BarTool } from '../types'
-import { ACCENTS, EFFORTS, clip, modelChoiceLabel, toolLabel } from './bar-logic'
+import type { BarFigures, BarMod, BarMode, BarTool } from '../types'
+import { EFFORTS, clip, modelChoiceLabel, toolLabel } from './bar-logic'
 import type { Palette } from './bar-logic'
-import { ICONS, currentAlias, effortName, iconColor, launchList, modLines, nextOption, pad, spaced } from './toolbox-logic'
+import { ICONS, currentAlias, effortName, iconColor, launchList, modLines, pad, spaced } from './toolbox-logic'
 import type { ModLine } from './toolbox-logic'
 
 /** The box's width on a terminal `columns` wide: room for the rows, never past the edge. */
@@ -15,23 +15,15 @@ export type ToolboxArgs = {
   /** The columns inside the box's border and padding. */
   width: number
   title: string
-  /** `home` or `settings`. */
-  view: string
-  colour: string
   figures: BarFigures
   models: string[]
   modes: Record<string, BarMode>
   mods: BarMod[]
   choices: BarTool[]
-  settings: BarSetting[]
   pickModel: (alias: string) => void
   pickEffort: (level: string) => void
   flip: (command: string) => void
   toggleMod: (mod: BarMod) => void
-  setOption: (s: BarSetting, value: string | number | boolean) => void
-  setName: (name: string) => void
-  setColour: (colour: string) => void
-  setView: (view: string) => void
   close: () => void
   /** False where the frame has a close mark of its own (the docked pane). */
   hasClose?: boolean
@@ -71,7 +63,7 @@ export function toolboxRows(a: ToolboxArgs): JSX.Element[] {
       <Text color={pal.dim}>{'  ✕'}</Text>
     </Button>
   )
-  const head = (name: string, right: JSX.Element) =>
+  const head = (name: string) =>
     row(
       'head',
       [
@@ -79,7 +71,6 @@ export function toolboxRows(a: ToolboxArgs): JSX.Element[] {
           {name}
         </Text>,
         <Box key="right" flexShrink={0}>
-          {right}
           {a.hasClose === false ? null : closeButton}
         </Box>,
       ],
@@ -126,11 +117,9 @@ export function toolboxRows(a: ToolboxArgs): JSX.Element[] {
       'space-between',
     )
 
-  if (a.view === 'settings') return settingsRows(a, { row, section, head, link, line, toggle, chip })
-
   const activeModel = currentAlias(a.models, a.figures.model)
   const rows: JSX.Element[] = [
-    head(`◆ ${spaced(a.title, width - 16)}`, link('tb-settings', '⚙', 'Settings', () => a.setView('settings'))),
+    head(`◆ ${spaced(a.title, width - 16)}`),
     row('models', [
       <Text key="t" color={pal.dim}>
         {pad('Model', LABEL_WIDTH)}
@@ -181,80 +170,6 @@ export function toolboxRows(a: ToolboxArgs): JSX.Element[] {
         )),
       ),
     )
-  }
-  return rows
-}
-
-type Parts = {
-  row: (key: string, children: JSX.Element | JSX.Element[], justify?: 'space-between') => JSX.Element
-  section: (text: string) => JSX.Element
-  head: (name: string, right: JSX.Element) => JSX.Element
-  link: (key: string, mark: string, text: string, onPress: () => void) => JSX.Element
-  line: (key: string, label: string, about: string, control: JSX.Element, room: number, mark?: boolean) => JSX.Element
-  toggle: (key: string, isOn: boolean, onPress: () => void) => JSX.Element
-  chip: (key: string, text: string, isOn: boolean, fill: string, onPress: () => void) => JSX.Element
-}
-
-/** The Settings page: the bar's own look first, then every other mod's options. */
-function settingsRows(a: ToolboxArgs, p: Parts): JSX.Element[] {
-  const { Box, Text, Button, Input } = a.els
-  const { pal, width } = a
-  const rows: JSX.Element[] = [
-    p.head(`◆ ${spaced('Settings', width - 14)}`, p.link('tb-back', '‹', 'Back', () => a.setView('home'))),
-    p.section('Look'),
-    p.row('name', [
-      <Text key="t" color={pal.dim}>
-        {pad('Name', LABEL_WIDTH)}
-      </Text>,
-      <Box key="i" width={Math.min(28, width - LABEL_WIDTH)}>
-        <Input key="tb-name" value={a.title} onSubmit={(value: string) => a.setName(value.trim())} />
-      </Box>,
-    ]),
-    p.row('colour', [
-      <Text key="t" color={pal.dim}>
-        {pad('Colour', LABEL_WIDTH)}
-      </Text>,
-      ...Object.entries(ACCENTS).map(([name, [dark]]) => {
-        const isOn = name === a.colour
-        const swatch = name === 'Coral' ? pal.accent : dark
-        return (
-          <Button key={`tb-colour:${name}`} plain onPress={() => a.setColour(name)}>
-            <Text color={swatch} backgroundColor={isOn ? pal.pillBg : undefined}>
-              {'■ '}
-            </Text>
-            <Text color={isOn ? pal.text : pal.dim} backgroundColor={isOn ? pal.pillBg : undefined} bold={isOn}>
-              {`${name} `}
-            </Text>
-          </Button>
-        )
-      }),
-    ]),
-    p.section('Mod options'),
-  ]
-
-  const options = a.settings.filter(s => !s.key.startsWith('bottom-bar.'))
-  if (options.length === 0) rows.push(p.row('no-settings', <Text color={pal.dim}>No mod has options yet.</Text>))
-  for (const s of options) {
-    const shown = [...String(s.value)].length
-    const control = s.isLocked ? (
-      <Text color={pal.dim}>{`${String(s.value)} (locked)`}</Text>
-    ) : s.kind === 'boolean' ? (
-      p.toggle(`tb-set:${s.key}`, s.value === true, () => a.setOption(s, s.value !== true))
-    ) : s.kind === 'choice' && s.options.length > 0 ? (
-      <Button key={`tb-set:${s.key}`} plain onPress={() => a.setOption(s, nextOption(s.options, s.value) ?? '')}>
-        <Text backgroundColor={pal.pillBg} color={pal.text}>{` ${String(s.value)} ▸ `}</Text>
-      </Button>
-    ) : (
-      <Box width={20}>
-        <Input
-          key={`tb-set:${s.key}`}
-          value={String(s.value)}
-          onSubmit={(value: string) => a.setOption(s, s.kind === 'number' ? Number(value) || 0 : value.trim())}
-        />
-      </Box>
-    )
-    const room = s.isLocked ? shown + 9 : s.kind === 'boolean' ? 7 : s.kind === 'choice' ? shown + 4 : 20
-    rows.push(p.line(`set:${s.key}`, s.label, s.description, control, room))
   }
   return rows
 }

@@ -1,4 +1,4 @@
-import type { SbBlock, SbFooter, SbJob, SbMode, SbStep, SbTab } from '../types'
+import type { SbBlock, SbFooter, SbJob, SbStep, SbTab } from '../types'
 
 /**
  * A mod the sidebar knows. `pane` mods draw their own tab in a pane of their own, which they open and
@@ -12,7 +12,7 @@ export type CatalogEntry = {
   label: string
   about: string
   pane?: { command: string }
-  /** Drawn as the footer at the bottom of every tab, not as a tab of its own; its settings page still opens. */
+  /** Drawn as the footer at the bottom of every tab, not as a tab of its own. */
   footer?: boolean
 }
 
@@ -21,17 +21,13 @@ export const CATALOG: readonly CatalogEntry[] = [
   { id: 'self-improve', icon: '✺', name: 'Self Improve', label: 'Improve', about: 'Learns from finished sessions and keeps soul.md.', pane: { command: 'learn' } },
   { id: 'clean-view', icon: '✶', name: 'Clean View', label: 'Steps', about: 'A plain checklist above the prompt while Claude works.' },
   { id: 'idea-shelf', icon: '◇', name: 'Idea Shelf', label: 'Ideas', about: 'Park ideas while Claude works and send them later.', pane: { command: 'ideas' } },
-  { id: 'folder-tracker', icon: '⇄', name: 'Folder Tracker', label: 'Folders', about: 'Other sessions working in this folder.', pane: { command: 'folders' } },
   { id: 'prompt-enhancer', icon: '✎', name: 'Prompt Enhancer', label: 'Enhance', about: 'Rewrites the prompt box into a clearer prompt.' },
-  { id: 'design-picker', icon: '◐', name: 'Design Picker', label: 'Design', about: 'Opens a gallery when Claude asks you to pick a look.' },
-  { id: 'plain-english', icon: '¶', name: 'Plain English', label: 'Plain', about: 'Plainer replies, checked against your rules.' },
   { id: 'bottom-bar', icon: '▭', name: 'Bottom Bar', label: 'Bar', about: 'The rounded bar under the prompt and its toolbox.' },
   { id: 'rule-guard', icon: '⊘', name: 'Rule Guard', label: 'Rules', about: 'Stops tool calls that break your rules and tells Claude why.' },
-  { id: 'context', icon: '◎', name: 'Context', label: 'Context', about: 'Context used, Hindsight, CodeGraph, the git repo and test passes, at the bottom of every tab.', footer: true },
+  { id: 'context', icon: '◎', name: 'Context', label: 'Context', about: 'Hindsight, CodeGraph, the git repo and test passes, at the bottom of every tab.', footer: true },
 ]
 
 export const SIDEBAR_TAB = 'sidebar'
-export const SETTINGS_PREFIX = 'settings:'
 
 export const entryOf = (id: string): CatalogEntry | undefined => CATALOG.find(c => c.id === id)
 
@@ -48,7 +44,7 @@ export function tabsFor(installed: readonly string[], order: readonly string[], 
     .map(c => ({ id: c.id, icon: c.icon, name: c.name, label: c.label, badge: Math.max(0, Math.floor(badges[c.id] ?? 0)) }))
 }
 
-/** All installed catalog mods in the person's order, hidden ones included: the sidebar's own settings list. */
+/** All installed catalog mods in the person's order, hidden ones included: the sidebar's own tab list. */
 export function orderedIds(installed: readonly string[], order: readonly string[]): string[] {
   return tabsFor(installed, order, [], {}).map(t => t.id)
 }
@@ -66,18 +62,17 @@ export function move(ids: readonly string[], id: string, by: -1 | 1): string[] {
 
 /** Which tab `/sidebar` with no tab opens: the last one if it still shows, else the first. */
 export function pickTab(active: string, tabs: readonly SbTab[]): string {
-  if (active === SIDEBAR_TAB || active.startsWith(SETTINGS_PREFIX)) return active
+  if (active === SIDEBAR_TAB) return active
   if (tabs.some(t => t.id === active)) return active
   return tabs[0]?.id ?? SIDEBAR_TAB
 }
 
-/** A `/sidebar` argument: open, close, flip, a tab, a mod's settings, or a pane's own close. */
+/** A `/sidebar` argument: open, close, flip, a tab, or a pane's own close. */
 export type SidebarArg =
   | { kind: 'open' }
   | { kind: 'close' }
   | { kind: 'flip' }
   | { kind: 'tab'; id: string }
-  | { kind: 'settings'; id: string }
   | { kind: 'closed'; id: string }
 
 export function parseArg(args: string): SidebarArg {
@@ -86,7 +81,6 @@ export function parseArg(args: string): SidebarArg {
   if (w === 'open' || w === 'on') return { kind: 'open' }
   if (w === 'close' || w === 'off') return { kind: 'close' }
   if (w === 'tab' && rest) return { kind: 'tab', id: rest }
-  if (w === 'settings' && rest) return { kind: 'settings', id: rest }
   if (w === 'closed' && rest) return { kind: 'closed', id: rest }
   if (w && entryOf(w)) return { kind: 'tab', id: w }
   return { kind: 'flip' }
@@ -102,17 +96,6 @@ export function installedFrom(list: unknown): string[] {
     out.add(id.split('@')[0]!)
   }
   return [...out]
-}
-
-/** A mod's published `modes` value, kept when it is well formed. */
-export function modesOf(value: unknown): Record<string, SbMode> {
-  const out: Record<string, SbMode> = {}
-  if (!value || typeof value !== 'object') return out
-  for (const [command, m] of Object.entries(value as Record<string, unknown>)) {
-    const mode = m as { label?: unknown; isOn?: unknown }
-    if (typeof mode?.label === 'string' && typeof mode.isOn === 'boolean') out[command] = { label: mode.label, isOn: mode.isOn }
-  }
-  return out
 }
 
 /** Clean View's `checklist`, cut down to what the tab draws; null with no job. */
@@ -153,10 +136,9 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
 /** Context's `footer`, kept when it is well formed; null otherwise, so the tabs draw no footer. */
 export function footerOf(value: unknown): SbFooter | null {
   const v = value as Record<string, any> | null
-  if (!v || typeof v !== 'object' || !v.context || !v.passes) return null
+  if (!v || typeof v !== 'object' || !v.passes) return null
   const git = v.git && typeof v.git.branch === 'string' ? v.git : null
   return {
-    context: { percent: num(v.context.percent), tokens: num(v.context.tokens), window: num(v.context.window) },
     hindsight: ['up', 'down', 'off', 'checking'].includes(v.hindsight) ? v.hindsight : 'off',
     codegraph: v.codegraph === 'indexed' ? 'indexed' : 'none',
     git: git ? { branch: git.branch, changed: num(git.changed) ?? 0, ahead: num(git.ahead) ?? 0, behind: num(git.behind) ?? 0 } : null,

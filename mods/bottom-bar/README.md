@@ -29,7 +29,7 @@ The bar replaces a `statusLine` script. If you have one in `~/.claude/settings.j
 - The mods you pick sit as filled, round-ended pills at the right end of the bar. Click one to run it. When its reply says it is on (`Diff panel shown`, `Guard is on`), the pill shows a ✓ until a reply says it is off.
 - `✎ Choose pills` in the toolbox (or `/choose-pills`) picks them. Mods' own commands are listed first; type in the search box to find any other command.
 - Your picks are saved and come back in every session.
-- The pill's name is the `Tools name` option ("Doole's Tools" by default). Change it in the toolbox, `/config` or `/plugin`.
+- The pill's name is the `Pill name` option ("Doole's Tools" by default). Change it in `/plugin` > Installed > Bottom Bar > Configure.
 
 ## The toolbox
 
@@ -37,7 +37,7 @@ The Doole's Tools pill opens the toolbox. In fullscreen it opens as a panel down
 
 ```
 ╭──────────────────────────────────────────────────────────────╮
-│ ◆ D O O L E ' S   T O O L S                       ⚙ Settings │
+│ ◆ D O O L E ' S   T O O L S                              ✕ │
 │ Model      Sonnet  Opus 5.5  Haiku  Fable                    │
 │ Effort     Low  Medium  High  XHigh  Max                     │
 │ MODS ─────────────────────────────────────────────────────── │
@@ -51,12 +51,7 @@ The Doole's Tools pill opens the toolbox. In fullscreen it opens as a panel down
 - **Model** and **Effort**: click one to switch. The toolbox stays open.
 - **Mods**: every mod you have installed, with an On/Off switch. For a mod with an on/off mode (below), the switch flips the mode. For any other mod it turns the mod itself on or off (`claude plugin enable` / `disable`) and reloads the plugins.
 - **Launch**: `Choose pills`, then every other command a mod adds. Clicking one closes the toolbox and runs it.
-- **⚙ Settings** opens the settings page:
-  - **Name**: the name on the pill and the toolbox. Type it and press Enter.
-  - **Colour**: the accent colour of the bar, the pill and the toolbox (Coral, Amber, Sage, Sky, Lilac or Rose).
-  - **Mod options**: every other mod's own options: switches for yes/no options, a button that steps through pick-one options, and a text box for names and numbers (press Enter to save).
-
-Name and Colour are also the `Tools name` and `Colour` options in `/config` and `/plugin`.
+The bar's options (`Pill name` and `Colour`) are not in the toolbox. Set them in `/plugin` > Installed > Bottom Bar > Configure.
 
 ## On/off modes
 

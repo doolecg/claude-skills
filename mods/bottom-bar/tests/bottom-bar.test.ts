@@ -29,9 +29,7 @@ import {
   effortName,
   launchList,
   modLines,
-  nextOption,
   pickInstalls,
-  settingsList,
   spaced,
 } from '../hooks/toolbox-logic'
 
@@ -220,8 +218,8 @@ test('segments show only the figures that exist', () => {
   const keys = (f: any) => segments(f, DARK).map(s => s.key)
   expect(keys(EMPTY_FIGURES)).toEqual(['ctx', 'agents'])
   expect(
-    keys({ model: 'Opus 5.5', window: 1_000_000, effort: 'high', ctx: 42, fiveHour: 30, agents: 2 }),
-  ).toEqual(['model', 'effort', 'ctx', 'fiveHour', 'agents'])
+    keys({ model: 'Opus 5.5', window: 1_000_000, effort: 'high', ctx: 42, fiveHour: 30, sevenDay: 12, agents: 2 }),
+  ).toEqual(['model', 'effort', 'ctx', 'fiveHour', 'sevenDay', 'agents'])
 
   const model = segments({ ...EMPTY_FIGURES, model: 'Opus 5.5', window: 1_000_000 }, DARK).find(s => s.key === 'model')
   expect(model?.parts.map(p => p.text).join('')).toBe('◆ Opus 5.5 · 1M')
@@ -233,8 +231,8 @@ test('segments show only the figures that exist', () => {
 })
 
 test('segmentOffset: columns from the row start to where a segment starts', () => {
-  const list = segments({ model: 'Opus 5.5', window: 1_000_000, effort: 'high', ctx: 42, fiveHour: 30, agents: 0 }, DARK)
-  expect(list.map(x => x.key)).toEqual(['model', 'effort', 'ctx', 'fiveHour', 'agents'])
+  const list = segments({ model: 'Opus 5.5', window: 1_000_000, effort: 'high', ctx: 42, fiveHour: 30, sevenDay: 12, agents: 0 }, DARK)
+  expect(list.map(x => x.key)).toEqual(['model', 'effort', 'ctx', 'fiveHour', 'sevenDay', 'agents'])
   const width = (key: string) => [...list.find(x => x.key === key)!.parts.map(p => p.text).join('')].length
 
   expect(segmentOffset(list, 'model')).toBe(0)
@@ -928,140 +926,6 @@ test('toolbox: a refused model change shows a toast and keeps the box open', asy
   expect(findProp(await bar.find({ key: 'tb-model:opus' }), 'backgroundColor', DARK.accent)).toBeDefined()
 })
 
-// A plugin's own /config rows, as the engine lists them, and some of the engine's.
-const configRow = (key: string, kind: string, value: unknown, extra: Record<string, unknown> = {}) => ({
-  key,
-  label: key.split('.')[1] ?? key,
-  description: `${key} setting`,
-  kind,
-  value,
-  provider: { plugin: key.split('.')[0] },
-  isLocked: false,
-  ...extra,
-})
-const ENGINE = { provider: { plugin: 'engine' } }
-const SETTING_ROWS = () => [
-  configRow('demo.enabled', 'boolean', false),
-  configRow('demo.style', 'choice', 'b', { options: ['a', 'b', 'c'] }),
-  configRow('demo.title', 'text', 'hello'),
-  configRow('demo.limit', 'number', 5),
-  configRow('engine.spinner', 'boolean', true, ENGINE),
-  configRow('engine.shape', 'choice', 'x', { ...ENGINE, options: ['x', 'y'] }),
-  configRow('plain', 'boolean', true),
-]
-
-test("toolbox: a plugin's /config rows get a control each; the engine's are left out", async ($, on) => {
-  world(on)
-  registerCommands(on)
-  seedModel(on, { rows: SETTING_ROWS() })
-  await startSession($)
-  const bar = await mountBar($)
-  await bar.press({ key: 'pill' })
-  await bar.press({ key: 'tb-settings' })
-
-  expect(await bar.find({ key: 'tb-set:demo.enabled' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-set:demo.style' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-set:demo.title' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-set:demo.limit' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-set:engine.spinner' })).toBeUndefined()
-  expect(await bar.find({ key: 'tb-set:engine.shape' })).toBeUndefined()
-  expect(await bar.find({ key: 'tb-set:plain' })).toBeUndefined()
-  expect(await bar.find({ key: 'tb-set:theme' })).toBeUndefined()
-  expect(await bar.find({ key: 'tb-set:model' })).toBeUndefined()
-  // A boolean is an on/off button, a choice shows its value.
-  expect((await bar.find({ key: 'tb-set:demo.enabled' }))?.text).toContain('Off')
-  expect((await bar.find({ key: 'tb-set:demo.style' }))?.text).toContain('b ▸')
-})
-
-test('toolbox: with no plugin setting the box says so', async ($, on) => {
-  world(on)
-  registerCommands(on)
-  seedModel(on, { rows: [configRow('engine.spinner', 'boolean', true, ENGINE)] })
-  await startSession($)
-  const bar = await mountBar($)
-  await bar.press({ key: 'pill' })
-  await bar.press({ key: 'tb-settings' })
-  expect(await bar.find({ type: 'Text', text: 'No mod has options yet.' })).toBeDefined()
-})
-
-test('toolbox: a boolean setting flips through config.set', async ($, on) => {
-  world(on)
-  registerCommands(on)
-  const engine = seedModel(on, { rows: SETTING_ROWS() })
-  await startSession($)
-  const bar = await mountBar($)
-  await bar.press({ key: 'pill' })
-  await bar.press({ key: 'tb-settings' })
-
-  await bar.press({ key: 'tb-set:demo.enabled' })
-  expect(engine.configSets).toEqual([{ key: 'demo.enabled', value: true }])
-  expect((await bar.find({ key: 'tb-set:demo.enabled' }))?.text).toContain('On')
-  expect(await bar.find({ key: 'tb-back' })).toBeDefined()
-
-  await bar.press({ key: 'tb-set:demo.enabled' })
-  expect(engine.configSets.at(-1)).toEqual({ key: 'demo.enabled', value: false })
-  expect((await bar.find({ key: 'tb-set:demo.enabled' }))?.text).toContain('Off')
-})
-
-test('toolbox: a choice setting steps to the next option, round to the first', async ($, on) => {
-  world(on)
-  registerCommands(on)
-  const engine = seedModel(on, { rows: SETTING_ROWS() })
-  await startSession($)
-  const bar = await mountBar($)
-  await bar.press({ key: 'pill' })
-  await bar.press({ key: 'tb-settings' })
-
-  await bar.press({ key: 'tb-set:demo.style' })
-  expect(engine.configSets).toEqual([{ key: 'demo.style', value: 'c' }])
-  expect((await bar.find({ key: 'tb-set:demo.style' }))?.text).toContain('c ▸')
-  await bar.press({ key: 'tb-set:demo.style' })
-  expect(engine.configSets.at(-1)).toEqual({ key: 'demo.style', value: 'a' })
-  expect(await bar.find({ key: 'tb-back' })).toBeDefined()
-})
-
-test('toolbox: a text or number setting is an input that submits through config.set', async ($, on) => {
-  world(on)
-  registerCommands(on)
-  const engine = seedModel(on, { rows: SETTING_ROWS() })
-  await startSession($)
-  const bar = await mountBar($)
-  await bar.press({ key: 'pill' })
-  await bar.press({ key: 'tb-settings' })
-
-  await bar.input({ key: 'tb-set:demo.title', text: '  new title ', kind: 'submit' })
-  expect(engine.configSets).toEqual([{ key: 'demo.title', value: 'new title' }])
-  await bar.input({ key: 'tb-set:demo.limit', text: '12', kind: 'submit' })
-  expect(engine.configSets.at(-1)).toEqual({ key: 'demo.limit', value: 12 })
-  await bar.input({ key: 'tb-set:demo.limit', text: 'abc', kind: 'submit' })
-  expect(engine.configSets.at(-1)).toEqual({ key: 'demo.limit', value: 0 })
-})
-
-test('toolbox: a refused setting shows a toast', async ($, on) => {
-  const seen = world(on)
-  registerCommands(on)
-  const engine = seedModel(on, { rows: SETTING_ROWS() })
-  engine.denyModel = 'locked by policy'
-  await startSession($)
-  const bar = await mountBar($)
-  await bar.press({ key: 'pill' })
-  await bar.press({ key: 'tb-settings' })
-  await bar.press({ key: 'tb-set:demo.enabled' })
-  expect(seen.toasts.join(' ')).toContain('Could not change enabled: locked by policy')
-})
-
-test('toolbox: a locked setting shows its value and no control', async ($, on) => {
-  world(on)
-  registerCommands(on)
-  seedModel(on, { rows: [configRow('demo.enabled', 'boolean', true, { isLocked: true })] })
-  await startSession($)
-  const bar = await mountBar($)
-  await bar.press({ key: 'pill' })
-  await bar.press({ key: 'tb-settings' })
-  expect(await bar.find({ key: 'tb-set:demo.enabled' })).toBeUndefined()
-  expect(await bar.find({ type: 'Text', text: 'true (locked)' })).toBeDefined()
-})
-
 test('toolbox: an on/off mode is a toggle that runs its command', { plugins: [DEMO_MOD] }, async ($, on) => {
   const DEMO = cmd('demo', 'demo-mode', 'plugin', 'Flip the demo mode')
   const seen = world(on, {}, [DEMO, CLEAN, COMPACT])
@@ -1195,45 +1059,6 @@ test("launchList keeps the mods' commands and drops the ones with an on/off mode
   expect(launchList([], modes)).toEqual([])
 })
 
-test("settingsList keeps the plugins' dotted rows of a usable kind, and not the engine's", () => {
-  const rows = [
-    configRow('demo.enabled', 'boolean', true),
-    configRow('demo.style', 'choice', 'a', { options: ['a', 'b'] }),
-    configRow('demo.title', 'text', undefined),
-    configRow('demo.limit', 'number', 3),
-    configRow('demo.other', 'list', 'x'),
-    configRow('engine.spinner', 'boolean', true, ENGINE),
-    configRow('theme', 'choice', 'dark', ENGINE),
-    configRow('plain', 'boolean', true),
-  ] as any[]
-  const out = settingsList(rows)
-  expect(out.map(s => s.key)).toEqual(['demo.enabled', 'demo.style', 'demo.title', 'demo.limit'])
-  expect(out[0]).toEqual({
-    key: 'demo.enabled',
-    label: 'enabled',
-    description: 'demo.enabled setting',
-    kind: 'boolean',
-    value: true,
-    options: [],
-    isLocked: false,
-  })
-  expect(out[1]!.options).toEqual(['a', 'b'])
-  // A missing value reads as an empty string; a number stays a number.
-  expect(out[2]!.value).toBe('')
-  expect(out[3]!.value).toBe(3)
-  expect(settingsList([])).toEqual([])
-})
-
-test('nextOption steps on and wraps round to the first', () => {
-  expect(nextOption(['a', 'b', 'c'], 'a')).toBe('b')
-  expect(nextOption(['a', 'b', 'c'], 'c')).toBe('a')
-  // An unknown value starts the round at the first option.
-  expect(nextOption(['a', 'b', 'c'], 'zzz')).toBe('a')
-  expect(nextOption(['a'], 'a')).toBe('a')
-  expect(nextOption([], 'a')).toBeUndefined()
-  expect(nextOption(['1', '2'], 1)).toBe('2')
-})
-
 test('/choose-pills is registered at session start', async ($, on) => {
   world(on)
   const registered: { name: string; description?: string }[] = []
@@ -1330,75 +1155,7 @@ test('a command that is no mode and no pill leaves the mode pills alone', { plug
   expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('● Quiet Mode')
 })
 
-// ------------------------------------------------- settings page, colour, mods
-
-const openSettings = async (bar: any) => {
-  await bar.press({ key: 'pill' })
-  await bar.press({ key: 'tb-settings' })
-}
-
-test('settings page: the gear opens it, Back returns home, the cross closes the box', async ($, on) => {
-  world(on)
-  registerCommands(on)
-  seedModel(on)
-  await startSession($)
-  const bar = await mountBar($)
-  await bar.press({ key: 'pill' })
-  expect(await bar.find({ key: 'tb-settings' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-close' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-back' })).toBeUndefined()
-
-  await bar.press({ key: 'tb-settings' })
-  expect(await bar.find({ type: 'Text', text: '◆ S E T T I N G S' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-back' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-name' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
-  expect(await bar.find({ key: 'tb-model:opus' })).toBeUndefined()
-
-  await bar.press({ key: 'tb-back' })
-  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
-  expect(await bar.find({ key: 'tb-back' })).toBeUndefined()
-
-  await bar.press({ key: 'tb-settings' })
-  await bar.press({ key: 'tb-close' })
-  expect(await bar.find({ key: 'tb-back' })).toBeUndefined()
-  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
-  expect((await bar.find({ key: 'pill' }))?.text).toContain('▲')
-
-  // Opening the box again starts on the home page.
-  await bar.press({ key: 'pill' })
-  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
-})
-
-test("settings page: the bar's own options are left out of the mod options", async ($, on) => {
-  world(on)
-  registerCommands(on)
-  seedModel(on, { rows: [configRow('bottom-bar.name', 'text', 'x'), configRow('demo.enabled', 'boolean', true)] })
-  await startSession($)
-  const bar = await mountBar($)
-  await openSettings(bar)
-  expect(await bar.find({ key: 'tb-set:bottom-bar.name' })).toBeUndefined()
-  expect(await bar.find({ key: 'tb-set:demo.enabled' })).toBeDefined()
-})
-
-test('settings page: a colour chip sets bottom-bar.colour', async ($, on) => {
-  world(on)
-  registerCommands(on)
-  const engine = seedModel(on)
-  await startSession($)
-  const bar = await mountBar($)
-  await openSettings(bar)
-  expect(await keysOf(bar, 'tb-colour:')).toEqual([
-    'tb-colour:Coral',
-    'tb-colour:Amber',
-    'tb-colour:Sage',
-    'tb-colour:Sky',
-    'tb-colour:Lilac',
-    'tb-colour:Rose',
-  ])
-  await bar.press({ key: 'tb-colour:Lilac' })
-  expect(engine.configSets).toEqual([{ key: 'bottom-bar.colour', value: 'Lilac' }])
-})
+// ------------------------------------------------- colour, mods
 
 test('the colour option recolours the filled model chip', { options: { colour: 'Sky' } }, async ($, on) => {
   world(on)
@@ -1420,23 +1177,6 @@ test('paletteFor swaps the accent for a colour, keeping Coral and unknown names 
   expect(paletteFor('light', 'Coral')).toBe(LIGHT)
   expect(paletteFor('dark', 'Nope')).toBe(DARK)
   expect(paletteFor('dark', undefined)).toBe(DARK)
-})
-
-test('settings page: the name input sets bottom-bar.name, trimmed, and blank is ignored', async ($, on) => {
-  world(on)
-  registerCommands(on)
-  const engine = seedModel(on)
-  await startSession($)
-  const bar = await mountBar($)
-  await openSettings(bar)
-
-  await bar.input({ key: 'tb-name', text: '   ', kind: 'submit' })
-  expect(engine.configSets).toEqual([])
-  expect((await bar.find({ key: 'pill' }))?.text).toContain("Doole's Tools")
-
-  await bar.input({ key: 'tb-name', text: '  Mine  ', kind: 'submit' })
-  expect(engine.configSets).toEqual([{ key: 'bottom-bar.name', value: 'Mine' }])
-  expect((await bar.find({ key: 'pill' }))?.text).toContain('Mine')
 })
 
 // A fake `claude plugin list --json` and the files beneath each install.

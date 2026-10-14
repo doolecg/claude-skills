@@ -2,7 +2,6 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import {
   afterTool,
-  contextOf,
   emptyFooter,
   gitInfo,
   hindsightFrom,
@@ -93,17 +92,12 @@ describe('hindsight', () => {
   })
 })
 
-describe('git, context and throttle', () => {
+describe('git and throttle', () => {
   test('git info', () => {
     expect(gitInfo('main\n', ' M a.ts\n?? b.ts\n', '1\t2')).toEqual({ branch: 'main', changed: 2, behind: 1, ahead: 2 })
     expect(gitInfo('main', '', null)).toEqual({ branch: 'main', changed: 0, ahead: 0, behind: 0 })
     expect(gitInfo(null, '', null)).toBeNull()
     expect(parseCounts('garbage')).toEqual({ ahead: 0, behind: 0 })
-  })
-
-  test('context from usage', () => {
-    expect(contextOf({ context: { percent: 42, tokens: 84000, window: 200000 } })).toEqual({ percent: 42, tokens: 84000, window: 200000 })
-    expect(contextOf({})).toEqual({ percent: null, tokens: null, window: null })
   })
 
   test('throttle', () => {

@@ -1,6 +1,5 @@
 export type CtxFooter = {
-  context: { percent: number | null; tokens: number | null; window: number | null }
-  /** off: no ~/.hindsight/coding-agent.json (self-hosted). up: the server answered. down: it did not within 5 s. */
+  /** off: no self-hosted ~/.hindsight/coding-agent.json (Hindsight not set up). up: the server answered. down: it did not within 5 s. */
   hindsight: 'up' | 'down' | 'off' | 'checking'
   /** indexed: a .codegraph/ folder at the git root or session root. */
   codegraph: 'indexed' | 'none'

@@ -1,7 +1,7 @@
 {
   "name": "context",
-  "version": "1.0.0",
-  "description": "Context: publishes the facts for the Sidebar footer (context left, Hindsight, CodeGraph, git, test and fix passes) and counts test and fix passes against a limit.",
+  "version": "1.1.0",
+  "description": "Context: publishes the facts for the Sidebar footer (Hindsight, CodeGraph, git, test and fix passes) and counts test and fix passes against a limit.",
   "author": { "name": "doolecg" },
   "license": "MIT",
   "types": "./types/index.d.ts",
@@ -9,13 +9,13 @@
     "passLimit": {
       "type": "number",
       "title": "Pass limit",
-      "description": "Test and fix rounds before Claude stops to ask you.",
+      "description": "How many test and fix rounds Claude may run on one problem before it stops to ask you; the default is 3.",
       "default": 3
     },
     "extraChecks": {
       "type": "string",
       "title": "Extra check commands",
-      "description": "More command words that count as a test run, separated by commas.",
+      "description": "Extra command words to count as a test run, separated by commas (for example: make, just); the default is none.",
       "default": ""
     }
   }

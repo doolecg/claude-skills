@@ -68,7 +68,6 @@ declare module 'claude-code' {
         tabs: { id: string; icon: string; name: string; label?: string; badge: number }[]
         theme: string
         colour: string
-        isSettings?: boolean
       }
     }
   }

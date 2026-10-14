@@ -36,10 +36,10 @@ import {
 } from '../hooks/enhance'
 import type { GatherDeps } from '../hooks/enhance'
 
-// ---------------------------------------------------------------- prompt building (Operant's shape)
+// ---------------------------------------------------------------- prompt building (shape)
 
 describe('prompt', () => {
-  test('the instructions ask for Operant\'s rewrite shape', () => {
+  test('the instructions ask for the rewrite shape', () => {
     for (const part of ['Load these skills:', 'Ask me first about:', 'Done when:', 'Start with:', 'Keep in mind:', 'Context:']) {
       expect(SYSTEM_PROMPT.includes(part)).toBe(true)
     }
@@ -123,7 +123,7 @@ describe('model and effort', () => {
     expect(resolveModel('session', 'claude-opus-5-5[1m]')).toBe('claude-opus-5-5[1m]')
     expect(resolveModel('', 'x')).toBe(DEFAULTS.model)
     expect(resolveModel('bad model; rm', 'x')).toBe(DEFAULTS.model)
-    expect(DEFAULTS.model).toBe('claude-haiku-5-5')
+    expect(DEFAULTS.model).toBe('haiku')
   })
 
   test('effort "default" sends none, "session" follows the session', () => {

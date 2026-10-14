@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { CATALOG, blocksOf, fmtAgo, fmtElapsed, footerOf, installedFrom, jobOf, modesOf, move, parseArg, pickTab, progressOf, tabsFor } from '../hooks/logic'
+import { CATALOG, blocksOf, fmtAgo, fmtElapsed, footerOf, installedFrom, jobOf, move, parseArg, pickTab, progressOf, tabsFor } from '../hooks/logic'
 import { DENSE_FULL, sbAsker, sbBadge, sbMeter, sbPaneMove, sbTabRows } from '../hooks/sidebar-kit'
 
 const SESSION = { cwd: 'F:/proj', surface: 'terminal', isInteractive: true } as any
@@ -52,7 +52,6 @@ describe('logic', () => {
     expect(pickTab('self-improve', tabs)).toBe('flightdeck')
     expect(pickTab('', tabs)).toBe('flightdeck')
     expect(pickTab('sidebar', tabs)).toBe('sidebar')
-    expect(pickTab('settings:flightdeck', tabs)).toBe('settings:flightdeck')
     expect(pickTab('', [])).toBe('sidebar')
   })
 
@@ -65,7 +64,7 @@ describe('logic', () => {
     expect(parseArg('off')).toEqual({ kind: 'close' })
     expect(parseArg('tab clean-view')).toEqual({ kind: 'tab', id: 'clean-view' })
     expect(parseArg('tab')).toEqual({ kind: 'flip' })
-    expect(parseArg('settings flightdeck')).toEqual({ kind: 'settings', id: 'flightdeck' })
+    expect(parseArg('settings flightdeck')).toEqual({ kind: 'flip' })
     expect(parseArg('closed flightdeck')).toEqual({ kind: 'closed', id: 'flightdeck' })
     expect(parseArg('flightdeck')).toEqual({ kind: 'tab', id: 'flightdeck' })
     expect(parseArg('  Flightdeck ')).toEqual({ kind: 'tab', id: 'flightdeck' })
@@ -76,14 +75,6 @@ describe('logic', () => {
     expect(installedFrom(list)).toEqual(['flightdeck', 'bottom-bar'])
     expect(installedFrom(null)).toEqual([])
     expect(installedFrom({})).toEqual([])
-  })
-
-  test('published modes are kept only when well formed', () => {
-    expect(modesOf({ flightdeck: { label: 'Flightdeck', isOn: true }, bad: { label: 1, isOn: true }, worse: { label: 'x' }, nul: null })).toEqual({
-      flightdeck: { label: 'Flightdeck', isOn: true },
-    })
-    expect(modesOf(null)).toEqual({})
-    expect(modesOf('x')).toEqual({})
   })
 
   test('Clean View’s checklist is cut down to a job, or null with none', () => {
@@ -146,7 +137,7 @@ describe('kit strip rows', () => {
   test('the tabs fill the width in as few rows as fit, full rows reaching both edges', () => {
     const tabs = tabsFor(CATALOG.map(c => c.id), [], [], {})
     const rows = sbTabRows(tabs, 52)
-    expect(rows).toHaveLength(3)
+    expect(rows).toHaveLength(2)
     expect(rows.flatMap(r => r.tabs).map(t => t.id)).toEqual(tabs.map(t => t.id))
     const cells = (r: (typeof rows)[number]) => r.tabs.reduce((n, t, i) => n + r.gaps[i]! + [...`${t.icon} ${t.label}`].length + 2, 0)
     expect(cells(rows[0]!)).toBe(52)
@@ -155,15 +146,13 @@ describe('kit strip rows', () => {
 })
 
 describe('kit strip asks', () => {
-  const strip = (isOn: boolean, active: string, isSettings = false) => ({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral', isSettings })
+  const strip = (isOn: boolean, active: string) => ({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral' })
 
   test('a pane mod opens when its tab turns up and closes when it goes', () => {
     expect(sbPaneMove('flightdeck', strip(true, 'flightdeck'), strip(true, 'clean-view'))).toBe('open')
     expect(sbPaneMove('flightdeck', strip(true, 'flightdeck'), undefined)).toBe('open')
-    expect(sbPaneMove('flightdeck', strip(true, 'flightdeck'), strip(true, 'flightdeck', true))).toBe('open')
     expect(sbPaneMove('flightdeck', strip(true, 'clean-view'), strip(true, 'flightdeck'))).toBe('close')
     expect(sbPaneMove('flightdeck', strip(false, 'flightdeck'), strip(true, 'flightdeck'))).toBe('close')
-    expect(sbPaneMove('flightdeck', strip(true, 'flightdeck', true), strip(true, 'flightdeck'))).toBe('close')
   })
 
   test('a mod opened by its own command with the sidebar off is left alone', () => {
@@ -176,11 +165,11 @@ describe('kit strip asks', () => {
   test('a press that leaves the tab closes the mod’s pane first, then asks; its own tab only asks', async () => {
     const log: string[] = []
     const ask = sbAsker(async args => void log.push(`ask ${args}`), 'flightdeck', async () => void log.push('close'))
-    for (const args of ['tab clean-view', 'tab flightdeck', 'settings flightdeck']) {
+    for (const args of ['tab clean-view', 'tab flightdeck', 'tab sidebar']) {
       ask(args)
       for (let i = 0; i < 5; i++) await new Promise(r => (globalThis as any).setTimeout(r, 0))
     }
-    expect(log).toEqual(['close', 'ask tab clean-view', 'ask tab flightdeck', 'close', 'ask settings flightdeck'])
+    expect(log).toEqual(['close', 'ask tab clean-view', 'ask tab flightdeck', 'close', 'ask tab sidebar'])
   })
 })
 
@@ -250,7 +239,7 @@ const FLIGHTDECK = {
   register: ((on: any) => {
     let n = 0
     let strip: any
-    const shows = (v: any) => !!v && v.isOn === true && v.active === 'flightdeck' && v.isSettings !== true
+    const shows = (v: any) => !!v && v.isOn === true && v.active === 'flightdeck'
     on('command.run', { command: 'fd-press' }, async ($: any, e: any) => {
       if (e.args !== 'tab flightdeck') await $.ui.close({ id: 'flightdeck' })
       await $.state.set({ plugin: 'flightdeck', key: 'sidebarAsk' }, { args: e.args, n: (n += 1) })
@@ -301,18 +290,6 @@ describe('wiring', () => {
     await ui.unmount()
   })
 
-  test('a mod’s settings page has a Back button', async ($, on) => {
-    world(on)
-    await $.session.start(SESSION)
-    await settle()
-    await $.command.run(command('settings flightdeck'))
-    const { ui, all } = await texts($)
-    expect(all).toContain('FLIGHTDECK')
-    expect(all).toContain('Back')
-    expect(all).toContain('OPTIONS')
-    await ui.unmount()
-  })
-
   test('/sidebar close closes the pane and /sidebar flips it', async ($, on) => {
     const w = world(on)
     await $.session.start(SESSION)
@@ -342,7 +319,7 @@ describe('wiring', () => {
     await $.command.run(command('tab sidebar'))
     expect(w.panes).toContain('sidebar')
     await $.command.run(command('tab flightdeck'))
-    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'flightdeck', isSettings: false })
+    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'flightdeck' })
     expect(w.closed).toContain('sidebar')
     expect(w.panes).not.toContain('sidebar')
     expect(w.ran).toEqual([])
@@ -354,20 +331,20 @@ describe('wiring', () => {
     await settle()
     await $.command.run(command('tab flightdeck'))
     await $.command.run(command('tab clean-view'))
-    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'clean-view', isSettings: false })
+    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'clean-view' })
     expect(w.panes).toContain('sidebar')
     expect(w.ran).toEqual([])
   })
 
-  test('a pane mod that is not loaded here shows its settings page instead', { plugins: [FLIGHTDECK] }, async ($, on) => {
+  test('a pane mod that is not loaded here shows its about page on the sidebar’s pane', { plugins: [FLIGHTDECK] }, async ($, on) => {
     const w = world(on)
     await $.session.start(SESSION)
     await settle()
     await $.command.run(command('tab self-improve'))
-    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'self-improve', isSettings: true })
+    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'self-improve' })
     expect(w.panes).toContain('sidebar')
     const { ui, all } = await texts($)
-    expect(all).toContain('Back')
+    expect(all).toContain('SELF IMPROVE')
     await ui.unmount()
     expect(w.ran).toEqual([])
   })
@@ -380,7 +357,7 @@ describe('wiring', () => {
     const { ui } = await texts($)
     await ui.press({ key: 'sb-tab:flightdeck' })
     await settle()
-    expect(await stripOf($)).toMatchObject({ active: 'flightdeck', isSettings: false })
+    expect(await stripOf($)).toMatchObject({ active: 'flightdeck' })
     expect(w.panes).not.toContain('sidebar')
     expect(w.ran).toEqual([])
     await ui.unmount()
@@ -401,15 +378,9 @@ describe('wiring', () => {
     await ui.unmount()
 
     await press($, 'tab flightdeck')
-    expect(await stripOf($)).toMatchObject({ active: 'flightdeck', isSettings: false })
+    expect(await stripOf($)).toMatchObject({ active: 'flightdeck' })
     expect(w.panes).toContain('flightdeck')
     expect(w.panes).not.toContain('sidebar')
-    await press($, 'settings flightdeck')
-    expect(await stripOf($)).toMatchObject({ active: 'flightdeck', isSettings: true })
-    expect(w.panes).toContain('sidebar')
-    expect(w.panes).not.toContain('flightdeck')
-    await press($, 'tab flightdeck')
-    expect(w.panes).toContain('flightdeck')
     await press($, 'close')
     expect(await stripOf($)).toMatchObject({ isOn: false })
     expect(w.panes).toEqual([])
@@ -461,7 +432,6 @@ describe('wiring', () => {
 // ---------------------------------------------------------------- Context footer and Rule Guard
 
 const FOOTER = {
-  context: { percent: 42, tokens: 84000, window: 200000 },
   hindsight: 'up',
   codegraph: 'indexed',
   git: { branch: 'main', changed: 3, ahead: 1, behind: 0 },
@@ -475,7 +445,6 @@ const CONTEXT = {
     on('command.run', { command: 'ctx-publish' }, async ($: any, e: any) => {
       // Hooks run in a world of their own, so the footer is spelled out here (it is FOOTER above).
       const footer = {
-        context: { percent: 42, tokens: 84000, window: 200000 },
         hindsight: 'up',
         codegraph: 'indexed',
         git: { branch: 'main', changed: 3, ahead: 1, behind: 0 },
@@ -500,7 +469,7 @@ describe('context footer', () => {
   test('a well formed footer is kept, anything else drops it', () => {
     expect(footerOf(FOOTER)).toMatchObject({ hindsight: 'up', git: { branch: 'main', changed: 3 }, passes: { count: 2, limit: 3 } })
     expect(footerOf(null)).toBeNull()
-    expect(footerOf({ context: {} })).toBeNull()
+    expect(footerOf({})).toBeNull()
     expect(footerOf({ ...FOOTER, hindsight: 'odd', git: { changed: 2 } })).toMatchObject({ hindsight: 'off', git: null })
   })
 
@@ -524,12 +493,11 @@ describe('context footer', () => {
     await $.command.run(command('tab clean-view'))
     await $.command.run({ ...command(''), command: 'ctx-publish' })
     let { ui, all } = await texts($)
-    expect(all).toContain('CONTEXT')
     expect(all).toContain('main')
     expect(all).toContain(' · 3 changed')
     expect(all).toContain('Hindsight')
     expect(all).toContain(' 2 of 3')
-    expect(all.indexOf('CONTEXT ')).toBeGreaterThan(all.indexOf('CLEAN VIEW'))
+    expect(all.indexOf('main')).toBeGreaterThan(all.indexOf('CLEAN VIEW'))
     await ui.unmount()
     await $.command.run({ ...command('none'), command: 'ctx-publish' })
     ;({ ui, all } = await texts($))
@@ -537,7 +505,7 @@ describe('context footer', () => {
     await ui.unmount()
   })
 
-  test('Rule Guard has a tab with what it stopped and its rules', { plugins: [RULE_GUARD] }, async ($, on) => {
+  test('Rule Guard has a tab with what it stopped and where its rules are set', { plugins: [RULE_GUARD] }, async ($, on) => {
     world(on)
     await $.session.start(SESSION)
     await settle()
@@ -548,7 +516,7 @@ describe('context footer', () => {
     expect(all).toContain('Plain version tags')
     expect(all).toContain('git tag v1.2.0')
     expect(all).toContain('2m ago')
-    expect(all).toContain('RULES')
+    expect(all).toContain('/plugin')
     await ui.unmount()
   })
 })

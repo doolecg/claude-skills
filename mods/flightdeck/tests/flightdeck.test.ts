@@ -216,10 +216,10 @@ const SIDEBAR = {
     })
   }) as any,
 }
-const setStrip = ($: any, isOn: boolean, active: string, isSettings = false) =>
+const setStrip = ($: any, isOn: boolean, active: string) =>
   $.command.run({
     command: 'sb-strip',
-    args: JSON.stringify({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral', isSettings }),
+    args: JSON.stringify({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral' }),
     origin: { kind: 'composer' as const },
   })
 
@@ -235,7 +235,7 @@ describe('wiring', () => {
     await setStrip($, true, 'flightdeck')
     expect(w.opened.at(-1)).toMatchObject({ id: 'flightdeck', columns: 56 })
     expect(w.modes.at(-1)).toEqual({ flightdeck: { label: 'Flightdeck', isOn: true } })
-    await setStrip($, true, 'flightdeck', true)
+    await setStrip($, true, 'clean-view')
     expect(w.closed).toEqual(['flightdeck'])
     expect(w.modes.at(-1)).toEqual({ flightdeck: { label: 'Flightdeck', isOn: false } })
     await setStrip($, true, 'flightdeck')

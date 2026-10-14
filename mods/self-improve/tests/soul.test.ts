@@ -133,13 +133,36 @@ describe('sync with the Soul Bank', () => {
     expect(up.pushed).toBe(2)
   })
 
-  test('the bank name is the setting: operant-soul shares one soul with Operant', async () => {
+  test('the bank name is the setting: shared-soul uses the named bank', async () => {
     const io = fakeIo()
     io.files.set(SOUL, '## How I work\n\n- one fact\n')
     hindsightConfig(io)
     io.banks = new Map()
-    await syncSoul(io, emptyState(), settings({ soulBank: 'operant-soul' }), await connectHindsight(io))
-    expect([...io.banks.keys()]).toEqual(['operant-soul'])
+    await syncSoul(io, emptyState(), settings({ soulBank: 'shared-soul' }), await connectHindsight(io))
+    expect([...io.banks.keys()]).toEqual(['shared-soul'])
+  })
+})
+
+describe('the Hindsight address setting', () => {
+  test('used in place of the file, with no file at all', async () => {
+    const io = fakeIo()
+    io.banks = new Map()
+    const hs = await connectHindsight(io, 'http://other.local:9999/')
+    expect(hs.on && hs.client.config.url).toBe('http://other.local:9999')
+  })
+
+  test('overrides the file and keeps its token', async () => {
+    const io = fakeIo()
+    io.files.set(`${CONFIG.replace('/.claude', '')}/.hindsight/coding-agent.json`, JSON.stringify({ apiUrl: 'http://hs.local:8888', apiToken: 'secret' }))
+    io.banks = new Map()
+    const hs = await connectHindsight(io, 'http://other.local:9999')
+    expect(hs.on && hs.client.config).toEqual({ url: 'http://other.local:9999', token: 'secret' })
+  })
+
+  test('not an address: off, saying why', async () => {
+    const hs = await connectHindsight(fakeIo(), 'hs.local')
+    expect(hs.on).toBe(false)
+    expect(!hs.on && hs.reason).toMatch(/not an http/)
   })
 })
 
@@ -163,9 +186,9 @@ describe('seeding', () => {
     const io = fakeIo()
     io.files.set(SOUL, EXISTING)
     io.files.set(`${MEM}/a.md`, '---\nname: a\ndescription: a\ntype: feedback\n---\n\nWhen asked for a change, make the edits yourself.\n')
-    withBank(io, 'operant-soul', [{ id: 'x', text: 'Never invoke superpowers:brainstorming; plan briefly, then build.', tags: ['kind:correction'] }])
+    withBank(io, 'shared-soul', [{ id: 'x', text: 'Never invoke superpowers:brainstorming; plan briefly, then build.', tags: ['kind:correction'] }])
     const st = emptyState()
-    const r = await seedSoul(io, st, settings({ soulBank: 'operant-soul' }), await connectHindsight(io))
+    const r = await seedSoul(io, st, settings({ soulBank: 'shared-soul' }), await connectHindsight(io))
     expect(r).toMatchObject({ fromMemory: 1, fromBank: 1 })
     const text = io.files.get(SOUL)!
     expect(text.startsWith('# My soul\n\nHand-written intro.')).toBe(true)

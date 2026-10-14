@@ -6,6 +6,7 @@ export const EMPTY_FIGURES: BarFigures = {
   effort: '',
   ctx: null,
   fiveHour: null,
+  sevenDay: null,
   agents: 0,
 }
 
@@ -166,6 +167,15 @@ export function segments(f: BarFigures, pal: Palette): Segment[] {
       ],
     })
   }
+  if (f.sevenDay !== null) {
+    out.push({
+      key: 'sevenDay',
+      parts: [
+        { text: '7d ', color: pal.dim },
+        { text: `${Math.round(f.sevenDay)}%`, color: level(f.sevenDay, pal) },
+      ],
+    })
+  }
   out.push({
     key: 'agents',
     parts: [
@@ -222,6 +232,7 @@ export const sameFigures = (a: BarFigures, b: BarFigures): boolean =>
   a.effort === b.effort &&
   a.ctx === b.ctx &&
   a.fiveHour === b.fiveHour &&
+  a.sevenDay === b.sevenDay &&
   a.agents === b.agents
 
 /** `clean-view` → `Clean View`, `superpowers:brainstorming` → `Brainstorming`. */

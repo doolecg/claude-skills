@@ -55,7 +55,7 @@ const rt: { s: Settings; isWorker: boolean; isLearning: boolean; lastHindsight: 
 
 
 async function hindsight(io: Io): Promise<HindsightState> {
-  rt.lastHindsight = await connectHindsight(io)
+  rt.lastHindsight = await connectHindsight(io, rt.s.hindsightUrl)
   return rt.lastHindsight
 }
 

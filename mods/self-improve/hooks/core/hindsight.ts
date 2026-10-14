@@ -1,4 +1,5 @@
-// Hindsight, the optional memory server. On only when ~/.hindsight/coding-agent.json names an apiUrl that answers.
+// Hindsight, the optional memory server. On only when the Hindsight address setting, or else
+// ~/.hindsight/coding-agent.json's apiUrl, names a server that answers.
 // Ported from Operant (core/hindsight.ts recall and retain), over the Io's fetch.
 
 import type { Io } from './io'
@@ -113,15 +114,25 @@ export class Hindsight {
 }
 
 // Reads the config file and checks that the server answers. Never throws.
-export async function connectHindsight(io: Io): Promise<HindsightState> {
+// `address`: the mod's Hindsight address setting; when set it is used in place of the file's apiUrl, with the file's
+// token if it has one.
+export async function connectHindsight(io: Io, address = ''): Promise<HindsightState> {
   let text: string | null = null
   try {
     text = await io.read(hindsightConfigPath(io))
   } catch {
     text = null
   }
-  if (text === null) return { on: false, reason: 'not set up' }
-  const config = parseHindsightConfig(text)
+  const fromFile = parseHindsightConfig(text)
+  let config: HindsightConfig | null
+  if (address) {
+    const set = parseHindsightConfig(JSON.stringify({ apiUrl: address }))
+    if (!set) return { on: false, reason: `address ${address} is not an http:// or https:// address` }
+    config = { url: set.url, token: fromFile?.token ?? '' }
+  } else {
+    if (text === null) return { on: false, reason: 'not set up' }
+    config = fromFile
+  }
   if (!config) return { on: false, reason: 'not set up (no apiUrl in ~/.hindsight/coding-agent.json)' }
   const client = new Hindsight(io, config)
   try {

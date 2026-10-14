@@ -1,3 +1,13 @@
+# Bottom Bar 1.5.0
+
+## New
+- The bar shows your 7-day usage (7d %) after the 5-hour figure, yellow from 60% and red from 80%.
+
+## Changed
+- The Doole's Tools box has no settings page any more. The pill name and colour are set in /plugin › Installed › Bottom Bar › Configure, with plain labels and help.
+
+---
+
 # Bottom Bar 1.4.0
 
 ## New

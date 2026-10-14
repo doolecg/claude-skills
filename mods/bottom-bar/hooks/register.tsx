@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, StateWrite } from 'claude-code'
 
-import type { BarFigures, BarMod, BarSetting, BarTool } from '../types'
+import type { BarFigures, BarMod, BarTool } from '../types'
 import {
   ACCENTS,
   EFFORTS,
@@ -26,7 +26,7 @@ import {
   toolLabel,
 } from './bar-logic'
 import { toolboxRows, toolboxWidth } from './toolbox'
-import { pickInstalls, settingsList } from './toolbox-logic'
+import { pickInstalls } from './toolbox-logic'
 import type { Install } from './toolbox-logic'
 
 const LABEL = "Doole's Tools"
@@ -45,8 +45,6 @@ const modeStates = atom({ plugin: 'bottom-bar', key: 'modeStates' } as const, {}
 const choices = atom({ plugin: 'bottom-bar', key: 'choices' } as const, [])
 const filter = atom({ plugin: 'bottom-bar', key: 'filter' } as const, '')
 const label = atom({ plugin: 'bottom-bar', key: 'label' } as const, LABEL)
-const settings = atom({ plugin: 'bottom-bar', key: 'settings' } as const, [])
-const view = atom({ plugin: 'bottom-bar', key: 'view' } as const, 'home')
 const mods = atom({ plugin: 'bottom-bar', key: 'mods' } as const, [])
 const published = atom({ plugin: 'bottom-bar', key: 'published' } as const, {})
 
@@ -88,12 +86,14 @@ async function refresh($: Dollar, opts: { settings?: boolean } = {}): Promise<vo
     ])
     if (opts.settings) await fromSettings($, modelId)
     const five = usage.rateLimits.find(r => r.kind === 'five_hour')
+    const seven = usage.rateLimits.find(r => r.kind === 'seven_day')
     await setFigures($, f => ({
       ...f,
       model: modelName(modelId),
       window: usage.context.window,
       ctx: usage.context.percent ?? f.ctx,
       fiveHour: five ? five.percentUsed : f.fiveHour,
+      sevenDay: seven ? seven.percentUsed : f.sevenDay,
       agents: agents.filter(a => a.status === 'running' || a.status === 'pending' || a.status === 'waiting').length,
     }))
   } catch {}
@@ -148,17 +148,6 @@ async function saveTools($: Dollar, list: string[]): Promise<void> {
   await $.store.set('tools', list)
 }
 
-async function loadSettings($: Dollar): Promise<void> {
-  const list = settingsList(await $.config.list())
-  await update($, settings, () => list)
-}
-
-async function setOption($: Dollar, s: BarSetting, value: string | number | boolean): Promise<void> {
-  const set = await $.config.set({ key: s.key, value })
-  if (set.deny !== undefined) $.ui.toast(`Could not change ${s.label}: ${set.deny}`)
-  await loadSettings($)
-}
-
 /** The installed mods, read off `claude plugin list`: plugins whose `hooks.json` names a module. */
 async function loadMods($: Dollar): Promise<void> {
   const ran = await $.process.run(['claude', 'plugin', 'list', '--json'], { timeoutMs: 30000 })
@@ -204,11 +193,6 @@ async function toggleMod($: Dollar, mod: BarMod): Promise<void> {
   }
 }
 
-async function setOwn($: Dollar, field: string, value: string): Promise<void> {
-  const set = await $.config.set({ key: `bottom-bar.${field}`, value })
-  if (set.deny !== undefined) $.ui.toast(`Could not change the ${field}: ${set.deny}`)
-}
-
 async function runCommand($: Dollar, text: string): Promise<void> {
   const { command: name, args } = splitCommand(text)
   try {
@@ -248,25 +232,15 @@ async function toolboxTree(
     pal: paletteFor(await read($, theme), colour),
     width,
     title,
-    view: await read($, view),
-    colour,
     figures: await read($, figures),
     models: loaded.length > 0 ? loaded : modelChoices(undefined),
     modes: await read($, modeStates),
     mods: await read($, mods),
     choices: await read($, choices),
-    settings: await read($, settings),
     pickModel: alias => void pickModel($, alias, true),
     pickEffort: level => void pickEffort($, level, true),
     flip: command => void runCommand($, command),
     toggleMod: mod => void toggleMod($, mod),
-    setOption: (s, value) => void setOption($, s, value),
-    setName: value => {
-      if (!value) return
-      void update($, label, () => value).then(() => setOwn($, 'name', value))
-    },
-    setColour: value => void setOwn($, 'colour', value),
-    setView: page => void update($, view, () => page),
     close: () => void closeTools($),
     hasClose,
     launch: command => void closeTools($).then(() => runCommand($, command)),
@@ -297,11 +271,13 @@ export const register: Register = (on, options) => {
 
   on('session.measure', async ($, e, next) => {
     const five = e.rateLimits.find(r => r.kind === 'five_hour')
+    const seven = e.rateLimits.find(r => r.kind === 'seven_day')
     await setFigures($, f => ({
       ...f,
       window: e.context.window || f.window,
       ctx: e.context.percent ?? f.ctx,
       fiveHour: five ? five.percentUsed : f.fiveHour,
+      sevenDay: seven ? seven.percentUsed : f.sevenDay,
     }))
     return next(e)
   })
@@ -436,10 +412,9 @@ export const register: Register = (on, options) => {
     }
     const openTools = async () => {
       if ((await read($, menu)) !== 'tools') {
-        await update($, view, () => 'home')
         void loadMods($).catch(() => {})
         try {
-          await Promise.all([loadChoices($), loadSettings($)])
+          await loadChoices($)
         } catch {}
       }
       if ((await read($, menu)) === 'tools') return closeTools($)

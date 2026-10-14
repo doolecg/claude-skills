@@ -1,3 +1,14 @@
+# Self Improve 2.3.0
+
+## New
+- A Hindsight address setting. Leave it empty to use apiUrl from ~/.hindsight/coding-agent.json, as before; if neither is set, Hindsight is skipped with a short note.
+
+## Changed
+- The Settings button on its sidebar tab is gone. Every option is in /plugin › Installed › Self Improve › Configure, with plain labels, help and defaults.
+- Cards and bars sit on the terminal's own background.
+
+---
+
 # Self Improve 2.2.3
 
 ## Changed

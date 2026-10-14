@@ -39,7 +39,6 @@ The first session seeds soul.md from your user and feedback memory files (and fr
 ## Hindsight and CodeGraph (both optional)
 
 - Hindsight is used only when `~/.hindsight/coding-agent.json` names an `apiUrl` that answers within 5 seconds. Project lessons go to `coding-agent::<folder name>`; soul facts go to the Soul Bank (setting `soulBank`, default `soul`). On every run soul.md and the Soul Bank are synced both ways, deduplicated. If Hindsight is down or not set up, everything still goes to the markdown files and is sent on a later run.
-- **Operant users:** set `soulBank` to `operant-soul` to share one soul with Operant.
 - CodeGraph is used only when the `codegraph` command is on PATH and the repo has a `.codegraph/` folder. Otherwise the run says "CodeGraph: not indexed".
 
 ## Review modes (setting `mode`)
@@ -63,10 +62,13 @@ The `mcp__self-improve__recall` tool lets Claude search Hindsight, soul.md and t
 
 ## Settings
 
+Set these in `/plugin` (Self Improve, then configure options). The sidebar has no settings page.
+
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `mode` | suggest | off, suggest, controlled, advanced |
 | `soulBank` | soul | Hindsight bank for soul.md |
+| `hindsightUrl` | empty | Hindsight server; empty uses `apiUrl` from `~/.hindsight/coding-agent.json` |
 | `learnModel` | haiku | Model that reads a finished session |
 | `rewriteModel` | sonnet | Model that drafts skill rewrites |
 | `maxCalls` | 4 | Model calls per run (0 = no limit) |

@@ -1,3 +1,10 @@
+# Rule Guard 1.0.1
+
+## Changed
+- Each rule's help in /plugin › Installed › Rule Guard › Configure says it is on by default. The sidebar no longer shows the rules as switches.
+
+---
+
 # Rule Guard 1.0.0
 
 ## New

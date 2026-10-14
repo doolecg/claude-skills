@@ -359,7 +359,7 @@ export async function learn(io: Io, job: Job, s: Settings, o: RunOptions = {}): 
   const run: Run = {
     id: newId(state), at: now, sessionId: job.sessionId, folder: job.folder, trigger: job.trigger, extracted: 0, saved: 0, queued: 0, merged: 0, staled: 0, drafts: 0, skipped: [], error: '', calls: 0, tokens: 0, usd: 0, model: s.learnModel,
   }
-  const hs = o.hindsight ?? (await connectHindsight(io))
+  const hs = o.hindsight ?? (await connectHindsight(io, s.hindsightUrl))
   const c: Ctx = { io, s, state, hs, run, budget: new Budget(s, state, io), now }
   const cc = c
   const lessonsThisRun: Lesson[] = []

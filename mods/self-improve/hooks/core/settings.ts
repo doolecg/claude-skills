@@ -16,6 +16,7 @@ export type Settings = {
   maxChanges: number
   dailyUsd: number
   soulBank: string
+  hindsightUrl: string
   extraSkillDirs: string
   soulCap: number
   minUserTurns: number
@@ -31,6 +32,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxChanges: 5,
   dailyUsd: 0.5,
   soulBank: 'soul',
+  hindsightUrl: '',
   extraSkillDirs: '',
   soulCap: 1500,
   // Operant's gate defaults (shared/learn.ts): 3 user turns and 500 tokens. The spec says 2 and 2000.
@@ -57,6 +59,7 @@ export function settingsFrom(options: Record<string, unknown> | undefined): Sett
     maxChanges: num(o.maxChanges, d.maxChanges, 0, 100),
     dailyUsd: num(o.dailyUsd, d.dailyUsd, 0, 1000),
     soulBank: text(o.soulBank, d.soulBank),
+    hindsightUrl: text(o.hindsightUrl, d.hindsightUrl),
     extraSkillDirs: typeof o.extraSkillDirs === 'string' ? o.extraSkillDirs : d.extraSkillDirs,
     soulCap: num(o.soulCap, d.soulCap, 200, 6000),
     minUserTurns: d.minUserTurns,

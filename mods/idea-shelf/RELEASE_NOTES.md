@@ -1,3 +1,10 @@
+# Idea Shelf 0.3.3
+
+## Changed
+- Cards sit on the terminal's own background, and the Settings button on its sidebar tab is gone.
+
+---
+
 # Idea Shelf 0.3.2
 
 ## Changed

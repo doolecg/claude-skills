@@ -1,3 +1,14 @@
+# Sidebar 1.4.0
+
+## Changed
+- The sidebar has no settings pages or ⚙ buttons any more. Every mod's options are in /plugin › Installed › <mod> › Configure; a tab that only had options says so in one line.
+- The ⋯ page keeps which tabs show and their order.
+- Cards and bars sit on the terminal's own background, like the Bottom Bar.
+- The Context footer shows Hindsight, CodeGraph, git and test passes; the context-used row is gone.
+- Folder Tracker, Design Picker and Plain English tabs are gone (those mods were removed).
+
+---
+
 # Sidebar 1.3.0
 
 ## New

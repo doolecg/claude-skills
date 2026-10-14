@@ -4,6 +4,7 @@ export type BarFigures = {
   effort: string
   ctx: number | null
   fiveHour: number | null
+  sevenDay: number | null
   agents: number
 }
 
@@ -41,17 +42,6 @@ export type BarTool = {
   source: string
 }
 
-/** A plugin's `userConfig` field as `/config` lists it, for the toolbox. */
-export type BarSetting = {
-  key: string
-  label: string
-  description: string
-  kind: 'boolean' | 'choice' | 'text' | 'number'
-  value: string | number | boolean
-  options: string[]
-  isLocked: boolean
-}
-
 /** An installed mod (a plugin with a hooks module), as `claude plugin list` reports it. */
 export type BarMod = {
   id: string
@@ -79,9 +69,6 @@ declare module 'claude-code' {
       filter: string
       /** The tools pill's name, from the `name` option; the toolbox is headed with it. */
       label: string
-      settings: BarSetting[]
-      /** The toolbox page shown: `home` or `settings`. */
-      view: string
       mods: BarMod[]
     }
   }

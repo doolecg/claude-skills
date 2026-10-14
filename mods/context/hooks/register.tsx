@@ -6,7 +6,6 @@ import {
   HINDSIGHT,
   THROTTLE,
   afterTool,
-  contextOf,
   emptyFooter,
   gitInfo,
   hindsightFrom,
@@ -97,11 +96,6 @@ const setFooter = ($: $, fn: (f: CtxFooter) => CtxFooter) =>
 
 const setPasses = ($: $, fn: (p: CtxFooter['passes']) => CtxFooter['passes']) => setFooter($, f => ({ ...f, passes: fn(f.passes) }))
 
-async function refreshContext($: $): Promise<void> {
-  const context = contextOf(await $.session.usage())
-  await setFooter($, f => ({ ...f, context }))
-}
-
 async function refreshHindsight($: $): Promise<void> {
   const cfg = await hindsightConfig($)
   const hindsight = cfg ? hindsightFrom(await healthStatus($, cfg)) : 'off'
@@ -135,19 +129,13 @@ async function refreshGit($: $): Promise<void> {
   await setFooter($, f => ({ ...f, git: info }))
 }
 
-let lastContext = 0
 let lastGit = 0
 
 /** Runs `fn` when the throttle gap has passed since the last run it allowed. */
-async function throttled($: $, which: 'context' | 'git', fn: () => Promise<void>): Promise<void> {
+async function throttled($: $, fn: () => Promise<void>): Promise<void> {
   const now = await $.clock.now()
-  if (which === 'context') {
-    if (!isDue(lastContext, now, THROTTLE.contextMs)) return
-    lastContext = now
-  } else {
-    if (!isDue(lastGit, now, THROTTLE.gitMs)) return
-    lastGit = now
-  }
+  if (!isDue(lastGit, now, THROTTLE.gitMs)) return
+  lastGit = now
   await fn()
 }
 
@@ -163,7 +151,6 @@ export const register: Register = (on, options: PluginOptions) => {
     const ran = await next(e)
     await quiet(() => $.command.register({ name: 'passes', description: 'Show how many test and fix passes this problem has had, or reset the count', argumentHint: '[reset]', immediate: true }))
     await quiet(() => setFooter($, f => f))
-    await quiet(() => refreshContext($))
     await quiet(() => refreshCodegraph($))
     await quiet(() => refreshGit($))
     timer?.cancel()
@@ -175,8 +162,7 @@ export const register: Register = (on, options: PluginOptions) => {
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.agentId === undefined) {
-      await quiet(() => refreshContext($))
-      await quiet(() => refreshCodegraph($))
+        await quiet(() => refreshCodegraph($))
       await quiet(() => refreshGit($))
     }
     return done
@@ -188,14 +174,10 @@ export const register: Register = (on, options: PluginOptions) => {
     if (ran && 'deny' in ran && ran.deny) return ran
     await quiet(async () => {
       const tool = String(e.tool)
-      if (!SHELL_OR_EDIT.has(tool)) {
-        await throttled($, 'context', () => refreshContext($))
-        return
-      }
+      if (!SHELL_OR_EDIT.has(tool)) return
       const command = (e as { command?: unknown }).command
       await setPasses($, p => afterTool(p, tool, command))
-      await throttled($, 'git', () => refreshGit($))
-      await throttled($, 'context', () => refreshContext($))
+      await throttled($, () => refreshGit($))
     })
     return ran
   })

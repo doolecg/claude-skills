@@ -1,3 +1,10 @@
+# Clean View 1.5.1
+
+## Changed
+- The progress bars sit on the terminal's own background, like the Bottom Bar.
+
+---
+
 # Clean View 1.5.0
 
 ## Changed

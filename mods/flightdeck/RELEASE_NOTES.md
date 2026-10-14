@@ -1,3 +1,11 @@
+# Flightdeck 1.4.2
+
+## Changed
+- Cards, bars and the agent critters sit on the terminal's own background, like the Bottom Bar.
+- The Settings button on its sidebar tab is gone, and the footer no longer shows context used.
+
+---
+
 # Flightdeck 1.4.1
 
 ## Changed

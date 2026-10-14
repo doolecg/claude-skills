@@ -117,7 +117,7 @@ for (const surface of SURFACES) {
     expect(await row.find({ key: 'pe-undo' })).toBeUndefined()
   })
 
-  test(`${surface}: pressing it rewrites the box in place, and Undo puts the text back`, async ($, on) => {
+  test(`${surface}: pressing it rewrites the box in place, and Undo puts the text back`, { options: { soulBank: 'soul' } }, async ($, on) => {
     const w = baseWorld()
     const seen = engine(on, w)
     await start($)
@@ -127,7 +127,7 @@ for (const surface of SURFACES) {
     expect(seen.fills).toEqual([(w.reply as any).text])
     expect(w.box.startsWith('Fix the login bug.')).toBe(true)
     const ask = seen.prompts[0]
-    expect(ask.model).toBe('claude-haiku-5-5')
+    expect(ask.model).toBe('haiku')
     expect(ask.effort).toBeUndefined()
     expect(ask.system.includes('Load these skills:')).toBe(true)
     expect(ask.prompt.includes('"""\nfix the login bug\n"""')).toBe(true)
@@ -280,7 +280,7 @@ test('neither Hindsight nor CodeGraph: the rewrite still lands with the session 
 
 // ---------------------------------------------------------------- counts, the published segment, a host bar
 
-test('after a run the own row shows what each source gave', async ($, on) => {
+test('after a run the own row shows what each source gave', { options: { soulBank: 'soul' } }, async ($, on) => {
   engine(on, baseWorld())
   await start($)
   const row = await mountRow($, 'terminal')
@@ -298,7 +298,7 @@ test('the counts name a source that was off or not indexed', async ($, on) => {
   expect(await row.find({ type: 'Text', text: 'Hindsight off · CodeGraph not indexed' })).toBeDefined()
 })
 
-test('the segment is published at start, while working and after a run', async ($, on) => {
+test('the segment is published at start, while working and after a run', { options: { soulBank: 'soul' } }, async ($, on) => {
   const published: any[] = []
   on('state.set', { plugin: 'prompt-enhancer', key: 'segments' } as any, (_$: any, e: any, next: any) => (published.push(e.value?.enhance), next(e)))
   engine(on, baseWorld())
@@ -358,3 +358,4 @@ test("with a host bar the own button is not drawn, and the bar's segment and Und
   expect(w.box).toBe('fix the login bug')
   expect(barPresses).toEqual([])
 })
+

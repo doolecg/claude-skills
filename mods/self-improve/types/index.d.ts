@@ -39,7 +39,7 @@ declare module 'claude-code' {
       sidebarAsk: { args: string; n: number }
     }
     sidebar: {
-      strip: { isOn: boolean; active: string; tabs: { id: string; icon: string; name: string; badge: number }[]; theme: string; colour: string; isSettings?: boolean }
+      strip: { isOn: boolean; active: string; tabs: { id: string; icon: string; name: string; badge: number }[]; theme: string; colour: string }
     }
   }
 }

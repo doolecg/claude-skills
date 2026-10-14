@@ -188,7 +188,7 @@ export async function contextDeps($: $, s: Settings): Promise<{ deps: GatherDeps
   const project = projectName(common, root)
   const cfg = await hindsightConfig($)
   const deps: GatherDeps = {
-    hindsight: cfg ? { project: recaller($, cfg, bankFor(project)), soul: recaller($, cfg, s.soulBank) } : null,
+    hindsight: cfg ? { project: recaller($, cfg, bankFor(project)), soul: s.soulBank ? recaller($, cfg, s.soulBank) : undefined } : null,
     soul: () => readSoul($),
     memoryFiles: () => readMemoryFiles($, top ? slash(top) : root),
     symbols: q => readSymbols($, [...new Set([root, top ? slash(top) : ''])], q),

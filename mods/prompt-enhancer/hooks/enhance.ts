@@ -1,6 +1,5 @@
-// The Enhance Prompt rewrite: the instructions, context blocks and reply handling of the Operant
-// desktop app's Enhance prompt button, copied here so the mod stands alone, plus a Session block and
-// an About me block (the Soul Bank and soul.md). Pure functions only: register.tsx does the reading.
+// The Enhance Prompt rewrite: the instructions, context blocks and reply handling, standing alone,
+// with a Session block and an About me block (the Soul Bank and soul.md). Pure functions only: register.tsx does the reading.
 
 export type Skill = { name: string; description: string }
 
@@ -58,7 +57,7 @@ export const LIMITS = {
 }
 
 export const DEFAULTS = {
-  model: 'claude-haiku-5-5',
+  model: 'haiku',
   effort: 'default',
   hindsightSeconds: 5,
   soulBank: 'soul',
@@ -283,7 +282,7 @@ export function soulLines(markdown: string): string[] {
     .filter(Boolean)
 }
 
-// The words CodeGraph searches for, as Operant picks them: letters, digits and _, longer than two, twelve at most.
+// The words CodeGraph searches for, as the rewrite picks them: letters, digits and _, longer than two, twelve at most.
 export function queryWords(text: string): string {
   return text
     .replace(/[^\p{L}\p{N}_ ]+/gu, ' ')
@@ -293,7 +292,7 @@ export function queryWords(text: string): string {
     .join(' ')
 }
 
-// `codegraph query --json` as Operant's symbol lines: "name (kind) file:line - signature".
+// `codegraph query --json` as symbol lines: "name (kind) file:line - signature".
 export function parseSymbols(stdout: string): string[] {
   let data: unknown
   try {
@@ -390,7 +389,7 @@ export type Recall = (q: string) => Promise<{ items: string[]; error: string }>
 
 export type GatherDeps = {
   // Hindsight recall of the project bank and of the Soul Bank; null when Hindsight is not set up.
-  hindsight: { project: Recall; soul: Recall } | null
+  hindsight: { project: Recall; soul?: Recall } | null
   // soul.md lines, or null when there is no such file.
   soul: () => Promise<string[] | null>
   // The project's auto-memory lines (MEMORY.md and its files), or null when there are none. Read only
@@ -467,7 +466,7 @@ export async function gatherContext(query: string, deps: GatherDeps): Promise<En
           ? { status: 'used', count: answered.reduce((n, r) => n + r.items.length, 0) }
           : { status: project.timedOut || soul.timedOut ? 'timeout' : 'unavailable', count: 0 }
       out.about = capLines([...(soulFile ?? []), ...soul.items], LIMITS.aboutLines, LIMITS.aboutTokens, 300)
-      if (!out.about.length) out.aboutNote = soul.answered || !deps.hindsight ? 'nothing about you' : soul.why
+      if (!out.about.length) out.aboutNote = soul.answered || !deps.hindsight?.soul ? 'nothing about you' : soul.why
     })(),
     (async () => {
       const ms = deps.codegraphMs ?? LIMITS.codegraphMs

@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "dooles-tools",
-  "description": "doolecg's Claude Code plugins: BlockDesigner, Claude Agent Viewer and Operant releases, Minecraft modding, and the Bottom Bar, Clean View, Flightdeck, Prompt Enhancer, Self Improve, Design Picker, Folder Tracker, Idea Shelf, Plain English, Sidebar, Context and Rule Guard mods.",
+  "description": "doolecg's Claude Code plugins: BlockDesigner, Claude Agent Viewer and Operant releases, Minecraft modding, and the Bottom Bar, Clean View, Flightdeck, Prompt Enhancer, Self Improve, Idea Shelf, Sidebar, Context and Rule Guard mods.",
   "owner": {
     "name": "doolecg",
     "email": "doolecg@gmail.com"
@@ -93,7 +93,7 @@
     },
     {
       "name": "bottom-bar",
-      "description": "A compact rounded bar at the bottom of the terminal (model, effort, context, 5h usage, agents) with a Doole's Tools pill that holds the mods you pick and opens a toolbox.",
+      "description": "A compact rounded bar at the bottom of the terminal (model, effort, context, 5-hour and 7-day usage, agents) with a Doole's Tools pill that holds the mods you pick and opens a toolbox.",
       "category": "productivity",
       "source": "./mods/bottom-bar"
     },
@@ -111,7 +111,7 @@
     },
     {
       "name": "sidebar",
-      "description": "One sidebar with a tab for each of your mods (Flightdeck, Self Improve, Clean View, Idea Shelf, Folder Tracker and the rest), each with its settings page, in the Bottom Bar's colours.",
+      "description": "One sidebar with a tab for each of your mods (Flightdeck, Self Improve, Clean View, Idea Shelf and the rest), in the Bottom Bar's colours.",
       "category": "productivity",
       "source": "./mods/sidebar"
     },
@@ -128,32 +128,14 @@
       "source": "./mods/self-improve"
     },
     {
-      "name": "design-picker",
-      "description": "When Claude asks you to choose a look, opens a browser gallery that previews each style option.",
-      "category": "productivity",
-      "source": "./mods/design-picker"
-    },
-    {
-      "name": "folder-tracker",
-      "description": "Shows what another Claude session in the same folder is doing and warns before you edit a file it already changed.",
-      "category": "productivity",
-      "source": "./mods/folder-tracker"
-    },
-    {
       "name": "idea-shelf",
       "description": "Park ideas with /idea while Claude works, one shelf per project, and send them later from /ideas.",
       "category": "productivity",
       "source": "./mods/idea-shelf"
     },
     {
-      "name": "plain-english",
-      "description": "Asks Claude for short, plain replies with a Summary and Next steps, and checks each long reply against those rules.",
-      "category": "productivity",
-      "source": "./mods/plain-english"
-    },
-    {
       "name": "context",
-      "description": "A footer at the bottom of every Sidebar tab: context used, Hindsight and CodeGraph, the git branch and changes, and test passes against your limit.",
+      "description": "Context: publishes the facts for the Sidebar footer (Hindsight, CodeGraph, git, test and fix passes) and counts test and fix passes against a limit.",
       "category": "productivity",
       "source": "./mods/context"
     },

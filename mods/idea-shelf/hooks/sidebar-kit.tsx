@@ -2,7 +2,7 @@
 // Every mod that draws a sidebar tab keeps a copy of this file as hooks/sidebar-kit.tsx.
 // Edit it in mods/sidebar/hooks and run `python mods/sidebar/copy-kit.py` so the copies stay the same.
 
-export const KIT_VERSION = 3
+export const KIT_VERSION = 4
 
 /** The pane id every sidebar tab is drawn under its own plugin, and the width they all open at. */
 export const SIDEBAR_COLUMNS = 56
@@ -245,7 +245,6 @@ export type SbTab = { id: string; icon: string; name: string; label?: string; ba
 
 /** The Context mod's `footer` state: what the footer at the bottom of every tab shows. */
 export type SbFooter = {
-  context: { percent: number | null; tokens: number | null; window: number | null }
   hindsight: 'up' | 'down' | 'off' | 'checking'
   codegraph: 'indexed' | 'none'
   git: { branch: string; changed: number; ahead: number; behind: number } | null
@@ -253,7 +252,7 @@ export type SbFooter = {
 }
 
 /** The Sidebar's `strip` state: which tabs show, which one is open, whether the sidebar is up, and the Context footer when that mod is loaded. */
-export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; isSettings?: boolean; footer?: SbFooter | null }
+export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; footer?: SbFooter | null }
 
 export const EMPTY_STRIP: SbStrip = { isOn: false, active: '', tabs: [], theme: 'dark', colour: 'Coral' }
 
@@ -301,13 +300,13 @@ export const sbKit = (els: Els, surface: string, pal: SbPalette, columns: number
 export const sbRows = (props: { placement?: string; scroll?: { bodyRows?: number } }): number =>
   props.placement === 'dock' ? Math.max(0, Math.floor(props.scroll?.bodyRows ?? 0)) : 0
 
-/** A meter as one Raster of braille pixels on `bg` in the terminal, coloured text elsewhere. */
+/** A meter as one Raster of braille pixels on `bg` (the terminal's own background by default) in the terminal, coloured text elsewhere. */
 export function sbBar(k: SbKit, key: string, pixels: SbPixel[], bg?: string) {
   const { Text } = k.els
   if (pixels.length === 0) return null
   if (k.isTerminal && 'Raster' in k.els) {
     const Raster = k.els.Raster
-    return <Raster key={key} columns={pixels.length} rows={1} cells={sbRasterCells(pixels, bg ?? k.pal.panel)} />
+    return <Raster key={key} columns={pixels.length} rows={1} cells={sbRasterCells(pixels, bg)} />
   }
   return sbRuns(pixels).map((r, i) => (
     <Text key={`${key}-${i}`} color={r.color}>
@@ -328,7 +327,7 @@ export const sbLevel = (k: SbKit, pct: number, seed = 0): SbLook => ({
   seed,
 })
 
-/** A rounded card on the panel colour. */
+/** A rounded card on the terminal's own background, like the Bottom Bar. */
 export function sbCard(k: SbKit, key: string, children: unknown, opts: { direction?: 'row' | 'column'; border?: string } = {}) {
   const { Box } = k.els
   const direction = opts.direction ?? 'column'
@@ -339,7 +338,6 @@ export function sbCard(k: SbKit, key: string, children: unknown, opts: { directi
       columnGap={direction === 'row' ? 1 : undefined}
       borderStyle="round"
       borderColor={opts.border ?? k.pal.border}
-      backgroundColor={k.pal.panel}
       paddingX={1}
       width="100%"
     >
@@ -423,8 +421,6 @@ export type SbStripActions = {
   onMenu: () => void
   /** The ✕: closes the sidebar. */
   onClose: () => void
-  /** A mod's settings page, by its id (the footer's ⚙ opens Context's). */
-  onSettings?: (id: string) => void
 }
 
 /** What a tab shows in the strip: its icon and one word. */
@@ -601,7 +597,7 @@ export function sbFramedBar(k: SbKit, key: string, f: SbFramed) {
   const color = f.color ?? k.pal.dim
   const cells = Math.max(1, f.width - 2)
   return (
-    <Box key={key} flexDirection="column" width={f.width} flexShrink={0} backgroundColor={k.pal.panel}>
+    <Box key={key} flexDirection="column" width={f.width} flexShrink={0}>
       {sbFrameEdge(k, `${key}-top`, f.width, ['╭', '╮'], f.top ?? [], f.topRight ?? [], color)}
       <Box key={`${key}-mid`} height={1} overflow="hidden">
         <Text color={color}>│</Text>
@@ -627,11 +623,11 @@ export function sbCappedBar(k: SbKit, key: string, pixels: SbPixel[], bg?: strin
   ]
 }
 
-/** A tab's title row: its icon and NAME in the accent colour, a dim status, and ⚙ Settings or ‹ Back on the right. */
+/** A tab's title row: its icon and NAME in the accent colour, a dim status, and ‹ Back on the right. */
 export function sbTitle(
   k: SbKit,
   t: { icon: string; name: string; status?: string },
-  right?: { label: 'Settings' | 'Back'; onPress: () => void },
+  right?: { label: 'Back'; onPress: () => void },
 ) {
   const { Text, Button } = k.els
   const { pal } = k
@@ -645,84 +641,23 @@ export function sbTitle(
       <Text color={pal.dim}>{t.status ? ` · ${t.status}` : ''}</Text>
     </Text>,
     right ? (
-      <Button key={right.label === 'Settings' ? 'sb-settings' : 'sb-back'} plain onPress={right.onPress}>
-        <Text color={pal.accent}>{right.label === 'Settings' ? '⚙ ' : '‹ '}</Text>
+      <Button key="sb-back" plain onPress={right.onPress}>
+        <Text color={pal.accent}>{'‹ '}</Text>
         <Text color={pal.text}>{right.label}</Text>
       </Button>
     ) : undefined,
   )
 }
 
-/** One of a mod's options, as `$.config.list()` reports it. */
-export type SbSetting = {
-  key: string
-  label: string
-  description: string
-  kind: 'boolean' | 'choice' | 'text' | 'number'
-  value: string | number | boolean
-  options: string[]
-  isLocked: boolean
-}
-
-/** The option after `value`, round to the first. */
-export function sbNextOption(options: readonly string[], value: unknown): string | undefined {
-  if (options.length === 0) return undefined
-  const at = options.indexOf(String(value))
-  return options[(at + 1) % options.length]
-}
-
-/** A settings row: the label, a dim line about it, and its control on the right. */
-export function sbSettingRow(k: SbKit, s: SbSetting, onSet: (value: string | number | boolean) => void) {
-  const { Box, Text, Button, Input } = k.els
-  const { pal } = k
-  const control = s.isLocked ? (
-    <Text color={pal.dim}>{`${String(s.value)} (locked)`}</Text>
-  ) : s.kind === 'boolean' ? (
-    sbToggle(k, `sb-set:${s.key}`, s.value === true, () => onSet(s.value !== true))
-  ) : s.kind === 'choice' && s.options.length > 0 ? (
-    <Button key={`sb-set:${s.key}`} plain onPress={() => onSet(sbNextOption(s.options, s.value) ?? '')}>
-      <Text backgroundColor={pal.pillBg} color={pal.pillFg}>{` ${String(s.value)} ▸ `}</Text>
-    </Button>
-  ) : (
-    <Box width={18}>
-      {Input ? (
-        <Input key={`sb-set:${s.key}`} value={String(s.value)} onSubmit={(v: string) => onSet(s.kind === 'number' ? Number(v) || 0 : v.trim())} />
-      ) : (
-        <Text color={pal.text}>{String(s.value)}</Text>
-      )}
-    </Box>
-  )
-  return sbSplit(
-    k,
-    `sb-row:${s.key}`,
-    <Text wrap="truncate-end">
-      <Text color={pal.text}>{sbPad(s.label, 17)}</Text>
-      <Text color={pal.dim}>{` ${s.description}`}</Text>
-    </Text>,
-    control,
-  )
-}
-
 // ---- the Context footer -------------------------------------------------------------
 
-/** The rows the footer takes (its border and four rows), for a tab that fills the pane's height itself. */
-export const sbFooterRows = (strip?: SbStrip | null): number => (strip?.footer ? 6 : 0)
+/** The rows the footer takes (its border and three rows), for a tab that fills the pane's height itself. */
+export const sbFooterRows = (strip?: SbStrip | null): number => (strip?.footer ? 5 : 0)
 
-/** 84000 → `84K`, 1200000 → `1.2M`. */
-export const sbTokens = (n: number): string => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}K`)
-
-/** The footer's four rows: context used, the memory and code index, the repo, and the test passes. */
-export function sbFooter(k: SbKit, f: SbFooter, a: SbStripActions) {
-  const { Box, Text, Button } = k.els
+/** The footer's three rows: the memory and code index, the repo, and the test passes. */
+export function sbFooter(k: SbKit, f: SbFooter) {
+  const { Box, Text } = k.els
   const { pal } = k
-  const pct = f.context.percent
-  const meterWidth = Math.max(6, Math.min(16, k.columns - 34))
-  const used =
-    f.context.tokens !== null && f.context.window
-      ? `${sbTokens(f.context.tokens)} of ${sbTokens(f.context.window)}`
-      : f.context.tokens !== null
-        ? sbTokens(f.context.tokens)
-        : ''
   const hs: [string, string] = f.hindsight === 'up' ? [pal.good, '●'] : f.hindsight === 'down' ? [pal.bad, '●'] : f.hindsight === 'checking' ? [pal.dim, '◌'] : [pal.faint, '○']
   const cg: [string, string] = f.codegraph === 'indexed' ? [pal.good, '●'] : [pal.faint, '○']
   const git = f.git
@@ -731,23 +666,6 @@ export function sbFooter(k: SbKit, f: SbFooter, a: SbStripActions) {
   const dotColour = p.count > p.limit ? pal.bad : atLimit ? pal.warn : pal.accent
   const dots = Array.from({ length: Math.max(p.limit, p.count) }, (_, i) => (i < p.count ? '●' : '○')).join('')
   return sbCard(k, 'sb-footer', [
-    sbSplit(
-      k,
-      'ft-ctx',
-      <Box>
-        <Text color={pal.dim} bold>
-          {'CONTEXT '}
-        </Text>
-        {pct === null ? <Text color={pal.faint}>—</Text> : sbCappedBar(k, 'ft-ctx-bar', sbMeter(meterWidth, pct / 100, sbLevel(k, pct, 11)))}
-        <Text color={pct === null ? pal.faint : pct >= 80 ? pal.bad : pct >= 60 ? pal.warn : pal.text}>{pct === null ? '' : ` ${Math.round(pct)}%`}</Text>
-        <Text color={pal.dim}>{used ? ` · ${used}` : ''}</Text>
-      </Box>,
-      a.onSettings ? (
-        <Button key="ft-settings" plain onPress={() => a.onSettings?.('context')}>
-          <Text color={pal.dim}>⚙</Text>
-        </Button>
-      ) : undefined,
-    ),
     <Box key="ft-sources" height={1} overflow="hidden">
       <Text color={hs[0]}>{`${hs[1]} `}</Text>
       <Text color={f.hindsight === 'up' ? pal.text : pal.dim}>{f.hindsight === 'down' ? 'Hindsight down' : f.hindsight === 'off' ? 'Hindsight off' : 'Hindsight'}</Text>
@@ -796,7 +714,7 @@ export function sbFrame(k: SbKit, strip: SbStrip, a: SbStripActions, body: unkno
       <Box flexDirection="column" flexGrow={1} width="100%">
         {body}
       </Box>
-      {sbFooter(k, strip.footer, a)}
+      {sbFooter(k, strip.footer)}
     </Box>
   )
 }
@@ -806,7 +724,6 @@ export const sbActions = (ask: (args: string) => void): SbStripActions => ({
   onTab: id => ask(`tab ${id}`),
   onMenu: () => ask('tab sidebar'),
   onClose: () => ask('close'),
-  onSettings: id => ask(`settings ${id}`),
 })
 
 /**
@@ -830,7 +747,7 @@ export const sbAsker =
 export function sbPaneMove(id: string, strip: unknown, previous: unknown): 'open' | 'close' | undefined {
   const shows = (s: unknown) => {
     const v = s as Partial<SbStrip> | null | undefined
-    return !!v && v.isOn === true && v.active === id && v.isSettings !== true
+    return !!v && v.isOn === true && v.active === id
   }
   const isNow = shows(strip)
   const was = shows(previous)

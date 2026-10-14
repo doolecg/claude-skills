@@ -47,7 +47,7 @@ export type PaneData = {
   /** The Sidebar's strip when this pane is its open tab; the pane then draws as a tab. */
   strip?: SbStrip
   theme: unknown
-  /** Asks the Sidebar for a tab or its settings (see `sbAsker`). */
+  /** Asks the Sidebar for a tab (see `sbAsker`). */
   ask: (args: string) => void
   onStop: (id: string) => void
   onStopAll: () => void
@@ -120,7 +120,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
   // ---- header ----
   const status = working > 0 ? `${working} agent${working === 1 ? '' : 's'} working` : 'no agents working'
   const header = strip
-    ? sbTitle(k, { icon: '✈', name: 'Flightdeck', status }, { label: 'Settings', onPress: () => d.ask('settings flightdeck') })
+    ? sbTitle(k, { icon: '✈', name: 'Flightdeck', status })
     : split(
         'header',
         <Text wrap="truncate-end">
@@ -253,7 +253,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
   const cardWidth = listWidth - (critterWidth ? critterWidth + 1 : 0)
   const critter = (a: FdAgent) => {
     if (Raster) {
-      const r = rasterOf(smallPixels(critterPixels(a.id, Math.floor(tick / 2) % 2 === 1)), pal.panel)
+      const r = rasterOf(smallPixels(critterPixels(a.id, Math.floor(tick / 2) % 2 === 1)))
       return <Raster key={`critter:${a.id}`} columns={r.columns} rows={r.rows} cells={r.cells} />
     }
     if (Svg) {

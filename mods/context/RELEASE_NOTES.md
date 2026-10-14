@@ -1,3 +1,11 @@
+# Context 1.1.0
+
+## Changed
+- The footer no longer shows how much context is used. It shows Hindsight, CodeGraph, the git branch and test passes.
+- Pass limit and Extra check commands have plain labels and help in /plugin › Installed › Context › Configure.
+
+---
+
 # Context 1.0.0
 
 ## New

@@ -6,7 +6,6 @@ Keeps the facts for the Sidebar footer up to date, and counts test and fix passe
 
 One value, `context` / `footer`:
 
-- **Context:** percent, tokens and window size of the session's context. Refreshed at start, after tool calls (at most every 2 seconds) and when a turn ends.
 - **Hindsight:** `up` when the server answers `/health` with anything below 500, `down` when it does not within 5 seconds, `off` when there is no self-hosted `~/.hindsight/coding-agent.json`. Checked at start, then every 5 minutes.
 - **CodeGraph:** `indexed` when there is a `.codegraph/` folder at the git root or the session root.
 - **Git:** branch, changed files, commits ahead and behind the upstream. `null` outside a repo. Refreshed at start, when a turn ends and after a shell or edit tool call (at most every 3 seconds).

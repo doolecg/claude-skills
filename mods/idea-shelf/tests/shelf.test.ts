@@ -49,10 +49,10 @@ const SIDEBAR = {
     })
   }) as any,
 }
-const setStrip = ($: any, isOn: boolean, active: string, isSettings = false) =>
+const setStrip = ($: any, isOn: boolean, active: string) =>
   $.command.run({
     command: 'sb-strip',
-    args: JSON.stringify({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral', isSettings }),
+    args: JSON.stringify({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral' }),
     origin: { kind: 'composer' as const },
   })
 
@@ -84,10 +84,7 @@ test('the pane follows the sidebar’s strip: opened for its tab, closed when it
   await $.session.start({ cwd: 'F:/repo', surface: 'terminal', isInteractive: true } as any)
   await setStrip($, true, 'idea-shelf')
   expect(opened.at(-1)).toMatchObject({ id: 'ideas', title: 'Idea Shelf', columns: 56 })
-  await setStrip($, true, 'idea-shelf', true)
-  expect(closed).toEqual(['ideas'])
-  await setStrip($, true, 'idea-shelf')
   await setStrip($, true, 'clean-view')
-  expect(closed).toEqual(['ideas', 'ideas'])
+  expect(closed).toEqual(['ideas'])
   expect(ran).toEqual([])
 })

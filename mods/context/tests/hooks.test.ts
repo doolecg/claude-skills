@@ -20,7 +20,6 @@ function engine(on: any, w: World = {}) {
   on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: undefined }))
   on('session.root', () => ({ value: ROOT }))
-  on('session.usage', () => ({ value: { context: { percent: 12, tokens: 24000, window: 200000 }, rateLimits: [] } }))
   on('fs.read', (_$: any, e: any) => (norm(e.path) === `${HOME}/.hindsight/coding-agent.json` && w.cfg !== '' ? { value: w.cfg ?? CFG } : { deny: 'no such file' }))
   on('fs.exists', (_$: any, e: any) => ({ value: w.codegraph === true && norm(e.path) === `${ROOT}/.codegraph` }))
   on('process.run', (_$: any, e: any) => {
@@ -52,7 +51,7 @@ test('the footer is filled at session start', async ($, on) => {
   const seen = engine(on, { codegraph: true })
   await start($)
   const f = seen.footer
-  expect(f.context).toEqual({ percent: 12, tokens: 24000, window: 200000 })
+  expect('context' in f).toBe(false)
   expect(f.hindsight).toBe('up')
   expect(f.codegraph).toBe('indexed')
   expect(f.git).toEqual({ branch: 'dev-1.0', changed: 2, ahead: 2, behind: 1 })

@@ -51,10 +51,10 @@ Change them in `/config` or `/plugin`.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| Model (`model`) | `claude-haiku-5-5` | The model that rewrites: an alias (`haiku`, `sonnet`, `opus`), a full model id, or `session` for this session's model. |
+| Model (`model`) | `haiku` | The model that rewrites: an alias (`haiku`, `sonnet`, `opus`), a full model id, or `session` for this session's model. |
 | Effort (`effort`) | `default` | `default` lets the model decide; `low` to `max` set it; `session` follows this session's effort. |
 | Hindsight time limit (`hindsightSeconds`) | `5` | Seconds to wait for Hindsight before going on without it. |
-| Soul Bank (`soulBank`) | `soul` | The Hindsight bank with facts about you. |
+| About-you memory bank (`soulBank`) | empty | Name of a Hindsight bank with facts about you. Empty skips it; `soul.md` is still read. |
 | Extra skill folders (`skillFolders`) | empty | More skill folders, separated by commas or semicolons. |
 
 ## Where the button is

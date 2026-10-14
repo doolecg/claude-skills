@@ -2,7 +2,7 @@ import type { CtxFooter } from '../types'
 import { isCheckCommand } from './checks'
 
 export const DEFAULT_LIMIT = 3
-export const THROTTLE = { contextMs: 2000, gitMs: 3000 }
+export const THROTTLE = { gitMs: 3000 }
 export const HINDSIGHT = { everyMs: 5 * 60 * 1000, timeoutMs: 5000 }
 
 export type Passes = CtxFooter['passes']
@@ -13,7 +13,6 @@ export const EDIT_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit']
 
 export function emptyFooter(limit = DEFAULT_LIMIT, extra: string[] = []): CtxFooter {
   return {
-    context: { percent: null, tokens: null, window: null },
     hindsight: 'checking',
     codegraph: 'none',
     git: null,
@@ -61,14 +60,6 @@ export function isPersonPrompt(origin: { kind?: string } | undefined, hasCommand
 
 export function passesText(p: Passes): string {
   return `Pass ${p.count} of ${p.limit}. ${p.editedSince ? 'An edit is waiting for the next check.' : 'No edit is waiting.'}`
-}
-
-// ---------------------------------------------------------------- context
-
-export function contextOf(u: { context?: { percent?: number | null; tokens?: number | null; window?: number | null } }): CtxFooter['context'] {
-  const c = u?.context ?? {}
-  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
-  return { percent: num(c.percent), tokens: num(c.tokens), window: num(c.window) }
 }
 
 // ---------------------------------------------------------------- Hindsight

@@ -357,7 +357,7 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
       </Button>
     )
     return sbFrame(k, d.sb.strip, sbActions(d.sb.ask), [
-      sbTitle(k, { icon: '✺', name: 'Self Improve', status: waiting ? `${waiting} to review` : `mode ${d.settings.mode}` }, { label: 'Settings', onPress: () => d.sb!.ask('settings self-improve') }),
+      sbTitle(k, { icon: '✺', name: 'Self Improve', status: waiting ? `${waiting} to review` : `mode ${d.settings.mode}` }),
       <Box key="tabs" flexWrap="wrap">
         {TABS.map(t => chip(`tab-${t.id}`, tabLabel(t), ui.tab === t.id, () => void a.set({ tab: t.id, editing: null, confirm: null })))}
         {chip('test', 'Test', false, () => void a.test())}

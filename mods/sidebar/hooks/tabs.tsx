@@ -1,5 +1,5 @@
-import type { SbBlock, SbJob, SbMode, SbTab } from '../types'
-import { CATALOG, SETTINGS_PREFIX, SIDEBAR_TAB, entryOf, fmtAgo, fmtElapsed, progressOf } from './logic'
+import type { SbBlock, SbJob, SbTab } from '../types'
+import { CATALOG, SIDEBAR_TAB, entryOf, fmtAgo, fmtElapsed, progressOf } from './logic'
 import {
   sbButton,
   sbCappedBar,
@@ -9,21 +9,17 @@ import {
   sbMeter,
   sbPad,
   sbSection,
-  sbSettingRow,
   sbSplit,
   sbSweep,
   sbTitle,
   sbToggle,
   sbWarm,
   type SbKit,
-  type SbSetting,
 } from './sidebar-kit'
 
 /** What the sidebar's own pane draws from, and what its buttons do. */
 export type ViewData = {
   view: string
-  settings: SbSetting[]
-  modes: Record<string, Record<string, SbMode>>
   job: SbJob | null
   enhance: { counts: string; ok: boolean } | null
   /** Rule Guard's stops this session, newest first. */
@@ -35,40 +31,17 @@ export type ViewData = {
   hidden: string[]
   tabs: SbTab[]
   now: number
-  setOption: (s: SbSetting, value: string | number | boolean) => void
-  flipMode: (command: string) => void
   openTab: (id: string) => void
-  openSettings: (id: string) => void
   setHidden: (id: string, isHidden: boolean) => void
   moveTab: (id: string, by: -1 | 1) => void
 }
 
-/** The options of one mod, by its plugin name. */
-const optionsOf = (d: ViewData, id: string) => d.settings.filter(s => s.key.startsWith(`${id}.`))
-
-function modeRows(k: SbKit, d: ViewData, id: string) {
-  const { Text } = k.els
-  return Object.entries(d.modes[id] ?? {}).map(([command, m]) =>
-    sbSplit(k, `mode:${command}`, <Text color={k.pal.text}>{sbPad(m.label, 17)}</Text>, sbToggle(k, `sb-mode:${command}`, m.isOn, () => d.flipMode(command))),
-  )
-}
-
-function optionRows(k: SbKit, d: ViewData, id: string) {
-  const { Text } = k.els
-  const options = optionsOf(d, id)
-  if (options.length === 0) return [<Text key="no-options" color={k.pal.dim}>No options to set.</Text>]
-  return options.map(s => sbSettingRow(k, s, value => d.setOption(s, value)))
-}
-
-/** A mod's settings: its on/off modes, then its options. A mod drawn in its own pane has no mode here: its tab is it. */
-function settingsBody(k: SbKit, d: ViewData, id: string) {
-  const modes = entryOf(id)?.pane ? [] : modeRows(k, d, id)
-  return [
-    ...(modes.length > 0 ? [sbSection(k, `s-mode:${id}`, 'Mode'), ...modes] : []),
-    sbSection(k, `s-opt:${id}`, 'Options'),
-    ...optionRows(k, d, id),
-  ]
-}
+/** The dim line that points a mod's options to Claude Code's plugin menu. */
+const optionsHint = (k: SbKit, id: string) => (
+  <k.els.Text key={`options:${id}`} color={k.pal.dim} wrap="wrap">
+    {`Options: /plugin › Installed › ${entryOf(id)?.name ?? id} › Configure`}
+  </k.els.Text>
+)
 
 function aboutCard(k: SbKit, id: string, extra: unknown[] = []) {
   const { Text } = k.els
@@ -81,25 +54,13 @@ function aboutCard(k: SbKit, id: string, extra: unknown[] = []) {
   ])
 }
 
-/** A settings page the ⚙ of a mod's own tab opens. A footer mod has no tab, so its Back goes to the first tab. */
-function settingsPage(k: SbKit, d: ViewData, id: string) {
-  const entry = entryOf(id)
-  const back = entry?.footer ? (d.tabs[0]?.id ?? SIDEBAR_TAB) : id
-  return [
-    sbTitle(k, { icon: entry?.icon ?? '◆', name: entry?.name ?? id, status: 'settings' }, { label: 'Back', onPress: () => d.openTab(back) }),
-    aboutCard(k, id),
-    ...settingsBody(k, d, id),
-  ]
-}
-
-/** Clean View's tab: the job on screen now, mirrored, then its settings. */
+/** Clean View's tab: the job on screen now, mirrored. */
 function cleanView(k: SbKit, d: ViewData) {
   const { Box, Text } = k.els
   const { pal } = k
-  const isOn = Object.values(d.modes['clean-view'] ?? {}).some(m => m.isOn)
   const job = d.job
   const state = !job ? 'no job running' : job.phase === 'done' ? 'all done' : job.phase === 'working' ? 'job running' : job.phase.replace('-', ' ')
-  const parts: unknown[] = [sbTitle(k, { icon: '✶', name: 'Clean View', status: `${isOn ? 'on' : 'off'} · ${state}` })]
+  const parts: unknown[] = [sbTitle(k, { icon: '✶', name: 'Clean View', status: state })]
   if (job) {
     const sum = progressOf(job)
     const isDone = job.phase === 'done'
@@ -166,10 +127,10 @@ function cleanView(k: SbKit, d: ViewData) {
       ]),
     )
   }
-  return [...parts, ...settingsBody(k, d, 'clean-view')]
+  return [...parts, optionsHint(k, 'clean-view')]
 }
 
-/** A tab for a mod that only has settings: what it does, then its modes and options. */
+/** A tab for a mod the sidebar draws: what it does, then where its options are. */
 function configTab(k: SbKit, d: ViewData, id: string) {
   const { Text } = k.els
   const entry = entryOf(id)!
@@ -184,10 +145,10 @@ function configTab(k: SbKit, d: ViewData, id: string) {
     )
   }
   if (id === 'rule-guard') return ruleGuard(k, d)
-  return [sbTitle(k, { icon: entry.icon, name: entry.name, status: 'settings only' }), aboutCard(k, id, extra), ...settingsBody(k, d, id)]
+  return [sbTitle(k, { icon: entry.icon, name: entry.name, status: 'options in /plugin' }), aboutCard(k, id, extra), optionsHint(k, id)]
 }
 
-/** Rule Guard's tab: the calls it stopped this session, then its rules as switches. */
+/** Rule Guard's tab: the calls it stopped this session, then where its rules are set. */
 function ruleGuard(k: SbKit, d: ViewData) {
   const { Text } = k.els
   const { pal } = k
@@ -211,12 +172,11 @@ function ruleGuard(k: SbKit, d: ViewData) {
     aboutCard(k, 'rule-guard'),
     sbSection(k, 'blocks', 'Stopped this session'),
     ...(rows.length > 0 ? rows : [<Text key="no-blocks" color={pal.dim}>Nothing stopped yet.</Text>]),
-    sbSection(k, 's-opt:rule-guard', 'Rules'),
-    ...optionRows(k, d, 'rule-guard'),
+    optionsHint(k, 'rule-guard'),
   ]
 }
 
-/** The sidebar's own settings (the ⋯): which tabs show and their order. */
+/** The sidebar's own page (the ⋯): which tabs show and their order. */
 function sidebarPage(k: SbKit, d: ViewData) {
   const { Box, Text, Button } = k.els
   const { pal } = k
@@ -244,9 +204,8 @@ function sidebarPage(k: SbKit, d: ViewData) {
     )
   })
   const missing = CATALOG.filter(c => !d.installed.includes(c.id)).map(c => c.name)
-  const footers = CATALOG.filter(c => c.footer && d.installed.includes(c.id))
   return [
-    sbTitle(k, { icon: '◆', name: 'Sidebar', status: 'settings' }, d.tabs[0] ? { label: 'Back', onPress: () => d.openTab(d.tabs[0]!.id) } : undefined),
+    sbTitle(k, { icon: '◆', name: 'Sidebar', status: 'tabs' }, d.tabs[0] ? { label: 'Back', onPress: () => d.openTab(d.tabs[0]!.id) } : undefined),
     sbCard(k, 'about-sidebar', [
       <Text key="a" color={pal.dim} wrap="wrap">
         One tab per mod. It follows your theme and the Bottom Bar's colour. Open it with /sidebar.
@@ -254,23 +213,6 @@ function sidebarPage(k: SbKit, d: ViewData) {
     ]),
     sbSection(k, 'tabs', 'Tabs'),
     ...(rows.length > 0 ? rows : [<Text key="none" color={pal.dim}>No mods with a tab are installed.</Text>]),
-    ...(footers.length > 0
-      ? [
-          sbSection(k, 'footer', 'Footer'),
-          ...footers.map(c =>
-            sbSplit(
-              k,
-              `footer:${c.id}`,
-              <Text wrap="truncate-end">
-                <Text color={pal.accent}>{`${c.icon} `}</Text>
-                <Text color={pal.text}>{c.name}</Text>
-                <Text color={pal.dim}>{' · at the bottom of every tab'}</Text>
-              </Text>,
-              sbButton(k, `sb-footer-set:${c.id}`, '⚙ Settings', () => d.openSettings(c.id)),
-            ),
-          ),
-        ]
-      : []),
     ...(missing.length > 0
       ? [
           sbSection(k, 'missing', 'Not installed'),
@@ -279,8 +221,6 @@ function sidebarPage(k: SbKit, d: ViewData) {
           </Text>,
         ]
       : []),
-    sbSection(k, 'bar-opts', 'Look'),
-    ...d.settings.filter(s => s.key === 'bottom-bar.colour').map(s => sbSettingRow(k, s, value => d.setOption(s, value))),
     <Box key="reload" marginTop={1}>
       {sbButton(k, 'sb-reopen', 'Reload the list', () => d.openTab(SIDEBAR_TAB), false)}
     </Box>,
@@ -290,7 +230,6 @@ function sidebarPage(k: SbKit, d: ViewData) {
 /** The rows the sidebar's own pane draws under the strip, for its current view. */
 export function viewRows(k: SbKit, d: ViewData): unknown[] {
   if (d.view === SIDEBAR_TAB) return sidebarPage(k, d)
-  if (d.view.startsWith(SETTINGS_PREFIX)) return settingsPage(k, d, d.view.slice(SETTINGS_PREFIX.length))
   if (d.view === 'clean-view') return cleanView(k, d)
   if (entryOf(d.view)) return configTab(k, d, d.view)
   return sidebarPage(k, d)
