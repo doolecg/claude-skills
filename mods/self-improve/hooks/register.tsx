@@ -124,7 +124,7 @@ async function learnNow($: EngineInterface, trigger: string): Promise<string> {
       }
     })()
   })
-  return `Learning from this session in the background (${trigger}). The band above the prompt shows the result; /learn to review.`
+  return `Learning from this session in the background (${trigger}). /learn status shows the result; /learn to review.`
 }
 
 // Jobs left by sessions that ended while their learner could not run (slept, crashed): each runs once, here.
@@ -401,27 +401,6 @@ export const register: Register = (on, options) => {
       // the job file stays; the next session start picks it up
     }
     return next(e)
-  })
-
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (rt.isWorker || s.mode === 'off' || e.props.hasSurvey) return next(e)
-    const band = await read($, bandAtom)
-    if (!band.line && !band.isRunning) return next(e)
-    const { Box, Text, Button } = $.ui.resolve(e)
-    if (e.surface !== 'terminal') {
-      return (
-        <Box borderStyle="round" borderDimColor paddingX={1} columnGap={1} flexWrap="wrap" alignItems="center">
-          <Text dimColor>{band.isRunning ? 'Self Improve: learning from this session...' : band.line}</Text>
-          <Button key="open" label="Review" onPress={() => void $.ui.open({ id: PANE, title: 'Self Improve', closeOnEscape: true })} />
-        </Box>
-      )
-    }
-    return (
-      <Box>
-        <Text dimColor>{band.isRunning ? 'Self Improve: learning from this session...' : band.line} </Text>
-        <Button key="open" label="Review" plain onPress={() => void $.ui.open({ id: PANE, title: 'Self Improve', closeOnEscape: true })} />
-      </Box>
-    )
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

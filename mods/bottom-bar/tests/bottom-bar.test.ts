@@ -1547,6 +1547,10 @@ const TASK_VIEW = {
       await $.state.set({ plugin: 'clean-view', key: 'checklist' }, list)
       return { text: 'ok' }
     })
+    on('command.run', { command: 'tick-list' }, async ($: any) => {
+      await $.state.set({ plugin: 'clean-view', key: 'tick' }, 9)
+      return { text: 'ok' }
+    })
   }) as any,
 }
 
@@ -1566,12 +1570,15 @@ test("app: Task View's list sits above the bar in the band, and turns green and 
   expect(all.indexOf('Step 1')).toBeLessThan(all.indexOf('context'))
   const svgs = async (m: any) => (await m.findAll({ type: 'Svg' })) as any[]
   const active = (await svgs(bar)).find(x => x.props.alt === 'Step 2: in progress')
-  expect(String(active.props.source)).toContain('animateTransform')
+  // The pixels are redrawn on Task View's frame clock, so they change from one frame to the next.
+  await $.command.run({ command: 'tick-list', args: '' } as any)
+  const later = (await svgs(await mountAppBar($))).find(x => x.props.alt === 'Step 2: in progress')
+  expect(String(later.props.source)).not.toBe(String(active.props.source))
   await $.command.run({ command: 'publish-list', args: 'done done done done' } as any)
   const finished = await mountAppBar($)
   expect(textsOf(await finished.drawn()).join(' ')).toContain('All done · 3 of 3')
   const main = (await svgs(finished)).find(x => x.props.alt === 'All 3 done')
-  expect(String(main.props.source)).not.toContain('<animate')
+  expect(String(main.props.source)).toContain('120 of 120 lit')
   await $.command.run({ command: 'publish-list', args: 'idle' } as any)
   expect(await (await mountAppBar($)).find({ key: 'todo' })).toBeUndefined()
 })

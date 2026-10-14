@@ -3,6 +3,7 @@ import type { Elements } from 'claude-code'
 import type { BarFigures, BarMod, BarMode, BarTodo, BarTodoItem, BarTool } from '../types'
 import { EFFORTS, modelChoiceLabel, toolLabel, usedLabel } from './bar-logic'
 import type { Palette, Segment } from './bar-logic'
+import { barSvg, mixHex } from './pixel-bar'
 import { currentAlias, effortName, modLines, quickLaunch } from './toolbox-logic'
 
 /** The elements the app draws with; the phone's table is the same less Input, Select and Client. */
@@ -26,8 +27,8 @@ function meter(els: AppEls, pal: Palette, pct: number, width: number, key: strin
   return pixelBar(els, pal, pct, level(pct, pal), width, key, alt)
 }
 
-/** A pixel bar `pct` full in `color`; still, it has no twinkle and no bright front. */
-function pixelBar(els: AppEls, pal: Palette, pct: number, color: string, width: number, key: string, alt: string, isStill = false): JSX.Element {
+/** A pixel bar `pct` full in `color`. */
+function pixelBar(els: AppEls, pal: Palette, pct: number, color: string, width: number, key: string, alt: string): JSX.Element {
   const { Svg } = els
   const tall = 9
   const pitch = 3
@@ -41,14 +42,13 @@ function pixelBar(els: AppEls, pal: Palette, pct: number, color: string, width: 
       `<rect x="${c * pitch + 0.5}" y="${r * pitch + 0.5}" width="2" height="2" rx="0.4" fill="${fill}" opacity="${o.toFixed(2)}"${glow ? ' filter="url(#glow)"' : ''}>${anim}</rect>`,
     )
   const blink = (o: number, hi: number, n: number) =>
-    isStill ? '' :
     `<animate attributeName="opacity" values="${o.toFixed(2)};${hi.toFixed(2)};${o.toFixed(2)}" dur="${(1.6 + n * 2).toFixed(1)}s" begin="${(n * 2).toFixed(1)}s" repeatCount="indefinite"/>`
   for (let c = 0; c < cols; c++) {
     for (let r = 0; r < rows; r++) {
       const i = c * rows + r
       const n = grain(i, 7)
       if (c < front) {
-        if (!isStill && lit < 1 && c >= front - 1) {
+        if (lit < 1 && c >= front - 1) {
           rect(c, r, pal.text, 0.95, blink(0.95, 0.55, grain(i, 37)), true)
           continue
         }
@@ -70,58 +70,35 @@ function pixelBar(els: AppEls, pal: Palette, pct: number, color: string, width: 
   return <Svg key={key} source={source} alt={alt} width={width} height={tall} isInteractive />
 }
 
-/**
- * A pixel bar with no percent yet: a lit patch, brightest at its front, runs along the track over and
- * over, its dots twinkling as it goes.
- */
-function sweepBar(els: AppEls, pal: Palette, color: string, width: number, key: string, alt: string): JSX.Element {
-  const { Svg } = els
-  const tall = 9
-  const pitch = 3
-  const rows = 3
-  const cols = Math.max(1, Math.floor(width / pitch))
-  const span = Math.max(4, Math.round(cols * 0.3))
-  const dots: string[] = []
-  for (let c = 0; c < span; c++) {
-    const b = c / (span - 1)
-    for (let r = 0; r < rows; r++) {
-      const i = c * rows + r
-      const isFront = c === span - 1
-      if (!isFront && grain(i, 5) < 0.35 * (1 - b)) continue
-      const o = isFront ? 0.95 : 0.2 + 0.7 * b * b * (0.45 + 0.55 * grain(i, 13))
-      const anim = grain(i, 19) > 0.6 ? `<animate attributeName="opacity" values="${o.toFixed(2)};${Math.min(1, o + 0.4).toFixed(2)};${o.toFixed(2)}" dur="${(0.8 + grain(i, 29)).toFixed(1)}s" repeatCount="indefinite"/>` : ''
-      dots.push(`<rect x="${c * pitch + 0.5}" y="${r * pitch + 0.5}" width="2" height="2" rx="0.4" fill="${isFront ? pal.text : color}" opacity="${o.toFixed(2)}"${isFront ? ' filter="url(#glow)"' : ''}>${anim}</rect>`)
-    }
-  }
-  const run = span * pitch
-  const source =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${tall}" viewBox="0 0 ${width} ${tall}">` +
-    `<defs><filter id="glow" x="-2" y="-2" width="5" height="5"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
-    `<clipPath id="c"><rect width="${width}" height="${tall}" rx="${tall / 2}"/></clipPath></defs>` +
-    `<rect width="${width}" height="${tall}" rx="${tall / 2}" fill="${pal.sep}" fill-opacity="0.45"/>` +
-    `<g clip-path="url(#c)"><g>${dots.join('')}<animateTransform attributeName="transform" type="translate" from="${-run} 0" to="${width} 0" dur="${(width / 110).toFixed(1)}s" repeatCount="indefinite"/></g></g></svg>`
-  return <Svg key={key} source={source} alt={alt} width={width} height={tall} isInteractive />
-}
-
 const MAIN_PX = 360
 const ITEM_PX = 160
 const mark = (s: BarTodoItem['status']) => (s === 'done' ? '✓' : s === 'active' ? '▶' : '○')
 
-/** Task View's to-do list: a header, a main bar, then a line and a bar for each item; green and still once all are done. */
-export function todoCard(els: AppEls, pal: Palette, todo: BarTodo): JSX.Element {
-  const { Box, Text } = els
+/**
+ * Task View's to-do list: a header, a main bar, then a line and a bar for each item. The bars are Task
+ * View's own, redrawn on its frame clock (`tick`) so the pixels flicker the same way; green and still
+ * once all are done.
+ */
+export function todoCard(els: AppEls, pal: Palette, todo: BarTodo, tick: number): JSX.Element {
+  const { Box, Text, Svg } = els
   const total = todo.items.length
   const done = todo.items.filter(t => t.status === 'done').length
   const isAllDone = total > 0 && done === total
   const percent = total === 0 ? 0 : Math.round((done / total) * 100)
+  const track = mixHex(pal.panel, pal.sep, 0.5)
+  const warm = { from: mixHex(track, pal.accent, 0.55), to: pal.accent }
+  const good = { from: mixHex(track, pal.good, 0.55), to: pal.good }
+  const bar = (key: string, width: number, fraction: number, c: { from: string; to: string }, isSweep: boolean, t: number, alt: string) => (
+    <Svg key={key} source={barSvg(width, fraction, c.from, c.to, track, isSweep, pal.text, t)} alt={alt} width={width} height={9} />
+  )
   const rows = todo.items.map((t, i) => {
     const key = `todo-${i}`
-    const bar =
+    const pixels =
       t.status === 'done'
-        ? pixelBar(els, pal, 100, pal.good, ITEM_PX, `${key}-bar`, `${t.name}: done`, true)
+        ? bar(`${key}-bar`, ITEM_PX, 1, good, false, 0, `${t.name}: done`)
         : t.status === 'active'
-          ? sweepBar(els, pal, pal.accent, ITEM_PX, `${key}-bar`, `${t.name}: in progress`)
-          : pixelBar(els, pal, 0, pal.accent, ITEM_PX, `${key}-bar`, `${t.name}: not started`, true)
+          ? bar(`${key}-bar`, ITEM_PX, 0, warm, true, tick, `${t.name}: in progress`)
+          : bar(`${key}-bar`, ITEM_PX, 0, warm, false, 0, `${t.name}: not started`)
     return (
       <Box key={key} flexDirection="row" alignItems="center" columnGap={1}>
         <Text color={t.status === 'done' ? pal.good : t.status === 'active' ? pal.accent : pal.dim}>{mark(t.status)}</Text>
@@ -130,7 +107,7 @@ export function todoCard(els: AppEls, pal: Palette, todo: BarTodo): JSX.Element 
             {t.name}
           </Text>
         </Box>
-        <Box flexShrink={0}>{bar}</Box>
+        <Box flexShrink={0}>{pixels}</Box>
       </Box>
     )
   })
@@ -144,8 +121,8 @@ export function todoCard(els: AppEls, pal: Palette, todo: BarTodo): JSX.Element 
       </Box>
       <Box key="todo-main" flexShrink={0}>
         {isAllDone
-          ? pixelBar(els, pal, 100, pal.good, MAIN_PX, 'todo-main-bar', `All ${total} done`, true)
-          : pixelBar(els, pal, percent, pal.accent, MAIN_PX, 'todo-main-bar', `${done} of ${total} done, ${percent}%`)}
+          ? bar('todo-main-bar', MAIN_PX, 1, good, false, 0, `All ${total} done`)
+          : bar('todo-main-bar', MAIN_PX, done / Math.max(1, total), warm, false, tick, `${done} of ${total} done, ${percent}%`)}
       </Box>
       <Box key="todo-rows" flexDirection="column">{rows}</Box>
     </Box>
@@ -163,6 +140,8 @@ export type DesktopBarArgs = {
   openToolbox: () => void
   /** Task View's list, drawn above the bar while it is open. */
   todo?: BarTodo
+  /** Task View's frame clock, so the list's pixels flicker with it. */
+  todoTick?: number
 }
 
 /**
@@ -212,7 +191,7 @@ export function desktopBar(a: DesktopBarArgs): JSX.Element {
   if (!a.todo) return bar
   return (
     <Box key="bottom-bar-stack" flexDirection="column" gap={1} width="100%">
-      {todoCard(a.els, pal, a.todo)}
+      {todoCard(a.els, pal, a.todo, a.todoTick ?? 0)}
       {bar}
     </Box>
   )

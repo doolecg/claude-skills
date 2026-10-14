@@ -1,3 +1,10 @@
+# Flightdeck 1.6.2
+
+## Fixed
+- A small clean-up in the pixel bar code so it cannot clash with how the desktop app draws mods.
+
+---
+
 # Flightdeck 1.6.1
 
 ## Changed

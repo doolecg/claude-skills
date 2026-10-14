@@ -80,6 +80,8 @@ declare module 'claude-code' {
       mods: BarMod[]
       /** Task View's to-do list, followed live. */
       todo: BarTodo
+      /** Task View's frame clock. */
+      todoTick: number
     }
   }
 }

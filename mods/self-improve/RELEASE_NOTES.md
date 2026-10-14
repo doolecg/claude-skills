@@ -1,3 +1,10 @@
+# Self Improve 2.4.2
+
+## Changed
+- The memory line above the prompt ("Memory: nothing learned yet", "Learned N lessons") is gone. `/learn status` still tells you, and `/learn` opens the review pane.
+
+---
+
 # Self Improve 2.4.1
 
 ## Fixed

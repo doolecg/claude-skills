@@ -1,3 +1,10 @@
+# Bottom Bar 1.8.3
+
+## Fixed
+- The to-do list above the bar now uses Task View's own pixel bars, redrawn on its frame clock, so the pixels flicker the same way as in Task View and Flightdeck.
+
+---
+
 # Bottom Bar 1.8.2
 
 ## New

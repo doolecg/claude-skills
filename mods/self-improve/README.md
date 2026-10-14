@@ -56,7 +56,7 @@ Every automatic change is recorded with its before and after text and can be rol
 
 `/learn status`, `/learn approve <id>` and `/learn reject <id>` work as typed commands too.
 
-The band above the prompt shows "Learned N lessons: M saved, K to review", "Memory: nothing learned yet", or "Memory: <error>".
+`/learn status` says "Learned N lessons: M saved, K to review", "Memory: nothing learned yet", or "Memory: <error>". Nothing is drawn above the prompt.
 
 The `mcp__self-improve__recall` tool lets Claude search Hindsight, soul.md and the local lessons (`why: true` asks Hindsight to reflect). It was kept from self-improve 1.0.0.
 

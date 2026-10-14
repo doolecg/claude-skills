@@ -16,7 +16,7 @@ function grain(i: number, seed: number): number {
  * keeps a faint scatter that shifts too. With no percent yet, a lit patch runs along the track.
  */
 export function barSvg(width: number, fraction: number, from: string, to: string, track: string, isSweep = false, tint = '#FFFFFF', tick = 0): string {
-  const h = 9
+  const tall = 9
   const pitch = 3
   const rows = 3
   const cols = Math.max(1, Math.floor(width / pitch))
@@ -55,10 +55,10 @@ export function barSvg(width: number, fraction: number, from: string, to: string
     }
   }
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${h}" viewBox="0 0 ${width} ${h}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${tall}" viewBox="0 0 ${width} ${tall}">` +
     `<desc>${isSweep ? 0 : end} of ${cols} lit</desc>` +
     `<defs><filter id="glow" x="-2" y="-2" width="5" height="5"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
-    `<clipPath id="c"><rect width="${width}" height="${h}" rx="${h / 2}"/></clipPath></defs>` +
-    `<rect width="${width}" height="${h}" rx="${h / 2}" fill="${track}"/><g clip-path="url(#c)">${dots.join('')}</g></svg>`
+    `<clipPath id="c"><rect width="${width}" height="${tall}" rx="${tall / 2}"/></clipPath></defs>` +
+    `<rect width="${width}" height="${tall}" rx="${tall / 2}" fill="${track}"/><g clip-path="url(#c)">${dots.join('')}</g></svg>`
   )
 }

@@ -54,6 +54,7 @@ const label = atom({ plugin: 'bottom-bar', key: 'label' } as const, LABEL)
 const mods = atom({ plugin: 'bottom-bar', key: 'mods' } as const, [])
 const published = atom({ plugin: 'bottom-bar', key: 'published' } as const, {})
 const todo = atom({ plugin: 'bottom-bar', key: 'todo' } as const, EMPTY_TODO)
+const todoTick = atom({ plugin: 'bottom-bar', key: 'todoTick' } as const, 0)
 
 /**
  * `segments` writes the bar could not hook as they landed: a publisher's command the bar itself ran
@@ -356,6 +357,14 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  // Task View's frame clock: each tick redraws the list so its pixels flicker.
+  on('state.set', { key: 'tick' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const write = e as unknown as StateWrite
+    if (write.plugin === 'clean-view' && typeof write.value === 'number') await update($, todoTick, () => write.value as number)
+    return ran
+  }).catch(($, e, next) => next(e))
+
   on('command.run', { command: CHOOSE }, async $ => {
     await openPicker($)
     return {}
@@ -393,6 +402,7 @@ export const register: Register = (on, options) => {
       runCommand: command => void runCommand($, command),
       openToolbox: () => void openToolbox(),
       todo: showsTodo(list, await $.clock.now()) ? list : undefined,
+      todoTick: await read($, todoTick),
     })
   })
 

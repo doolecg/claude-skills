@@ -98,29 +98,20 @@ test('a session that did nothing, a /clear, or /learn-off learns nothing when it
   expect([...h.files.keys()].some(k => k.includes('\\jobs\\'))).toBe(false)
 })
 
-test('the band says nothing was learned yet, on the terminal and the desktop', async ($, on) => {
+test('/learn status says nothing was learned yet', async ($, on) => {
   host(on)
   await start($)
-  await $.command.run({ command: 'learn', args: 'status' } as never)
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ plugin: 'self-improve', surface, component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 100 } as never })
-    expect(await ui.find({ type: 'Text', text: /Memory: nothing learned yet/ })).toBeDefined()
-    await ui.unmount()
-  }
+  const { text } = (await $.command.run({ command: 'learn', args: 'status' } as never)) as { text: string }
+  expect(text).toMatch(/Memory: nothing learned yet/)
 })
 
 const BOX = new RegExp('[' + String.fromCharCode(0x2500) + '-' + String.fromCharCode(0x259f) + String.fromCharCode(0x2800) + '-' + String.fromCharCode(0x28ff) + ']')
 const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join(String.fromCharCode(10))
 
-test('on the desktop the band is a native box with a Review button and the pane is native, with no Raster or box drawing', async ($, on) => {
+test('on the desktop the pane is native, with no Raster or box drawing', async ($, on) => {
   host(on)
   await start($)
   await $.command.run({ command: 'learn', args: 'status' } as never)
-  const band = await $.ui.mount({ plugin: 'self-improve', surface: 'desktop', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 100 } as never })
-  expect(await band.find({ type: 'Button', key: 'open' })).toBeDefined()
-  expect(await band.findAll({ type: 'Raster' })).toHaveLength(0)
-  expect(await texts(band)).not.toMatch(BOX)
-  await band.unmount()
   const pane = await $.ui.mount({ plugin: 'self-improve', surface: 'desktop', component: 'Pane', requestId: 'self-improve', props: { title: 'Self Improve', isFocused: false, bodyColumns: 100, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} } } as never)
   expect(await pane.find({ type: 'Button', key: 'tab-lessons' })).toBeDefined()
   expect(await pane.find({ type: 'Button', key: 'test' })).toBeDefined()
