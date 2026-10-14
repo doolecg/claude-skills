@@ -1,27 +1,27 @@
 import type { SbJob, SbMode, SbStep, SbTab } from '../types'
 
 /**
- * A mod the sidebar knows. `pane` mods draw their own tab in a pane of their own, opened and closed
- * with `open` and `close`; the rest are drawn by the sidebar.
+ * A mod the sidebar knows. `pane` mods draw their own tab in a pane of their own, which they open and
+ * close themselves as the strip changes (`command` is theirs, and shows they are loaded); the rest are drawn by the sidebar.
  */
 export type CatalogEntry = {
   id: string
   icon: string
   name: string
   about: string
-  pane?: { open: string; close: string }
+  pane?: { command: string }
 }
 
 export const CATALOG: readonly CatalogEntry[] = [
-  { id: 'flightdeck', icon: '✈', name: 'Flightdeck', about: 'The main session and every subagent working now.', pane: { open: 'flightdeck open', close: 'flightdeck close' } },
-  { id: 'self-improve', icon: '✺', name: 'Self Improve', about: 'Learns from finished sessions and keeps soul.md.', pane: { open: 'learn open', close: 'learn close' } },
+  { id: 'flightdeck', icon: '✈', name: 'Flightdeck', about: 'The main session and every subagent working now.', pane: { command: 'flightdeck' } },
+  { id: 'self-improve', icon: '✺', name: 'Self Improve', about: 'Learns from finished sessions and keeps soul.md.', pane: { command: 'learn' } },
   { id: 'clean-view', icon: '✶', name: 'Clean View', about: 'A plain checklist above the prompt while Claude works.' },
-  { id: 'idea-shelf', icon: '◇', name: 'Idea Shelf', about: 'Park ideas while Claude works and send them later.', pane: { open: 'ideas open', close: 'ideas close' } },
-  { id: 'folder-tracker', icon: '⇄', name: 'Folder Tracker', about: 'Other sessions working in this folder.', pane: { open: 'folders open', close: 'folders close' } },
+  { id: 'idea-shelf', icon: '◇', name: 'Idea Shelf', about: 'Park ideas while Claude works and send them later.', pane: { command: 'ideas' } },
+  { id: 'folder-tracker', icon: '⇄', name: 'Folder Tracker', about: 'Other sessions working in this folder.', pane: { command: 'folders' } },
   { id: 'prompt-enhancer', icon: '✎', name: 'Prompt Enhancer', about: 'Rewrites the prompt box into a clearer prompt.' },
   { id: 'design-picker', icon: '◐', name: 'Design Picker', about: 'Opens a gallery when Claude asks you to pick a look.' },
   { id: 'plain-english', icon: '¶', name: 'Plain English', about: 'Plainer replies, checked against your rules.' },
-  { id: 'bottom-bar', icon: '▁', name: 'Bottom Bar', about: 'The rounded bar under the prompt and its toolbox.' },
+  { id: 'bottom-bar', icon: '▭', name: 'Bottom Bar', about: 'The rounded bar under the prompt and its toolbox.' },
 ]
 
 export const SIDEBAR_TAB = 'sidebar'

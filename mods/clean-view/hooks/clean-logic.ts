@@ -215,9 +215,9 @@ export const unfinished = (cl: CvChecklist): boolean =>
 
 export function rowLabel(tasks: readonly CvTask[], i: number): string {
   const t = tasks[i]!
-  if (t.status === 'done') return 'Done'
-  if (t.status === 'active') return t.hasReported ? `${t.percent}%` : 'Working'
-  return tasks.findIndex(x => x.status === 'upcoming') === i ? 'Next' : 'Up next'
+  if (t.status === 'done') return 'done'
+  if (t.status === 'active') return t.hasReported ? `${t.percent}%` : '…'
+  return ''
 }
 
 /** The whole job's progress: done steps, plus the current step's share. */
@@ -330,8 +330,23 @@ export const LIGHT: Palette = {
   tint: '#3A1E26',
 }
 
-export const paletteFor = (theme: unknown): Palette =>
-  typeof theme === 'string' && theme.startsWith('light') ? LIGHT : DARK
+/** The Bottom Bar's `colour` accents, each as `[dark, light]`. */
+export const ACCENTS: Record<string, readonly [string, string]> = {
+  Coral: ['#D97757', '#C15F3C'],
+  Amber: ['#E5A84B', '#9A6B10'],
+  Sage: ['#8FBF8F', '#4E7D57'],
+  Sky: ['#6FB3E0', '#2F6FA3'],
+  Lilac: ['#B39DDB', '#6A4FB0'],
+  Rose: ['#E07A9A', '#B0446A'],
+}
+
+/** The theme's palette, its accent and the band's border following the Bottom Bar's colour. */
+export function paletteFor(theme: unknown, colour?: unknown): Palette {
+  const isLight = typeof theme === 'string' && theme.startsWith('light')
+  const base = isLight ? LIGHT : DARK
+  const accent = typeof colour === 'string' ? ACCENTS[colour]?.[isLight ? 1 : 0] : undefined
+  return accent ? { ...base, accent, border: accent } : base
+}
 
 const hex = (c: string): number[] => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16))
 const toHex = (n: number[]): string => `#${n.map(v => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase()}`

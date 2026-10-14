@@ -81,8 +81,9 @@ function world(on: any, strip: unknown = STRIP, entries: Record<string, unknown>
     w.badges.push(e.value)
     return next(e)
   })
-  on('command.run', { command: 'sidebar' }, (_$: any, e: any) => {
-    w.ran.push(e.args)
+  // Every command that reaches the bottom: the strip's presses and notices must never be one.
+  on('command.run', (_$: any, e: any) => {
+    w.ran.push(`${e.command} ${e.args}`.trim())
     return { text: '' }
   })
   return w
@@ -97,6 +98,61 @@ async function texts($: any) {
   const ui = await $.ui.mount(pane())
   return { ui, all: (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join('\n') }
 }
+
+// A stand-in for the Sidebar: `/sb-strip <json>` writes its `strip` state; every other command that reaches the bottom is recorded.
+const SIDEBAR = {
+  name: 'sidebar',
+  register: ((on: any) => {
+    on('command.run', { command: 'sb-strip' }, async ($: any, e: any) => {
+      await $.state.set({ plugin: 'sidebar', key: 'strip' }, JSON.parse(e.args))
+      return {}
+    })
+  }) as any,
+}
+const strip = (isOn: boolean, active: string, isSettings = false) =>
+  JSON.stringify({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral', isSettings })
+const setStrip = ($: any, isOn: boolean, active: string, isSettings = false) =>
+  $.command.run({ command: 'sb-strip', args: strip(isOn, active, isSettings), origin: { kind: 'composer' as const } })
+
+test('the pane opens when the sidebar’s strip names its tab and closes when it moves on, never by a command', { plugins: [SIDEBAR] }, async ($, on) => {
+  const w = world(on, { ...STRIP, isOn: false })
+  await $.session.start(SESSION)
+  await setStrip($, true, 'folder-tracker')
+  expect(w.opened.at(-1)).toMatchObject({ id: 'folders', title: 'Folder Tracker', columns: 56 })
+  await setStrip($, true, 'clean-view')
+  expect(w.closed).toEqual(['folders'])
+  await setStrip($, true, 'folder-tracker')
+  await setStrip($, false, 'folder-tracker')
+  expect(w.closed).toEqual(['folders', 'folders'])
+  expect(w.ran).toEqual([])
+})
+
+test('a pane opened by /folders with the sidebar off is left alone by the strip', { plugins: [SIDEBAR] }, async ($, on) => {
+  const w = world(on, { ...STRIP, isOn: false })
+  await $.session.start(SESSION)
+  await $.command.run(command('open'))
+  await setStrip($, false, '')
+  await setStrip($, true, 'clean-view')
+  expect(w.closed).toEqual([])
+})
+
+test('a strip press writes the mod’s own sidebarAsk state and runs no command', { plugins: [SIDEBAR] }, async ($, on) => {
+  const w = world(on, { ...STRIP, tabs: [...STRIP.tabs, { id: 'clean-view', icon: 'x', name: 'Clean View', badge: 0 }] })
+  const asks: any[] = []
+  on('state.set', { plugin: 'folder-tracker', key: 'sidebarAsk' }, async (_$: any, e: any, next: any) => {
+    asks.push(e.value)
+    return next(e)
+  })
+  await $.session.start(SESSION)
+  await $.command.run(command('open'))
+  const { ui } = await texts($)
+  await ui.press({ key: 'sb-tab:clean-view' })
+  await ui.press({ key: 'sb-tab:clean-view' })
+  expect(asks).toEqual([{ args: 'tab clean-view', n: 1 }, { args: 'tab clean-view', n: 2 }])
+  expect(w.closed).toEqual(['folders'])
+  expect(w.ran).toEqual([])
+  await ui.unmount()
+})
 
 test('/folders opens and closes the pane', async ($, on) => {
   const w = world(on)

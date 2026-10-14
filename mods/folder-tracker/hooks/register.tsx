@@ -1,10 +1,16 @@
-import type { EngineInterface, Register } from 'claude-code'
+import { atom, update } from 'claude-code'
+import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
 import type { Phase, Tracker } from '../types'
 import { drawFolders } from './pane'
-import { sbKit, sbPalette } from './sidebar-kit'
+import { SIDEBAR_COLUMNS, sbAsker, sbKit, sbPaneMove, sbPalette } from './sidebar-kit'
 import type { SbStrip } from './sidebar-kit'
 import { PRUNE_MS, SAVE_EVERY_MS, addFile, describeOther, isLive, isTracker, relativeTo, sameFile, trackerKey, trackerPrefix } from './tracker'
+
+const askAtom = atom({ plugin: 'folder-tracker', key: 'sidebarAsk' } as const, { args: '', n: 0 })
+
+/** Asks the Sidebar to do what `/sidebar <args>` does, through this mod's own state: no command is run. */
+const askSidebar = ($: EngineInterface, args: string) => update($, askAtom, v => ({ args, n: (v?.n ?? 0) + 1 }))
 
 let last: { phase: Phase; savedAt: number } | undefined
 const warned = new Set<string>()
@@ -55,6 +61,12 @@ async function readStrip($: EngineInterface): Promise<SbStrip | undefined> {
   } catch {
     return undefined
   }
+}
+
+const openPane = ($: EngineInterface) => $.ui.open({ id: PANE, title: 'Folder Tracker', columns: SIDEBAR_COLUMNS })
+
+async function closePane($: EngineInterface): Promise<void> {
+  if ((await $.ui.panes()).some(p => p.id === PANE)) await $.ui.close({ id: PANE })
 }
 
 export const register: Register = on => {
@@ -140,16 +152,28 @@ export const register: Register = on => {
       await $.ui.close({ id: PANE })
       return { text: 'Folder Tracker closed.' }
     }
-    const opened = await $.ui.open({ id: PANE, title: 'Folder Tracker', columns: 56 })
+    const opened = await openPane($)
     return { text: opened.isPlaced ? 'Folder Tracker opened.' : `Folder Tracker opened; it shows once there is room: ${opened.reason}` }
   })
+
+  // The Sidebar's strip names this tab, or moves on from it: the pane opens or closes with it.
+  on('state.set', { key: 'strip' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const w = e as unknown as StateWrite
+    const move = w.plugin === 'sidebar' ? sbPaneMove('folder-tracker', w.value, w.previous) : undefined
+    try {
+      if (move === 'open') await openPane($)
+      else if (move === 'close') await closePane($)
+    } catch {}
+    return ran
+  }).catch(($, e, next) => next(e))
 
   on('ui.close', async ($, e, next) => {
     const ran = await next(e)
     if (e.id === PANE && e.origin.kind === 'person') {
       const strip = await readStrip($)
       if (strip?.isOn && strip.active === 'folder-tracker') {
-        await $.command.run({ command: 'sidebar', args: 'closed folder-tracker' }).catch(() => {})
+        await askSidebar($, 'closed folder-tracker').catch(() => {})
       }
     }
     return ran
@@ -161,6 +185,6 @@ export const register: Register = on => {
     const k = sbKit(els, e.surface, sbPalette(strip?.theme ?? 'dark', strip?.colour), e.props.bodyColumns, 0)
     const cwd = await $.session.cwd()
     const mine: unknown = await $.store.get(trackerKey(cwd, await $.session.id()))
-    return drawFolders(k, strip, c => $.command.run(c), cwd, await $.clock.now(), isTracker(mine) ? mine : undefined, await otherSessions($))
+    return drawFolders(k, strip, sbAsker(args => askSidebar($, args), 'folder-tracker', () => closePane($)), cwd, await $.clock.now(), isTracker(mine) ? mine : undefined, await otherSessions($))
   })
 }

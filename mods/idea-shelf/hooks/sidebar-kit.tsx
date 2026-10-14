@@ -244,7 +244,7 @@ export function sbRasterCells(pixels: readonly SbPixel[], background?: string): 
 export type SbTab = { id: string; icon: string; name: string; badge: number }
 
 /** The Sidebar's `strip` state: which tabs show, which one is open, and whether the sidebar is up. */
-export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string }
+export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; isSettings?: boolean }
 
 export const EMPTY_STRIP: SbStrip = { isOn: false, active: '', tabs: [], theme: 'dark', colour: 'Coral' }
 
@@ -392,6 +392,11 @@ export function sbToggle(k: SbKit, key: string, isOn: boolean, onPress: () => vo
   )
 }
 
+const SUPERSCRIPT = '⁰¹²³⁴⁵⁶⁷⁸⁹'
+
+/** A tab's count as one superscript cell (⁺ above 9), or a blank cell for none, so every icon takes three cells. */
+export const sbBadge = (n: number): string => (n <= 0 ? ' ' : n > 9 ? '⁺' : SUPERSCRIPT[n]!)
+
 export type SbStripActions = {
   /** Opens a tab by its id. */
   onTab: (id: string) => void
@@ -401,7 +406,7 @@ export type SbStripActions = {
   onClose: () => void
 }
 
-/** The top card: the sidebar's name, ⋯ and ✕, then a pill for the open tab and an icon for each other one. */
+/** The top card: the sidebar's name, ⋯ and ✕, then a rounded pill for the open tab and a one-cell icon with its count for each other one. */
 export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
   const { Box, Text, Button } = k.els
   const { pal } = k
@@ -409,16 +414,18 @@ export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
     if (t.id === strip.active) {
       return (
         <Button key={`sb-tab:${t.id}`} plain onPress={() => a.onTab(t.id)}>
+          <Text color={pal.accent}>◖</Text>
           <Text backgroundColor={pal.accent} color={pal.ink} bold>
             {` ${t.icon} ${t.name} `}
           </Text>
+          <Text color={pal.accent}>◗</Text>
         </Button>
       )
     }
     return (
       <Button key={`sb-tab:${t.id}`} plain onPress={() => a.onTab(t.id)}>
         <Text color={pal.dim}>{` ${t.icon}`}</Text>
-        <Text color={pal.warn}>{t.badge > 0 ? (t.badge > 9 ? '+' : String(t.badge)) : ' '}</Text>
+        <Text color={pal.warn}>{sbBadge(t.badge)}</Text>
       </Button>
     )
   })
@@ -532,13 +539,37 @@ export function sbFrame(k: SbKit, strip: SbStrip, a: SbStripActions, body: unkno
   )
 }
 
-/** Runs a `/sidebar` command from a press, the way every tab's strip buttons do. */
-export const sbCommand = (run: (c: { command: string; args: string }) => Promise<unknown>, args: string): void =>
-  void run({ command: 'sidebar', args }).catch(() => {})
-
-/** The strip's actions as every mod wires them: each runs `/sidebar` with what was pressed. */
-export const sbActions = (run: (c: { command: string; args: string }) => Promise<unknown>): SbStripActions => ({
-  onTab: id => sbCommand(run, `tab ${id}`),
-  onMenu: () => sbCommand(run, 'tab sidebar'),
-  onClose: () => sbCommand(run, 'close'),
+/** The strip's actions as every mod wires them: each asks the Sidebar for what was pressed (see `sbAsker`). */
+export const sbActions = (ask: (args: string) => void): SbStripActions => ({
+  onTab: id => ask(`tab ${id}`),
+  onMenu: () => ask('tab sidebar'),
+  onClose: () => ask('close'),
 })
+
+/**
+ * What a mod's strip presses call. `send` is the mod's own write of its `sidebarAsk` state (`{ args, n }`, `n`
+ * counting up so a repeat is a new value): no command, nothing queued behind a running turn. A press that leaves
+ * the mod's own tab closes its pane first: the Sidebar's answer runs beneath this press, so this mod's strip
+ * hook may be skipped as already in the chain.
+ */
+export const sbAsker =
+  (send: (args: string) => Promise<unknown>, plugin: string, closeOwnPane: () => Promise<unknown>) =>
+  (args: string): void =>
+    void (async () => {
+      if (args !== `tab ${plugin}`) await closeOwnPane().catch(() => {})
+      await send(args)
+    })().catch(() => {})
+
+/**
+ * What a pane mod does when the Sidebar's strip changes: `open` when its tab turns up, `close` when its tab
+ * was showing and now is not. A mod opened by its own command with the sidebar off is never closed by this.
+ */
+export function sbPaneMove(id: string, strip: unknown, previous: unknown): 'open' | 'close' | undefined {
+  const shows = (s: unknown) => {
+    const v = s as Partial<SbStrip> | null | undefined
+    return !!v && v.isOn === true && v.active === id && v.isSettings !== true
+  }
+  const isNow = shows(strip)
+  const was = shows(previous)
+  return isNow && !was ? 'open' : was && !isNow ? 'close' : undefined
+}

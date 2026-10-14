@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import { CATALOG, fmtElapsed, installedFrom, jobOf, modesOf, move, parseArg, pickTab, progressOf, tabsFor } from '../hooks/logic'
-import { DENSE_FULL, sbMeter } from '../hooks/sidebar-kit'
+import { DENSE_FULL, sbAsker, sbBadge, sbMeter, sbPaneMove } from '../hooks/sidebar-kit'
 
 const SESSION = { cwd: 'F:/proj', surface: 'terminal', isInteractive: true } as any
 const ALL = CATALOG.map(c => c.id)
@@ -29,6 +29,12 @@ describe('logic', () => {
     const badged = tabsFor(['flightdeck', 'clean-view'], [], [], { flightdeck: 3.9, 'clean-view': -2 })
     expect(badged.map(t => t.badge)).toEqual([3, 0])
     expect(badged[0]).toMatchObject({ id: 'flightdeck', name: 'Flightdeck' })
+  })
+
+  test('every tab icon is one cell and the strip badges are one superscript cell', () => {
+    for (const c of CATALOG) expect([...c.icon]).toHaveLength(1)
+    expect(CATALOG.find(c => c.id === 'bottom-bar')?.icon).toBe('▭')
+    expect([0, 1, 5, 9, 12].map(sbBadge)).toEqual([' ', '¹', '⁵', '⁹', '⁺'])
   })
 
   test('move shifts one place and stops at the ends', () => {
@@ -135,12 +141,42 @@ describe('kit meter', () => {
   })
 })
 
+describe('kit strip asks', () => {
+  const strip = (isOn: boolean, active: string, isSettings = false) => ({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral', isSettings })
+
+  test('a pane mod opens when its tab turns up and closes when it goes', () => {
+    expect(sbPaneMove('flightdeck', strip(true, 'flightdeck'), strip(true, 'clean-view'))).toBe('open')
+    expect(sbPaneMove('flightdeck', strip(true, 'flightdeck'), undefined)).toBe('open')
+    expect(sbPaneMove('flightdeck', strip(true, 'flightdeck'), strip(true, 'flightdeck', true))).toBe('open')
+    expect(sbPaneMove('flightdeck', strip(true, 'clean-view'), strip(true, 'flightdeck'))).toBe('close')
+    expect(sbPaneMove('flightdeck', strip(false, 'flightdeck'), strip(true, 'flightdeck'))).toBe('close')
+    expect(sbPaneMove('flightdeck', strip(true, 'flightdeck', true), strip(true, 'flightdeck'))).toBe('close')
+  })
+
+  test('a mod opened by its own command with the sidebar off is left alone', () => {
+    expect(sbPaneMove('flightdeck', strip(false, 'flightdeck'), strip(false, 'flightdeck'))).toBeUndefined()
+    expect(sbPaneMove('flightdeck', strip(false, ''), undefined)).toBeUndefined()
+    expect(sbPaneMove('flightdeck', strip(true, 'clean-view'), strip(true, 'idea-shelf'))).toBeUndefined()
+    expect(sbPaneMove('flightdeck', strip(true, 'flightdeck'), strip(true, 'flightdeck'))).toBeUndefined()
+  })
+
+  test('a press that leaves the tab closes the mod’s pane first, then asks; its own tab only asks', async () => {
+    const log: string[] = []
+    const ask = sbAsker(async args => void log.push(`ask ${args}`), 'flightdeck', async () => void log.push('close'))
+    for (const args of ['tab clean-view', 'tab flightdeck', 'settings flightdeck']) {
+      ask(args)
+      for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0))
+    }
+    expect(log).toEqual(['close', 'ask tab clean-view', 'ask tab flightdeck', 'close', 'ask settings flightdeck'])
+  })
+})
+
 // ---------------------------------------------------------------- wiring
 
-type World = { opened: any[]; closed: string[]; panes: string[]; ran: string[]; registered: string[]; clock: any; refuse: Set<string> }
+type World = { opened: any[]; closed: string[]; panes: string[]; ran: string[]; registered: string[]; clock: any }
 
 function world(on: any): World {
-  const w: World = { opened: [], closed: [], panes: [], ran: [], registered: [], clock: null, refuse: new Set() }
+  const w: World = { opened: [], closed: [], panes: [], ran: [], registered: [], clock: null }
   w.clock = mock.clock(on, { now: 1_800_000_000_000 })
   mock.store(on)
   on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
@@ -162,11 +198,12 @@ function world(on: any): World {
     ],
   }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: JSON.stringify([{ id: 'bottom-bar@doole-skills', enabled: true }]), stderr: '' } }))
-  on('command.run', { command: 'flightdeck' }, (_$: any, e: any) => {
+  // Every command that reaches the bottom: the sidebar answers `/sidebar` itself, so a tab switch must leave this empty.
+  on('command.run', (_$: any, e: any) => {
     w.ran.push(`${e.command} ${e.args}`.trim())
-    if (w.refuse.has(e.command)) throw new Error('gone')
     return { text: 'ok' }
   })
+  on('turn.start', (_$: any, e: any) => ({ turnId: e.turnId }))
   on('ui.open', (_$: any, e: any) => {
     w.opened.push(e)
     if (!w.panes.includes(e.id)) w.panes.push(e.id)
@@ -190,6 +227,32 @@ async function texts($: any) {
   const ui = await $.ui.mount({ ...pane(), surface: 'terminal' })
   const all = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join('\n')
   return { ui, all }
+}
+
+// A stand-in for a pane mod (Flightdeck). Hooks run in a world of their own, so it spells out what the kit's `sbAsker` and
+// `sbPaneMove` do (those are tested above): `/fd-press <args>` is its strip press, written as its `sidebarAsk` state after it
+// closes its own pane; it opens and closes that pane as the sidebar's strip moves; `/fd-strip` tells the test the last strip it saw.
+const FLIGHTDECK = {
+  name: 'flightdeck',
+  register: ((on: any) => {
+    let n = 0
+    let strip: any
+    const shows = (v: any) => !!v && v.isOn === true && v.active === 'flightdeck' && v.isSettings !== true
+    on('command.run', { command: 'fd-press' }, async ($: any, e: any) => {
+      if (e.args !== 'tab flightdeck') await $.ui.close({ id: 'flightdeck' })
+      await $.state.set({ plugin: 'flightdeck', key: 'sidebarAsk' }, { args: e.args, n: (n += 1) })
+      return {}
+    })
+    on('command.run', { command: 'fd-strip' }, async () => ({ text: JSON.stringify(strip ?? null) }))
+    on('state.set', { key: 'strip' }, async ($: any, e: any, next: any) => {
+      const ran = await next(e)
+      if (e.plugin !== 'sidebar') return ran
+      strip = e.value
+      if (shows(e.value) && !shows(e.previous)) await $.ui.open({ id: 'flightdeck', title: 'Flightdeck' })
+      else if (shows(e.previous) && !shows(e.value)) await $.ui.close({ id: 'flightdeck' })
+      return ran
+    })
+  }) as any,
 }
 
 describe('wiring', () => {
@@ -253,58 +316,128 @@ describe('wiring', () => {
     expect(w.panes).not.toContain('sidebar')
   })
 
-  test('a pane mod’s tab runs its open command and takes the sidebar’s pane away', async ($, on) => {
+  const stripOf = async ($: any) => JSON.parse((await $.command.run({ command: 'fd-strip', args: '', origin: { kind: 'composer' as const } })).text)
+  const press = async ($: any, args: string) => {
+    await $.command.run({ command: 'fd-press', args, origin: { kind: 'composer' as const } })
+    await settle()
+  }
+
+  test('a pane mod’s tab goes to the strip, which the mod follows, and takes the sidebar’s pane away', { plugins: [FLIGHTDECK] }, async ($, on) => {
     const w = world(on)
     await $.session.start(SESSION)
     await settle()
     await $.command.run(command('tab sidebar'))
     expect(w.panes).toContain('sidebar')
     await $.command.run(command('tab flightdeck'))
-    await w.clock.advance(10)
-    await settle()
-    expect(w.ran).toContain('flightdeck open')
+    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'flightdeck', isSettings: false })
     expect(w.closed).toContain('sidebar')
     expect(w.panes).not.toContain('sidebar')
+    expect(w.ran).toEqual([])
   })
 
-  test('leaving a pane mod’s tab runs its close command', async ($, on) => {
+  test('leaving a pane mod’s tab moves the strip on and brings the sidebar’s pane back', { plugins: [FLIGHTDECK] }, async ($, on) => {
     const w = world(on)
     await $.session.start(SESSION)
     await settle()
     await $.command.run(command('tab flightdeck'))
-    await w.clock.advance(10)
     await $.command.run(command('tab clean-view'))
-    await w.clock.advance(10)
-    await settle()
-    expect(w.ran).toEqual(['flightdeck open', 'flightdeck close'])
+    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'clean-view', isSettings: false })
     expect(w.panes).toContain('sidebar')
+    expect(w.ran).toEqual([])
   })
 
-  test('a pane mod that refuses to open falls back to its settings page', async ($, on) => {
+  test('a pane mod that is not loaded here shows its settings page instead', { plugins: [FLIGHTDECK] }, async ($, on) => {
     const w = world(on)
-    w.refuse.add('flightdeck')
     await $.session.start(SESSION)
     await settle()
-    await $.command.run(command('tab flightdeck'))
-    await w.clock.advance(10)
-    await settle()
+    await $.command.run(command('tab self-improve'))
+    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'self-improve', isSettings: true })
     expect(w.panes).toContain('sidebar')
     const { ui, all } = await texts($)
     expect(all).toContain('Back')
     await ui.unmount()
+    expect(w.ran).toEqual([])
   })
 
-  test('the pane mod closing itself switches the sidebar off', async ($, on) => {
+  test('pressing a tab in the sidebar’s own pane switches to it', { plugins: [FLIGHTDECK] }, async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('tab sidebar'))
+    const { ui } = await texts($)
+    await ui.press({ key: 'sb-tab:flightdeck' })
+    await settle()
+    expect(await stripOf($)).toMatchObject({ active: 'flightdeck', isSettings: false })
+    expect(w.panes).not.toContain('sidebar')
+    expect(w.ran).toEqual([])
+    await ui.unmount()
+  })
+
+  test('a strip press in another mod’s pane switches tabs through its state, with no command run', { plugins: [FLIGHTDECK] }, async ($, on) => {
     const w = world(on)
     await $.session.start(SESSION)
     await settle()
     await $.command.run(command('tab flightdeck'))
-    await w.clock.advance(10)
-    const told = await $.command.run(command('closed flightdeck'))
-    await w.clock.advance(10)
+    expect(w.panes).toContain('flightdeck')
+    await press($, 'tab clean-view')
+    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'clean-view' })
+    expect(w.panes).toContain('sidebar')
+    expect(w.panes).not.toContain('flightdeck')
+    const { ui, all } = await texts($)
+    expect(all).toContain('CLEAN VIEW')
+    await ui.unmount()
+
+    await press($, 'tab flightdeck')
+    expect(await stripOf($)).toMatchObject({ active: 'flightdeck', isSettings: false })
+    expect(w.panes).toContain('flightdeck')
+    expect(w.panes).not.toContain('sidebar')
+    await press($, 'settings flightdeck')
+    expect(await stripOf($)).toMatchObject({ active: 'flightdeck', isSettings: true })
+    expect(w.panes).toContain('sidebar')
+    expect(w.panes).not.toContain('flightdeck')
+    await press($, 'tab flightdeck')
+    expect(w.panes).toContain('flightdeck')
+    await press($, 'close')
+    expect(await stripOf($)).toMatchObject({ isOn: false })
+    expect(w.panes).toEqual([])
+    expect(w.ran).toEqual([])
+  })
+
+  test('tabs switch while a turn is running, with no command run and nothing queued', { plugins: [FLIGHTDECK] }, async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
     await settle()
+    await $.turn.start({ text: 'Do a long job', turnId: 't1' })
+    await $.command.run(command('tab flightdeck'))
+    await press($, 'tab clean-view')
+    expect(await stripOf($)).toMatchObject({ isOn: true, active: 'clean-view' })
+    expect(w.panes).toContain('sidebar')
+    await press($, 'tab flightdeck')
+    expect(w.panes).toContain('flightdeck')
+    expect(w.ran).toEqual([])
+  })
+
+  test('the open tab is a rounded pill with its icon and name', async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('tab clean-view'))
+    const { ui, all } = await texts($)
+    expect(all).toContain('◖')
+    expect(all).toContain(' ✶ Clean View ')
+    expect(all).toContain('◗')
+    await ui.unmount()
+  })
+
+  test('the pane mod closing itself switches the sidebar off', { plugins: [FLIGHTDECK] }, async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('tab flightdeck'))
+    const told = await $.command.run(command('closed flightdeck'))
     expect(told.text).toBeUndefined()
-    expect(w.ran).toEqual(['flightdeck open'])
+    expect(await stripOf($)).toMatchObject({ isOn: false })
+    expect(w.ran).toEqual([])
     // The sidebar is off now, so a bare /sidebar opens it rather than closing it.
     expect((await $.command.run(command(''))).text).toBe('Sidebar opened.')
   })

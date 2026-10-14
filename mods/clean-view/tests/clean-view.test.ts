@@ -15,6 +15,7 @@ import {
   cleanName,
   easeToward,
   overall,
+  paletteFor,
   pixelMeter,
   pixelSweep,
   planSteps,
@@ -108,17 +109,17 @@ test('plan_steps then report_progress at 100 checks off step one and starts step
   const planned = await $.tool.call({ tool: PLAN, steps: ['Read your brand notes', 'Build the pricing section', 'Add the contact form'] } as any)
   expect((planned as any).result).toBe('Planned 3 steps. The first one has started.')
   expect(await rowText($, 'p0')).toContain('▶')
-  expect(await rowText($, 'p0')).toContain('Working')
-  expect(await rowText($, 'p1')).toContain('Next')
+  expect(await rowText($, 'p0')).toContain('…')
+  expect(await rowText($, 'p1')).toContain('○')
   const reported = await $.tool.call({ tool: REPORT, task: 'Read your brand notes', percent: 140 } as any)
   expect((reported as any).result).toBe('Progress noted: 100%.')
   expect(await rowText($, 'p0')).toContain('✓')
-  expect(await rowText($, 'p0')).toContain('Done')
+  expect(await rowText($, 'p0')).toContain('done')
   expect(await rowText($, 'p1')).toContain('▶')
-  expect(await rowText($, 'p2')).toContain('Next')
+  expect(await rowText($, 'p2')).toContain('○')
 })
 
-test('a to-do list plus a 60% report renders done, 60%, Next and Up next on both surfaces', async ($, on) => {
+test('a to-do list plus a 60% report renders done, 60% and dim pending rows on both surfaces', async ($, on) => {
   world(on)
   await startJob($)
   await $.tool.call({
@@ -132,10 +133,10 @@ test('a to-do list plus a 60% report renders done, 60%, Next and Up next on both
   } as any)
   await $.tool.call({ tool: REPORT, task: 'Build the pricing section', percent: 60 } as any)
   for (const surface of SURFACES) {
-    expect(await rowText($, 't0', surface)).toMatch(/✓.*Read your brand notes.*Done/s)
+    expect(await rowText($, 't0', surface)).toMatch(/✓.*Read your brand notes.*done/s)
     expect(await rowText($, 't1', surface)).toMatch(/▶.*Build the pricing section.*60%/s)
-    expect(await rowText($, 't2', surface)).toMatch(/○.*Add the contact form.*Next/s)
-    expect(await rowText($, 't3', surface)).toMatch(/○.*Polish the footer.*Up next/s)
+    expect(await rowText($, 't2', surface)).toMatch(/○.*Add the contact form/s)
+    expect(await rowText($, 't3', surface)).toMatch(/○.*Polish the footer/s)
     const { ui, all } = await band($, surface)
     expect(all).toContain('Step 2 of 4')
     expect(await ui.find({ type: 'Button' })).toBeUndefined()
@@ -542,4 +543,10 @@ test("a helper's question keeps the engine's own dialog", async ($, on) => {
   const ui = await mountBand($, 140)
   expect(await ui.find({ key: 'o0' })).toBeUndefined()
   await ui.unmount()
+})
+
+test('the accent and the band border follow the Bottom Bar colour', () => {
+  expect(paletteFor('dark', 'Sky')).toMatchObject({ accent: '#6FB3E0', border: '#6FB3E0' })
+  expect(paletteFor('light', 'Sky').accent).toBe('#2F6FA3')
+  expect(paletteFor('dark', 'Nope')).toEqual(paletteFor('dark'))
 })

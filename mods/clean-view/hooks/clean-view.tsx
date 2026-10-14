@@ -64,6 +64,7 @@ const checklistAtom = atom({ plugin: 'clean-view', key: 'checklist' } as const, 
 const askAtom = atom({ plugin: 'clean-view', key: 'ask' } as const, EMPTY_ASK)
 const tickAtom = atom({ plugin: 'clean-view', key: 'tick' } as const, 0)
 const themeAtom = atom({ plugin: 'clean-view', key: 'theme' } as const, 'dark')
+const colourAtom = atom({ plugin: 'clean-view', key: 'colour' } as const, 'Coral')
 const modesAtom = atom({ plugin: 'clean-view', key: 'modes' } as const, {})
 
 const PLAN = 'mcp__clean-view__plan_steps'
@@ -175,6 +176,11 @@ async function readTheme($: Dollar): Promise<void> {
     const s = (await $.settings.read()) as Record<string, unknown>
     if (typeof s.theme === 'string' && s.theme !== (await read($, themeAtom))) await update($, themeAtom, () => s.theme as string)
   } catch {}
+  // The band takes the Bottom Bar's colour setting, so the two match.
+  try {
+    const colour = (await $.config.list()).find(r => r.key === 'bottom-bar.colour')?.value
+    if (typeof colour === 'string' && colour !== (await read($, colourAtom))) await update($, colourAtom, () => colour)
+  } catch {}
 }
 
 async function nameJob($: Dollar, text: string, startedAt: number): Promise<void> {
@@ -268,6 +274,7 @@ export function registerCleanView(on: On): void {
   on('turn.start', async ($, e, next) => {
     if ((e as { agentId?: string }).agentId !== undefined) return next(e)
     isWaitingForHelpers = false
+    await readTheme($)
     if ((await read($, checklistAtom)).helpers > 0) await change($, c => ({ ...c, helpers: 0 }))
     const text = e.text.trim()
     if (text !== '' && !text.startsWith('/') && (await read($, enabledAtom)) && !isLive(await read($, checklistAtom))) {
@@ -422,7 +429,7 @@ export function registerCleanView(on: On): void {
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
     const Raster = e.surface === 'terminal' && 'Raster' in els ? els.Raster : undefined
-    const pal = paletteFor(await read($, themeAtom))
+    const pal = paletteFor(await read($, themeAtom), await read($, colourAtom))
     const isOn = await read($, enabledAtom)
     const cl = await read($, checklistAtom)
     const tick = await read($, tickAtom)

@@ -11,7 +11,7 @@ import { afterChange, cardStats, correctionRate, trend } from './core/skills'
 import { parseSoul, SECTION_ORDER, SECTION_TITLES } from './core/soul'
 import { LESSON_KINDS, runLine, type Lesson, type State } from './core/state'
 import { similarity } from './core/text'
-import { sbActions, sbButton, sbCard, sbCommand, sbFrame, sbKit, sbTitle, type SbPalette, type SbStrip } from './sidebar-kit'
+import { sbActions, sbButton, sbCard, sbFrame, sbKit, sbTitle, type SbPalette, type SbStrip } from './sidebar-kit'
 
 export type PaneActions = {
   set: (patch: Partial<PaneUi>) => Promise<unknown>
@@ -45,7 +45,7 @@ export type PaneData = {
   hindsight: HindsightState | null
   actions: PaneActions
   /** Set when the pane is drawn as the Sidebar's Self Improve tab. */
-  sb?: { strip: SbStrip; pal: SbPalette; columns: number; surface: string; run: (c: { command: string; args: string }) => Promise<unknown> }
+  sb?: { strip: SbStrip; pal: SbPalette; columns: number; surface: string; ask: (args: string) => void }
 }
 
 // The surface's element table; Input and Select are drawn only where the surface has them (not on mobile).
@@ -356,8 +356,8 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
         <Text backgroundColor={isActive ? pal.pillBg : undefined} color={isActive ? pal.pillFg : pal.dim} bold={isActive}>{` ${label} `}</Text>
       </Button>
     )
-    return sbFrame(k, d.sb.strip, sbActions(d.sb.run), [
-      sbTitle(k, { icon: '✺', name: 'Self Improve', status: waiting ? `${waiting} to review` : `mode ${d.settings.mode}` }, { label: 'Settings', onPress: () => sbCommand(d.sb!.run, 'settings self-improve') }),
+    return sbFrame(k, d.sb.strip, sbActions(d.sb.ask), [
+      sbTitle(k, { icon: '✺', name: 'Self Improve', status: waiting ? `${waiting} to review` : `mode ${d.settings.mode}` }, { label: 'Settings', onPress: () => d.sb!.ask('settings self-improve') }),
       <Box key="tabs" flexWrap="wrap">
         {TABS.map(t => chip(`tab-${t.id}`, tabLabel(t), ui.tab === t.id, () => void a.set({ tab: t.id, editing: null, confirm: null })))}
         {chip('test', 'Test', false, () => void a.test())}

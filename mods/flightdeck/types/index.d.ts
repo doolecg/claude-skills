@@ -52,6 +52,8 @@ declare module 'claude-code' {
       tick: number
       theme: string
       modes: Record<string, FdMode>
+      /** The Sidebar request a strip press or pane close writes (what `/sidebar <args>` does); `n` counts up so a repeat is a new value. */
+      sidebarAsk: { args: string; n: number }
     }
     /** The Sidebar mod's strip, as it publishes it (the same shape as its SbStrip). */
     'sidebar': {
@@ -61,6 +63,7 @@ declare module 'claude-code' {
         tabs: { id: string; icon: string; name: string; badge: number }[]
         theme: string
         colour: string
+        isSettings?: boolean
       }
     }
   }

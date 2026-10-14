@@ -34,9 +34,6 @@ const COMMAND_OF: Record<string, string> = {
 }
 
 let ticker: Timer | undefined
-/** The mod commands the sidebar ran for a tab switch: their replies stay out of the transcript. */
-const quietRuns = new Set<string>()
-let runs: Promise<void> = Promise.resolve()
 
 async function quiet(fn: () => Promise<unknown>): Promise<void> {
   try {
@@ -45,7 +42,7 @@ async function quiet(fn: () => Promise<unknown>): Promise<void> {
 }
 
 /** Rebuilds the strip every tab draws from: the tabs, their badges, the open one, the look. */
-async function syncStrip($: Dollar, patch: { isOn?: boolean; active?: string } = {}): Promise<void> {
+async function syncStrip($: Dollar, patch: { isOn?: boolean; active?: string; isSettings?: boolean } = {}): Promise<void> {
   const tabs = tabsFor(await read($, installedAtom), await read($, orderAtom), await read($, hiddenAtom), await read($, badgesAtom))
   await update($, stripAtom, s => ({ ...(s ?? EMPTY_STRIP), ...patch, tabs }))
   // Tells the bottom bar (and any mod that reads it) whether the sidebar is open.
@@ -117,65 +114,42 @@ async function closeOwnPane($: Dollar): Promise<void> {
   if ((await $.ui.panes()).some(p => p.id === PANE)) await $.ui.close({ id: PANE })
 }
 
-/**
- * Runs another mod's open or close command. A `command.run` hook may not wait on `$.command.run`
- * (the turn is waiting on it), so it runs from a timer, after the hook has answered. A mod that is
- * gone or refuses leaves the sidebar as it was, and `onFail` hears of it.
- */
-function runMod($: Dollar, command: string, then: { onOk?: () => Promise<void>; onFail?: () => Promise<void> } = {}): void {
-  const [name = '', ...rest] = command.split(' ')
-  quietRuns.add(command)
-  // One at a time: a command run while another is still running is refused.
-  $.clock.after(0, () => {
-    runs = runs.then(async () => {
-      try {
-        await $.command.run({ command: name, args: rest.join(' ') })
-      } catch {
-        await quiet(async () => then.onFail?.())
-        return
-      }
-      await quiet(async () => then.onOk?.())
-    })
-  })
+/** Whether a pane mod is loaded here: its command is registered. */
+async function isLoaded($: Dollar, command: string): Promise<boolean> {
+  try {
+    return (await $.command.list()).some(c => c.name === command)
+  } catch {
+    return false
+  }
 }
 
-/** Shows tab `id`: its mod's own pane, or the sidebar's pane on the right view; the tab before it goes. */
+/**
+ * Shows tab `id`. A pane mod draws its own tab: it opens its pane when the strip names it and closes it when
+ * the strip moves on (state, never a command), and the sidebar's own pane goes. A pane mod that is not loaded
+ * here, or a settings id, shows on the sidebar's pane.
+ */
 async function showTab($: Dollar, id: string): Promise<void> {
-  const before = await read($, stripAtom)
-  const was = before.isOn ? before.active : ''
-  const wasEntry = entryOf(was.startsWith(SETTINGS_PREFIX) ? '' : was)
   const entry = id === SIDEBAR_TAB || id.startsWith(SETTINGS_PREFIX) ? undefined : entryOf(id)
+  const hasPane = !!entry?.pane && (await isLoaded($, entry.pane.command))
+  const view = entry?.pane && !hasPane ? `${SETTINGS_PREFIX}${id}` : id
+  const isSettings = view.startsWith(SETTINGS_PREFIX)
 
-  await syncStrip($, { isOn: true, active: id.startsWith(SETTINGS_PREFIX) ? id.slice(SETTINGS_PREFIX.length) : id })
-  await quiet(() => $.store.set('active', id))
+  await syncStrip($, { isOn: true, active: isSettings ? view.slice(SETTINGS_PREFIX.length) : view, isSettings })
+  await quiet(() => $.store.set('active', view))
   await quiet(() => $.store.set('isOn', true))
 
-  if (entry?.pane) {
-    // The mod draws this tab itself: open its pane, then take the sidebar's own away. A mod that
-    // will not open leaves its settings page in the sidebar's pane instead.
-    runMod($, entry.pane.open, {
-      onOk: () => closeOwnPane($),
-      onFail: async () => {
-        await update($, viewAtom, () => `${SETTINGS_PREFIX}${id}`)
-        await openOwnPane($)
-        await syncTicker($)
-      },
-    })
-  } else {
-    await update($, viewAtom, () => id)
+  if (hasPane) await quiet(() => closeOwnPane($))
+  else {
+    await update($, viewAtom, () => view)
     await quiet(() => openOwnPane($))
   }
-  if (wasEntry?.pane && wasEntry.id !== id) runMod($, wasEntry.pane.close)
   await syncTicker($)
 }
 
 async function closeAll($: Dollar): Promise<void> {
-  const strip = await read($, stripAtom)
-  const entry = entryOf(strip.active)
   await syncStrip($, { isOn: false })
   await quiet(() => $.store.set('isOn', false))
   await quiet(() => closeOwnPane($))
-  if (entry?.pane) runMod($, entry.pane.close)
   await syncTicker($)
 }
 
@@ -199,6 +173,41 @@ async function setLayout($: Dollar, hidden: string[], order: string[]): Promise<
   await quiet(() => $.store.set('hidden', hidden))
   await quiet(() => $.store.set('order', order))
   await syncStrip($)
+}
+
+/** `/sidebar <args>`: what the command hook answers, and what the sidebar's own buttons call directly. */
+async function sidebarCommand($: Dollar, args: string): Promise<{ text?: string }> {
+  const arg = parseArg(args)
+  const strip = await read($, stripAtom)
+  if (arg.kind === 'close' || (arg.kind === 'flip' && strip.isOn)) {
+    await closeAll($)
+    return { text: 'Sidebar closed.' }
+  }
+  if (arg.kind === 'closed') {
+    // A mod's own pane was closed by the person: the sidebar reads off with it.
+    if (strip.isOn && strip.active === arg.id) {
+      await syncStrip($, { isOn: false })
+      await quiet(() => $.store.set('isOn', false))
+      await syncTicker($)
+    }
+    return {}
+  }
+  if (arg.kind === 'tab') {
+    if (arg.id === SIDEBAR_TAB) await loadInstalled($)
+    await quiet(() => loadSettings($))
+    await showTab($, arg.id)
+    return {}
+  }
+  if (arg.kind === 'settings') {
+    await quiet(() => loadSettings($))
+    await syncStrip($, { isOn: true, active: arg.id, isSettings: true })
+    await update($, viewAtom, () => `${SETTINGS_PREFIX}${arg.id}`)
+    await quiet(() => openOwnPane($))
+    await syncTicker($)
+    return {}
+  }
+  await openSidebar($)
+  return { text: 'Sidebar opened.' }
 }
 
 /** Another mod's write of a key the sidebar follows; read untyped, as the contract does not declare it. */
@@ -237,41 +246,7 @@ export const register: Register = on => {
     return ran
   })
 
-  on('command.run', { command: 'sidebar' }, async ($, e) => {
-    const arg = parseArg(e.args)
-    const strip = await read($, stripAtom)
-    if (arg.kind === 'close' || (arg.kind === 'flip' && strip.isOn)) {
-      await closeAll($)
-      return { text: 'Sidebar closed.' }
-    }
-    if (arg.kind === 'closed') {
-      // A mod's own pane was closed by the person: the sidebar reads off with it.
-      if (strip.isOn && strip.active === arg.id) {
-        await syncStrip($, { isOn: false })
-        await quiet(() => $.store.set('isOn', false))
-        await syncTicker($)
-      }
-      return {}
-    }
-    if (arg.kind === 'tab') {
-      if (arg.id === SIDEBAR_TAB) await loadInstalled($)
-      await quiet(() => loadSettings($))
-      await showTab($, arg.id)
-      return {}
-    }
-    if (arg.kind === 'settings') {
-      await quiet(() => loadSettings($))
-      await syncStrip($, { isOn: true, active: arg.id })
-      await update($, viewAtom, () => `${SETTINGS_PREFIX}${arg.id}`)
-      await quiet(() => openOwnPane($))
-      const entry = entryOf(arg.id)
-      if (entry?.pane) runMod($, entry.pane.close)
-      await syncTicker($)
-      return {}
-    }
-    await openSidebar($)
-    return { text: 'Sidebar opened.' }
-  })
+  on('command.run', { command: 'sidebar' }, ($, e) => sidebarCommand($, e.args))
 
   on('command.run', async ($, e, next) => {
     const ran = await next(e)
@@ -296,6 +271,15 @@ export const register: Register = on => {
     const ran = await next(e)
     const w = writeOf(e)
     if (w.plugin !== 'sidebar') await quiet(() => update($, modModesAtom, all => ({ ...(all ?? {}), [w.plugin]: modesOf(w.value) })))
+    return ran
+  }).catch(($, e, next) => next(e))
+
+  // A mod's strip press, written as its own `sidebarAsk`: what `/sidebar <args>` would do, with no command run.
+  on('state.set', { key: 'sidebarAsk' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const w = writeOf(e)
+    const args = (w.value as { args?: unknown } | null)?.args
+    if (w.plugin !== 'sidebar' && typeof args === 'string') await quiet(() => sidebarCommand($, args))
     return ran
   }).catch(($, e, next) => next(e))
 
@@ -331,19 +315,13 @@ export const register: Register = on => {
     return ran
   }).catch(($, e, next) => next(e))
 
-  on('ui.render', { component: 'CommandOutput' }, async ($, e, next) => {
-    if (!quietRuns.has(`${e.props.command} ${e.props.args}`.trim())) return next(e)
-    const { Box } = $.ui.resolve(e)
-    return <Box display="none" />
-  }).catch(($, e, next) => next(e))
-
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e) as unknown as Record<string, any>
     const strip = await read($, stripAtom)
     const view = await read($, viewAtom)
     const k = sbKit(els, e.surface, sbPalette(strip.theme, strip.colour), e.props.bodyColumns, await read($, tickAtom))
     const installed = await read($, installedAtom)
-    const run = (c: { command: string; args: string }) => $.command.run(c)
+    const ask = (args: string) => void sidebarCommand($, args).catch(() => {})
     const body = viewRows(k, {
       view,
       settings: await read($, settingsAtom),
@@ -355,8 +333,8 @@ export const register: Register = on => {
       tabs: strip.tabs,
       now: await $.clock.now(),
       setOption: (s, value) => void setOption($, s, value).catch(() => {}),
-      flipMode: command => void run({ command, args: '' }).catch(() => {}),
-      openTab: id => void run({ command: 'sidebar', args: `tab ${id}` }).catch(() => {}),
+      flipMode: command => void $.command.run({ command, args: '' }).catch(() => {}),
+      openTab: id => ask(`tab ${id}`),
       setHidden: (id, isHidden) =>
         void (async () => {
           const hidden = await read($, hiddenAtom)
@@ -368,6 +346,6 @@ export const register: Register = on => {
           await setLayout($, await read($, hiddenAtom), order)
         })().catch(() => {}),
     })
-    return sbFrame(k, strip, sbActions(run), body)
+    return sbFrame(k, strip, sbActions(ask), body)
   })
 }

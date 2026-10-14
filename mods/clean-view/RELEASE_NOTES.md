@@ -1,3 +1,11 @@
+# Clean View 1.3.0
+
+## Changed
+- The band's accent and border follow the Bottom Bar's colour.
+- Step rows read like the Sidebar mockup: finished steps say "done", the active one shows "…" until it has a percent, and steps still to come have no label.
+
+---
+
 # Clean View 1.2.0
 
 ## Changed

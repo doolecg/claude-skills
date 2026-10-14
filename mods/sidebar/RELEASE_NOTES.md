@@ -1,3 +1,15 @@
+# Sidebar 1.1.0
+
+## Changed
+- Tabs switch at once, even while Claude is working. Switching no longer runs commands, so nothing is added to the chat and Claude's turn is left alone.
+- The open tab is a rounded pill. The other tabs are evenly spaced icons with a small count when they need you (◇⁵).
+- The Bottom Bar tab's icon is now ▭.
+
+## Fixed
+- The tab buttons inside the Sidebar's own pane did nothing and printed "no command.run hook answered it".
+
+---
+
 # Sidebar 1.0.0
 
 ## New

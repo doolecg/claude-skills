@@ -189,7 +189,53 @@ async function texts($: any, surface: 'terminal' | 'desktop' = 'terminal', cols 
   return { ui, all }
 }
 
+// A stand-in for the Sidebar: `/sb-strip <json>` writes its `strip` state.
+const SIDEBAR = {
+  name: 'sidebar',
+  register: ((on: any) => {
+    on('command.run', { command: 'sb-strip' }, async ($: any, e: any) => {
+      await $.state.set({ plugin: 'sidebar', key: 'strip' }, JSON.parse(e.args))
+      return {}
+    })
+  }) as any,
+}
+const setStrip = ($: any, isOn: boolean, active: string, isSettings = false) =>
+  $.command.run({
+    command: 'sb-strip',
+    args: JSON.stringify({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral', isSettings }),
+    origin: { kind: 'composer' as const },
+  })
+
 describe('wiring', () => {
+  test('the pane follows the sidebar’s strip: opened for its tab, closed when the strip moves on, no command run', { plugins: [SIDEBAR] }, async ($, on) => {
+    const w = world(on)
+    const ran: string[] = []
+    on('command.run', (_$: any, e: any) => {
+      ran.push(`${e.command} ${e.args}`.trim())
+      return { text: '' }
+    })
+    await $.session.start(SESSION)
+    await setStrip($, true, 'flightdeck')
+    expect(w.opened.at(-1)).toMatchObject({ id: 'flightdeck', columns: 56 })
+    expect(w.modes.at(-1)).toEqual({ flightdeck: { label: 'Flightdeck', isOn: true } })
+    await setStrip($, true, 'flightdeck', true)
+    expect(w.closed).toEqual(['flightdeck'])
+    expect(w.modes.at(-1)).toEqual({ flightdeck: { label: 'Flightdeck', isOn: false } })
+    await setStrip($, true, 'flightdeck')
+    await setStrip($, false, 'flightdeck')
+    expect(w.closed).toEqual(['flightdeck', 'flightdeck'])
+    expect(ran).toEqual([])
+  })
+
+  test('a pane opened by /flightdeck with the sidebar off is left alone by the strip', { plugins: [SIDEBAR] }, async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
+    await $.command.run(command('open'))
+    await setStrip($, false, '')
+    await setStrip($, true, 'clean-view')
+    expect(w.closed).toEqual([])
+  })
+
   test('/flightdeck opens the sidebar, publishes the mode on, and closes it again', async ($, on) => {
     const w = world(on)
     await $.session.start(SESSION)

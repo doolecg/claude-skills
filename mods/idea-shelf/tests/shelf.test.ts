@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 import { ageOf, cleanIdea, folderOf, ideaKey, isIdea, newId, parseEdit, shelfPrefix } from '../hooks/shelf'
 
@@ -37,4 +37,57 @@ test('an idea shows its age as minutes, hours or days', () => {
   expect(ageOf(5 * 60000, 0)).toBe('5m')
   expect(ageOf(3 * 3600000, 0)).toBe('3h')
   expect(ageOf(2 * 86400000, 0)).toBe('2d')
+})
+
+// A stand-in for the Sidebar: `/sb-strip <json>` writes its `strip` state.
+const SIDEBAR = {
+  name: 'sidebar',
+  register: ((on: any) => {
+    on('command.run', { command: 'sb-strip' }, async ($: any, e: any) => {
+      await $.state.set({ plugin: 'sidebar', key: 'strip' }, JSON.parse(e.args))
+      return {}
+    })
+  }) as any,
+}
+const setStrip = ($: any, isOn: boolean, active: string, isSettings = false) =>
+  $.command.run({
+    command: 'sb-strip',
+    args: JSON.stringify({ isOn, active, tabs: [], theme: 'dark', colour: 'Coral', isSettings }),
+    origin: { kind: 'composer' as const },
+  })
+
+test('the pane follows the sidebar’s strip: opened for its tab, closed when it moves on, no command run', { plugins: [SIDEBAR] }, async ($, on) => {
+  const opened: any[] = []
+  const closed: string[] = []
+  const ran: string[] = []
+  let panes: string[] = []
+  mock.clock(on, { now: 1_800_000_000_000 })
+  mock.store(on)
+  on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: 'F:/repo' }))
+  on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }))
+  on('command.run', (_$: any, e: any) => {
+    ran.push(`${e.command} ${e.args}`.trim())
+    return { text: '' }
+  })
+  on('ui.open', (_$: any, e: any) => {
+    opened.push(e)
+    panes.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', (_$: any, e: any) => {
+    closed.push(e.id)
+    panes = panes.filter(p => p !== e.id)
+    return { value: undefined }
+  })
+  on('ui.panes', () => ({ value: panes.map(id => ({ id, title: 'Idea Shelf', isShown: true, isFocused: false, isPlaced: true })) }))
+  await $.session.start({ cwd: 'F:/repo', surface: 'terminal', isInteractive: true } as any)
+  await setStrip($, true, 'idea-shelf')
+  expect(opened.at(-1)).toMatchObject({ id: 'ideas', title: 'Idea Shelf', columns: 56 })
+  await setStrip($, true, 'idea-shelf', true)
+  expect(closed).toEqual(['ideas'])
+  await setStrip($, true, 'idea-shelf')
+  await setStrip($, true, 'clean-view')
+  expect(closed).toEqual(['ideas', 'ideas'])
+  expect(ran).toEqual([])
 })

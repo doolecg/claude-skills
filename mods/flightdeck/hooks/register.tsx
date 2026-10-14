@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { EngineInterface, Register, StateWrite, Timer } from 'claude-code'
 
 import type { FdAgent } from '../types'
 import {
@@ -17,7 +17,7 @@ import {
   wantOpen,
 } from './logic'
 import { drawPane } from './pane'
-import { SIDEBAR_COLUMNS, isSidebarTab, type SbStrip } from './sidebar-kit'
+import { SIDEBAR_COLUMNS, isSidebarTab, sbAsker, sbPaneMove, type SbStrip } from './sidebar-kit'
 
 type Dollar = EngineInterface
 
@@ -31,6 +31,10 @@ const agentsAtom = atom({ plugin: 'flightdeck', key: 'agents' } as const, [])
 const tickAtom = atom({ plugin: 'flightdeck', key: 'tick' } as const, 0)
 const themeAtom = atom({ plugin: 'flightdeck', key: 'theme' } as const, 'dark')
 const modesAtom = atom({ plugin: 'flightdeck', key: 'modes' } as const, {})
+const askAtom = atom({ plugin: 'flightdeck', key: 'sidebarAsk' } as const, { args: '', n: 0 })
+
+/** Asks the Sidebar to do what `/sidebar <args>` does, through this mod's own state: no command is run. */
+const askSidebar = ($: Dollar, args: string) => update($, askAtom, v => ({ args, n: (v?.n ?? 0) + 1 }))
 
 let ticker: Timer | undefined
 let frames = 0
@@ -120,6 +124,12 @@ async function setOpen($: Dollar, isOn: boolean): Promise<void> {
 
 const openPane = ($: Dollar) => $.ui.open({ id: PANE, title: TITLE, columns: SIDEBAR_COLUMNS })
 
+async function closePane($: Dollar): Promise<void> {
+  if (!(await $.ui.panes()).some(p => p.id === PANE)) return
+  await $.ui.close({ id: PANE })
+  await setOpen($, false)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
@@ -180,6 +190,22 @@ export const register: Register = on => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  // The Sidebar's strip names this tab, or moves on from it: the pane opens or closes with it.
+  on('state.set', { key: 'strip' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const w = e as unknown as StateWrite
+    const move = w.plugin === 'sidebar' ? sbPaneMove(PANE, w.value, w.previous) : undefined
+    if (move === 'open') {
+      await quiet(async () => {
+        await openPane($)
+        await setOpen($, true)
+        await refreshUsage($)
+        await reconcileAgents($)
+      })
+    } else if (move === 'close') await quiet(() => closePane($))
+    return ran
+  }).catch(($, e, next) => next(e))
+
   // The person's close mark or key, or an unload: the mode reads off.
   on('ui.close', async ($, e, next) => {
     const ran = await next(e)
@@ -187,7 +213,7 @@ export const register: Register = on => {
       await quiet(() => setOpen($, false))
       if (e.origin.kind === 'person') {
         const strip = await stripOf($)
-        if (strip && isSidebarTab(strip, PANE)) await quiet(() => $.command.run({ command: 'sidebar', args: `closed ${PANE}` }))
+        if (strip && isSidebarTab(strip, PANE)) await quiet(() => askSidebar($, `closed ${PANE}`))
       }
     }
     return ran
@@ -272,7 +298,7 @@ export const register: Register = on => {
       pal: paletteFor(theme),
       theme,
       strip: isSidebarTab(strip, PANE) ? strip : undefined,
-      run: c => $.command.run(c),
+      ask: sbAsker(args => askSidebar($, args), 'flightdeck', () => closePane($)),
       main: await read($, mainAtom),
       usage: await read($, usageAtom),
       agents: await read($, agentsAtom),

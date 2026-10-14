@@ -1,17 +1,17 @@
 import type { SbKit, SbStrip } from './sidebar-kit'
-import { isSidebarTab, sbActions, sbCard, sbClip, sbCommand, sbFrame, sbSplit, sbTitle } from './sidebar-kit'
+import { isSidebarTab, sbActions, sbCard, sbClip, sbFrame, sbSplit, sbTitle } from './sidebar-kit'
 import { agoOf, relativeTo, sharedFiles } from './tracker'
 import type { Tracker } from '../types'
 
-type Run = (c: { command: string; args: string }) => Promise<unknown>
+type Ask = (args: string) => void
 
 const FILES_SHOWN = 4
 
-export function drawFolders(k: SbKit, strip: SbStrip | undefined, run: Run, cwd: string, now: number, mine: Tracker | undefined, others: Tracker[]) {
+export function drawFolders(k: SbKit, strip: SbStrip | undefined, ask: Ask, cwd: string, now: number, mine: Tracker | undefined, others: Tracker[]) {
   const { Box, Text } = k.els
   const { pal } = k
   const status = others.length === 0 ? 'no other sessions here' : `${others.length} other session${others.length === 1 ? '' : 's'} here`
-  const body: unknown[] = [sbTitle(k, { icon: '⇄', name: 'Folder Tracker', status }, { label: 'Settings', onPress: () => sbCommand(run, 'settings folder-tracker') })]
+  const body: unknown[] = [sbTitle(k, { icon: '⇄', name: 'Folder Tracker', status }, { label: 'Settings', onPress: () => ask('settings folder-tracker') })]
 
   if (others.length === 0) {
     body.push(sbCard(k, 'ft-empty', <Text color={pal.dim}>No other sessions in this folder</Text>))
@@ -64,7 +64,7 @@ export function drawFolders(k: SbKit, strip: SbStrip | undefined, run: Run, cwd:
   }
 
   return isSidebarTab(strip, 'folder-tracker') ? (
-    sbFrame(k, strip!, sbActions(run), body)
+    sbFrame(k, strip!, sbActions(ask), body)
   ) : (
         <Box flexDirection="column" width="100%">
           {body}

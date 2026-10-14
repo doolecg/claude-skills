@@ -18,7 +18,6 @@ import {
 } from './logic'
 import {
   sbBar,
-  sbCommand,
   sbFrame,
   sbGood,
   sbKit,
@@ -44,7 +43,8 @@ export type PaneData = {
   /** The Sidebar's strip when this pane is its open tab; the pane then draws as a tab. */
   strip?: SbStrip
   theme: unknown
-  run: (c: { command: string; args: string }) => Promise<unknown>
+  /** Asks the Sidebar for a tab or its settings (see `sbAsker`). */
+  ask: (args: string) => void
 }
 
 const CRITTER = 12
@@ -98,7 +98,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
     ? sbTitle(
         k,
         { icon: '✈', name: 'Flightdeck', status: working > 0 ? `${working} agent${working === 1 ? '' : 's'} working` : 'no agents working' },
-        { label: 'Settings', onPress: () => sbCommand(d.run, 'settings flightdeck') },
+        { label: 'Settings', onPress: () => d.ask('settings flightdeck') },
       )
     : split(
         'header',
@@ -318,7 +318,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
     }
   }
 
-  if (strip) return sbFrame(k, strip, sbActions(d.run), parts)
+  if (strip) return sbFrame(k, strip, sbActions(d.ask), parts)
   return (
     <Box flexDirection="column" width="100%">
       {parts}

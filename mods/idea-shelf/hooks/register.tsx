@@ -1,15 +1,19 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
 import type { Editing } from '../types'
 import { ageOf, cleanIdea, ideaKey, isIdea, newId, parseEdit, shelfPrefix } from './shelf'
-import { SIDEBAR_COLUMNS, isSidebarTab, sbActions, sbButton, sbCard, sbCommand, sbFrame, sbKit, sbPalette, sbSplit, sbTitle } from './sidebar-kit'
+import { SIDEBAR_COLUMNS, isSidebarTab, sbActions, sbAsker, sbButton, sbCard, sbFrame, sbKit, sbPaneMove, sbPalette, sbSplit, sbTitle } from './sidebar-kit'
 import type { SbStrip } from './sidebar-kit'
 
 type Row = { id: string; text: string; at: number }
 
 const editing = atom({ plugin: 'idea-shelf', key: 'editing' } as const, null as Editing | null)
 const badge = atom({ plugin: 'idea-shelf', key: 'sidebarBadge' } as const, 0)
+const askAtom = atom({ plugin: 'idea-shelf', key: 'sidebarAsk' } as const, { args: '', n: 0 })
+
+/** Asks the Sidebar to do what `/sidebar <args>` does, through this mod's own state: no command is run. */
+const askSidebar = ($: EngineInterface, args: string) => update($, askAtom, v => ({ args, n: (v?.n ?? 0) + 1 }))
 
 async function listIdeas($: EngineInterface, cwd: string): Promise<Row[]> {
   const prefix = shelfPrefix(cwd)
@@ -36,6 +40,12 @@ async function publishBadge($: EngineInterface): Promise<void> {
     const count = (await listIdeas($, await $.session.cwd())).length
     await update($, badge, () => count)
   } catch {}
+}
+
+const openPane = ($: EngineInterface) => $.ui.open({ id: 'ideas', title: 'Idea Shelf', closeOnEscape: true, columns: SIDEBAR_COLUMNS })
+
+async function closePane($: EngineInterface): Promise<void> {
+  if ((await $.ui.panes()).some(p => p.id === 'ideas')) await $.ui.close({ id: 'ideas' })
 }
 
 export const register: Register = on => {
@@ -102,6 +112,18 @@ export const register: Register = on => {
     return {}
   })
 
+  // The Sidebar's strip names this tab, or moves on from it: the pane opens or closes with it.
+  on('state.set', { key: 'strip' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const w = e as unknown as StateWrite
+    const move = w.plugin === 'sidebar' ? sbPaneMove('idea-shelf', w.value, w.previous) : undefined
+    try {
+      if (move === 'open') await openPane($)
+      else if (move === 'close') await closePane($)
+    } catch {}
+    return ran
+  }).catch(($, e, next) => next(e))
+
   // The person closing the tab pane takes the sidebar down with it.
   on('ui.close', async ($, e, next) => {
     const ran = await next(e)
@@ -109,7 +131,7 @@ export const register: Register = on => {
       const strip = await readStrip($)
       if (strip?.isOn && strip.active === 'idea-shelf') {
         try {
-          await $.command.run({ command: 'sidebar', args: 'closed idea-shelf' })
+          await askSidebar($, 'closed idea-shelf')
         } catch {}
       }
     }
@@ -203,11 +225,12 @@ export const register: Register = on => {
 
     if (strip !== undefined && isSidebarTab(strip, 'idea-shelf')) {
       const k = sbKit(els, e.surface, sbPalette(strip.theme, strip.colour), e.props.bodyColumns, 0)
+      const ask = sbAsker(args => askSidebar($, args), 'idea-shelf', () => closePane($))
       const body: unknown[] = [
         sbTitle(
           k,
           { icon: '◇', name: 'Idea Shelf', status: `${ideas.length} ${ideas.length === 1 ? 'idea' : 'ideas'} · ${folder}` },
-          { label: 'Settings', onPress: () => sbCommand(c => $.command.run(c), 'settings idea-shelf') },
+          { label: 'Settings', onPress: () => ask('settings idea-shelf') },
         ),
       ]
       if (e.surface !== 'mobile') {
@@ -233,7 +256,7 @@ export const register: Register = on => {
           ),
         )
       })
-      return sbFrame(k, strip, sbActions(c => $.command.run(c)), body)
+      return sbFrame(k, strip, sbActions(ask), body)
     }
 
     return (

@@ -56,6 +56,7 @@ declare module 'claude-code' {
       ask: CvAsk
       tick: number
       theme: string
+      colour: string
       modes: Record<string, CvMode>
     }
   }

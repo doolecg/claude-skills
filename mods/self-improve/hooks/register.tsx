@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
 import type { BandInfo, PaneUi, SessionInfo } from '../types'
 import { approveDraft, approveLesson, deleteLessons, editDraft, editLesson, mergeLessons, moveLesson, rejectDraft, rejectLesson, rollback, soulAdd, soulEdit, soulPending, soulRemove, testModel } from './core/actions'
@@ -17,7 +17,7 @@ import { loadState, saveState, type Run } from './core/state'
 import { clean } from './core/text'
 import { messageEvents, type MessageRow } from './core/transcript'
 import { drawPane, type Els, type PaneActions } from './pane'
-import { isSidebarTab, sbPalette, SIDEBAR_COLUMNS, type SbStrip } from './sidebar-kit'
+import { isSidebarTab, sbAsker, sbPaneMove, sbPalette, SIDEBAR_COLUMNS, type SbStrip } from './sidebar-kit'
 
 const PLUGIN = 'self-improve'
 const PANE = 'self-improve'
@@ -26,6 +26,10 @@ const sessionAtom = atom({ plugin: 'self-improve', key: 'session' } as const, nu
 const briefAtom = atom({ plugin: 'self-improve', key: 'brief' } as const, '')
 const bandAtom = atom({ plugin: 'self-improve', key: 'band' } as const, { line: '', isRunning: false } as BandInfo)
 const badgeAtom = atom({ plugin: 'self-improve', key: 'sidebarBadge' } as const, 0)
+const askAtom = atom({ plugin: 'self-improve', key: 'sidebarAsk' } as const, { args: '', n: 0 })
+
+/** Asks the Sidebar to do what `/sidebar <args>` does, through this mod's own state: no command is run. */
+const askSidebar = ($: EngineInterface, args: string) => update($, askAtom, v => ({ args, n: (v?.n ?? 0) + 1 }))
 const uiAtom = atom({ plugin: 'self-improve', key: 'ui' } as const, {
   tab: 'lessons',
   kind: 'all',
@@ -61,6 +65,12 @@ async function readStrip($: EngineInterface): Promise<SbStrip | undefined> {
   } catch {
     return undefined
   }
+}
+
+const openPane = ($: EngineInterface) => $.ui.open({ id: PANE, title: 'Self Improve', closeOnEscape: true, columns: SIDEBAR_COLUMNS })
+
+async function closePane($: EngineInterface): Promise<void> {
+  if ((await $.ui.panes()).some(p => p.id === PANE)) await $.ui.close({ id: PANE })
 }
 
 async function refreshBand($: EngineInterface, io: Io, isRunning = false): Promise<void> {
@@ -327,13 +337,25 @@ export const register: Register = (on, options) => {
     return {}
   })
 
+  // The Sidebar's strip names this tab, or moves on from it: the pane opens or closes with it.
+  on('state.set', { key: 'strip' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const w = e as unknown as StateWrite
+    const move = w.plugin === 'sidebar' ? sbPaneMove(PLUGIN, w.value, w.previous) : undefined
+    try {
+      if (move === 'open') await openPane($)
+      else if (move === 'close') await closePane($)
+    } catch {}
+    return ran
+  }).catch(($, e, next) => next(e))
+
   // The person closing the tab in the sidebar (Escape, its close mark) tells the sidebar, so its strip lets go too.
   on('ui.close', async ($, e, next) => {
     const ran = await next(e)
     if (e.id === PANE && e.origin.kind === 'person') {
       try {
         const strip = await readStrip($)
-        if (strip && strip.isOn && strip.active === PLUGIN) await $.command.run({ command: 'sidebar', args: 'closed self-improve' })
+        if (strip && strip.isOn && strip.active === PLUGIN) await askSidebar($, 'closed self-improve')
       } catch {
         // the sidebar is not there
       }
@@ -397,7 +419,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const io = await engineIo($)
     const strip = await readStrip($)
-    const sb = isSidebarTab(strip, PLUGIN) && strip ? { strip, pal: sbPalette(strip.theme, strip.colour), columns: e.props.bodyColumns, surface: e.surface, run: (c: { command: string; args: string }) => $.command.run(c) } : undefined
+    const sb = isSidebarTab(strip, PLUGIN) && strip ? { strip, pal: sbPalette(strip.theme, strip.colour), columns: e.props.bodyColumns, surface: e.surface, ask: sbAsker(args => askSidebar($, args), PLUGIN, () => closePane($)) } : undefined
     const state = await loadState(io)
     const soulText = await readSoul(io)
     const ui = await read($, uiAtom)

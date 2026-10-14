@@ -6,10 +6,10 @@ A Claude Code mod that makes Claude feel calm and friendly for people who aren't
 ╭──────────────────────────────────────────────────────────────────────────────────╮
 │ ✶ Build my landing page                                                   1m 12s │
 │ Step 2 of 4 ⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠖⠶⠶⠶⠶⠶⠶⠶⠶⠦⠶⠲⠶⠴⠐⠀⠄⠀⠀⠠⠀⠂⠀⠀⠐⠀⠀⠄⠀⠀⠀⠂⠀⠀⠠⠀⠀⠀⠐⠀⠀⠄⠀⠀⠀⠀⠂   40% │
-│ ✓ Read your brand notes       ⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶  Done                                   │
+│ ✓ Read your brand notes       ⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶  done                                   │
 │ ▶ Build the pricing section   ⠶⠶⠶⠶⠶⠲⠴⠐⠀⠄  60%                                    │
-│ ○ Add the contact form        ⠀⠂⠀⠀⠠⠀⠀⠐⠀⠀  Next                                   │
-│ ○ Polish the footer           ⠄⠀⠀⠂⠀⠀⠠⠀⠀⠀  Up next                                │
+│ ○ Add the contact form        ⠀⠂⠀⠀⠠⠀⠀⠐⠀⠀                                         │
+│ ○ Polish the footer           ⠄⠀⠀⠂⠀⠀⠠⠀⠀⠀                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -31,7 +31,7 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 
 ## What the band shows
 
-- **Working:** the job's name and how long it has been running, an overall bar, then one row per step. Done steps get a green check, the current step a ▶ and a meter that fills as Claude reports progress (a moving sweep until the first report), upcoming steps say Next and Up next.
+- **Working:** the job's name and how long it has been running, an overall bar, then one row per step. Done steps get a green check, the current step a ▶ and a meter that fills as Claude reports progress (a moving sweep until the first report), upcoming steps are dim with an empty meter. The border and highlights follow the Bottom Bar's Colour setting.
 - **Meters:** thin lines of pixels with a gap between rows. They rise through scattered random pixels behind a glowing edge, build up smoothly to each new percent, and twinkle softly; the empty track keeps a faint scatter of dim pixels. A finished bar is solid.
 - **Needs you:** a highlighted badge and the reason, when Claude needs your OK or has a question.
 - **Questions:** when Claude asks you something, the band splits: the checklist on the left, a question panel on the right (the question on top, a column of question tabs, the options beside them, and an Other row to type your own). Press an option's number or click it; multi-select questions tick options and finish with Done (`d`); Skip dismisses. Under 110 columns the panel stacks under the checklist. Claude's own question dialog is not shown while the band asks, and your answer goes back as your next message. With no job on screen the panel still opens. A ✕ at the top right clears a stale band.
