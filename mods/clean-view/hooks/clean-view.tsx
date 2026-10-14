@@ -8,7 +8,6 @@ import {
   EMPTY_CHECKLIST,
   HAS_QUESTION,
   KEEPS_FAILING,
-  METER,
   OTHER_HINT,
   SKIPPED,
   NEEDS_OK,
@@ -30,7 +29,6 @@ import {
   formatElapsed,
   fitOption,
   fromTodos,
-  gradientText,
   hasRealPlan,
   isAnswered,
   isLive,
@@ -39,12 +37,8 @@ import {
   paletteFor,
   parseAsk,
   pickQuestion,
-  pixelMeter,
-  pixelRuns,
-  pixelSweep,
   pressOption,
   planSteps,
-  rasterCells,
   reportProgress,
   rowLabel,
   startJob,
@@ -52,10 +46,9 @@ import {
   titleFromReply,
   unfinished,
   updateTask,
-  type Pixel,
-  type Run,
   type TodoItem,
 } from './clean-logic'
+import { sbFramedBar, sbGood, sbKit, sbMeter, sbPalette, sbSweep, sbWarm, type SbSeg } from './sidebar-kit'
 
 type Dollar = EngineInterface
 
@@ -66,6 +59,9 @@ const tickAtom = atom({ plugin: 'clean-view', key: 'tick' } as const, 0)
 const themeAtom = atom({ plugin: 'clean-view', key: 'theme' } as const, 'dark')
 const colourAtom = atom({ plugin: 'clean-view', key: 'colour' } as const, 'Coral')
 const modesAtom = atom({ plugin: 'clean-view', key: 'modes' } as const, {})
+
+/** The narrowest a step's outlined bar gets before the steps take another row. */
+const STEP_MIN = 28
 
 const PLAN = 'mcp__clean-view__plan_steps'
 const REPORT = 'mcp__clean-view__report_progress'
@@ -428,19 +424,13 @@ export function registerCleanView(on: On): void {
     if (e.props.hasSurvey) return next(e)
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
-    const Raster = e.surface === 'terminal' && 'Raster' in els ? els.Raster : undefined
-    const pal = paletteFor(await read($, themeAtom), await read($, colourAtom))
+    const theme = await read($, themeAtom)
+    const colour = await read($, colourAtom)
+    const pal = paletteFor(theme, colour)
     const isOn = await read($, enabledAtom)
     const cl = await read($, checklistAtom)
     const tick = await read($, tickAtom)
     const now = await $.clock.now()
-
-    const runs = (list: Run[], prefix: string, bold?: boolean) =>
-      list.map((r, i) => (
-        <Text key={`${prefix}${i}`} color={r.color} bold={bold}>
-          {r.text}
-        </Text>
-      ))
 
     // On and off live in the bottom bar's pill and /simple; the band shows only a job.
     const ask = await read($, askAtom)
@@ -452,14 +442,8 @@ export function registerCleanView(on: On): void {
     const took = formatElapsed((cl.finishedAt > 0 ? cl.finishedAt : now) - cl.startedAt)
 
     // Shown once the job is no longer running (finished, stopped, stuck, waiting) or a question is up.
-    const closeButton =
-      cl.phase !== 'working' || ask.isOpen || cl.helpers > 0 ? (
-        <Box flexShrink={0} marginLeft={1}>
-          <Button key="close" plain dimColor onPress={() => void dismissBand($).catch(() => {})}>
-            ✕
-          </Button>
-        </Box>
-      ) : null
+    const hasClose = cl.phase !== 'working' || ask.isOpen || cl.helpers > 0
+    const onClose = () => void dismissBand($).catch(() => {})
 
     if (cl.phase === 'done' && cl.isCollapsed && !ask.isOpen) {
       return (
@@ -472,10 +456,18 @@ export function registerCleanView(on: On): void {
               <Text color={pal.dim}>{` · ${cl.title} · took ${took}`}</Text>
             </Text>
           </Box>
-          {closeButton}
+          <Box flexShrink={0} marginLeft={1}>
+            <Button key="close" plain dimColor onPress={onClose}>
+              ✕
+            </Button>
+          </Box>
         </Box>
       )
     }
+
+    // The checklist draws in Flightdeck's look: bars in rounded outlines with their labels set into the edges.
+    const k = sbKit(els, e.surface, sbPalette(theme, colour), cols, tick)
+    const kp = k.pal
 
     const animate = isAnimated(cl)
     if (shown.size > 200) shown.clear()
@@ -487,133 +479,110 @@ export function registerCleanView(on: On): void {
       const it = shown.get(key)!
       return animate ? easeToward(it.from, it.to, now - it.at) : target
     }
-    // The terminal draws a meter as one Raster of braille pixels; other surfaces as coloured text.
-    const meter = (key: string, pixels: Pixel[]) =>
-      Raster ? (
-        <Raster key={key} columns={pixels.length} rows={1} cells={rasterCells(pixels)} />
-      ) : (
-        runs(pixelRuns(pixels), `${key}-`)
-      )
 
-    const warm = [pal.warmFrom, pal.warmTo]
-    const good = [pal.goodFrom, pal.goodTo]
-    const border = isBare
-      ? pal.warn
-      : cl.phase === 'done'
-        ? pal.good
-        : cl.phase === 'needs-you'
-          ? pal.warn
-          : cl.phase === 'stuck'
-            ? pal.bad
-            : cl.phase === 'stopped'
-              ? pal.idle
-              : pal.border
-
-    const header = isBare ? (
-      <Text wrap="truncate-end">
-        <Text backgroundColor={pal.warn} color={pal.badgeText} bold>
-          {' Needs you '}
-        </Text>
-        <Text color={pal.text}>{'  Waiting for your answer'}</Text>
-      </Text>
-    ) : cl.phase === 'needs-you' ? (
-        <Text wrap="truncate-end">
-          <Text backgroundColor={pal.warn} color={pal.badgeText} bold>
-            {' Needs you '}
-          </Text>
-          <Text color={pal.text}>{`  ${cl.needsYouReason}`}</Text>
-        </Text>
-      ) : cl.phase === 'stuck' ? (
-        <Text wrap="truncate-end">
-          <Text color={pal.bad} bold>
-            ⚠ Stuck:
-          </Text>
-          <Text color={pal.text}>{` ${cl.stuckReason}`}</Text>
-        </Text>
-      ) : cl.phase === 'stopped' ? (
-        <Text wrap="truncate-end">
-          <Text color={pal.dim} bold>
-            ■ Stopped
-          </Text>
-          <Text color={pal.dim}>{` · ${cl.title} · you pressed Esc`}</Text>
-        </Text>
-      ) : cl.phase === 'done' ? (
-        <Text wrap="truncate-end">
-          <Text backgroundColor={pal.good} color={pal.badgeText} bold>
-            {' ✓ All done '}
-          </Text>
-          <Text color={pal.good} bold>{`  ${cl.title}`}</Text>
-        </Text>
-      ) : (
-        <Text wrap="truncate-end">
-          <Text color={pal.warmFrom}>{'✶ '}</Text>
-          {runs(gradientText(cl.title, [pal.warmFrom, pal.warmTo, pal.titleTo]), 't', true)}
-          {cl.helpers > 0 ? <Text color={pal.dim}>{` · Waiting for ${cl.helpers} ${cl.helpers === 1 ? 'helper' : 'helpers'}`}</Text> : null}
-        </Text>
-      )
-    const timeText = isBare ? '' : cl.phase === 'done' ? `took ${took}` : cl.phase === 'stopped' ? '' : took
-
-    const layout = askLayout(Math.max(10, cols - 4))
+    const full = Math.max(16, cols)
     const isAsking = ask.isOpen
-    const inner = isAsking && layout.isSplit ? layout.left : Math.max(10, cols - 4)
+    const isSplit = isAsking && askLayout(Math.max(10, cols - 4)).isSplit
+    const leftW = isSplit ? Math.floor((full - 1) / 2) : full
     const sum = overall(cl)
-    const stepLabel = cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total}`
-    const pctText = `${sum.percent}%`.padStart(4)
-    const barWidth = Math.max(0, inner - stepLabel.length - pctText.length - 2)
-    const barStops = cl.phase === 'done' ? good : warm
-    const bar = pixelMeter(barWidth, eased('all', sum.percent / 100), { stops: barStops, track: pal.track, tint: pal.tint, tick })
-
-    const longest = cl.tasks.reduce((n, t) => Math.max(n, [...t.name].length), 0)
-    const nameWidth = Math.max(4, Math.min(longest + 1, 41, inner - 2 - 2 - METER - 2 - 7))
+    const isWorking = cl.phase === 'working'
     const isPaused = cl.phase === 'needs-you'
 
-    const rows = cl.tasks.map((t, i) => {
+    const outline =
+      isBare || isPaused ? kp.warn : cl.phase === 'done' ? kp.good : cl.phase === 'stuck' ? kp.bad : cl.phase === 'stopped' ? kp.faint : kp.dim
+    const top: SbSeg[] = isBare
+      ? [
+          { text: '‖ Needs you', color: kp.warn, bold: true },
+          { text: ' · Waiting for your answer', color: kp.text },
+        ]
+      : isPaused
+        ? [
+            { text: '‖ Needs you', color: kp.warn, bold: true },
+            { text: ` · ${cl.needsYouReason}`, color: kp.text },
+          ]
+        : cl.phase === 'stuck'
+          ? [
+              { text: '⚠ Stuck: ', color: kp.bad, bold: true },
+              { text: cl.stuckReason, color: kp.text },
+            ]
+          : cl.phase === 'stopped'
+            ? [
+                { text: '■ Stopped', color: kp.dim, bold: true },
+                { text: ` · ${cl.title} · you pressed Esc`, color: kp.dim },
+              ]
+            : cl.phase === 'done'
+              ? [
+                  { text: '✓ All done', color: kp.good, bold: true },
+                  { text: ` · ${cl.title}`, color: kp.good },
+                ]
+              : [
+                  { text: '✶ ', color: kp.warmFrom },
+                  { text: cl.title, color: kp.text, bold: true },
+                  ...(cl.helpers > 0 ? [{ text: ` · Waiting for ${cl.helpers} ${cl.helpers === 1 ? 'helper' : 'helpers'}`, color: kp.dim }] : []),
+                ]
+    const timeText = isBare ? '' : cl.phase === 'done' ? `took ${took}` : cl.phase === 'stopped' ? '' : took
+    const topRight: SbSeg[] = [
+      ...(timeText ? [{ text: hasClose ? `${timeText} ` : timeText, color: kp.dim }] : []),
+      ...(hasClose ? [{ text: '✕', color: kp.dim, onPress: onClose, key: 'close' }] : []),
+    ]
+    const hasSteps = sum.total > 0 && !isBare
+    const jobFrame = sbFramedBar(k, 'job', {
+      width: leftW,
+      color: outline,
+      bar: cells =>
+        hasSteps
+          ? sbMeter(cells, eased('all', sum.percent / 100), cl.phase === 'done' ? sbGood(k) : sbWarm(k))
+          : isWorking
+            ? sbSweep(cells, sbWarm(k))
+            : sbMeter(cells, 0, sbWarm(k)),
+      top,
+      topRight,
+      bottom: hasSteps
+        ? [{ text: cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total}`, color: kp.dim }]
+        : [],
+      bottomRight: hasSteps ? [{ text: `${sum.percent}%`, color: cl.phase === 'done' ? kp.good : kp.accent, bold: true }] : [],
+    })
+
+    // One outlined bar per step, side by side in rows like Flightdeck's usage limits.
+    const n = isBare ? 0 : cl.tasks.length
+    const lines = Math.ceil(n / Math.max(1, Math.min(n, Math.floor((leftW + 1) / (STEP_MIN + 1)))))
+    const across = Math.max(1, Math.ceil(n / Math.max(1, lines)))
+    const each = Math.floor((leftW - (across - 1)) / across)
+    const stepFrame = (i: number, width: number) => {
+      const t = cl.tasks[i]!
       const isDone = t.status === 'done'
       const isActive = t.status === 'active'
       const marker = isDone ? '✓' : isActive ? (isPaused ? '‖' : '▶') : '○'
-      const markerColor = isDone ? pal.good : isActive ? (isPaused ? pal.warn : pal.accent) : pal.faint
-      const look = { stops: isDone ? good : warm, track: pal.track, tint: pal.tint, tick, seed: i + 1 }
-      const pixels =
-        isActive && !t.hasReported && cl.phase === 'working'
-          ? pixelSweep(METER, look)
-          : pixelMeter(METER, eased(t.id, isDone ? 1 : isActive ? t.percent / 100 : 0), look)
+      const look = isDone ? sbGood(k, i + 1) : sbWarm(k, i + 1)
       const label = rowLabel(cl.tasks, i)
+      return sbFramedBar(k, t.id, {
+        width,
+        color: isActive ? (isPaused ? kp.warn : kp.accent) : isDone ? kp.dim : kp.sep,
+        bar: cells =>
+          isActive && !t.hasReported && isWorking
+            ? sbSweep(cells, look)
+            : sbMeter(cells, eased(t.id, isDone ? 1 : isActive ? t.percent / 100 : 0), look),
+        top: [
+          { text: `${marker} `, color: isDone ? kp.good : isActive ? (isPaused ? kp.warn : kp.accent) : kp.faint },
+          { text: t.name, color: isDone ? kp.dim : isActive ? kp.text : kp.faint, bold: isActive },
+        ],
+        topRight: label ? [{ text: label, color: isActive ? kp.accent : kp.dim, bold: isActive && t.hasReported }] : [],
+      })
+    }
+    const stepRows = Array.from({ length: lines }, (_, r) => {
+      const first = r * across
+      const count = Math.min(across, n - first)
       return (
-        <Box key={t.id}>
-          <Text color={markerColor}>{`${marker} `}</Text>
-          <Text color={isDone ? pal.dim : isActive ? pal.text : pal.faint} bold={isActive}>
-            {padTo(t.name, nameWidth)}
-          </Text>
-          <Text> </Text>
-          {meter(`m${i}`, pixels)}
-          <Text color={isActive ? pal.accent : isDone ? pal.dim : pal.faint} bold={isActive && t.hasReported}>
-            {`  ${label}`}
-          </Text>
+        <Box key={`steps${r}`} columnGap={1}>
+          {Array.from({ length: count }, (_, j) => stepFrame(first + j, j === across - 1 ? leftW - (across - 1) * (each + 1) : each))}
         </Box>
       )
     })
 
     const checklist = (
-      <Box flexDirection="column" width={isAsking && layout.isSplit ? layout.left : undefined} flexShrink={0}>
-        <Box>
-          <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
-            {header}
-          </Box>
-          {timeText ? (
-            <Box flexShrink={0} marginLeft={1}>
-              <Text color={pal.dim}>{timeText}</Text>
-            </Box>
-          ) : null}
-          {closeButton}
-        </Box>
-        {sum.total > 0 && !isBare ? (
-          <Box>
-            <Text color={pal.dim}>{`${stepLabel} `}</Text>
-            {meter('bar', bar)}
-            <Text color={cl.phase === 'done' ? pal.good : pal.accent} bold>{` ${pctText}`}</Text>
-          </Box>
-        ) : null}
-        {isBare ? null : rows}
+      <Box key="checklist" flexDirection="column" width={leftW} flexShrink={0}>
+        {jobFrame}
+        {stepRows}
       </Box>
     )
 
@@ -621,13 +590,13 @@ export function registerCleanView(on: On): void {
     if (isAsking) {
       const Input = 'Input' in els ? els.Input : undefined
       const q = ask.questions[ask.current]!
-      const W = layout.right
+      const W = isSplit ? full - 1 - leftW : full
       const tabW = Math.max(8, Math.min(16, Math.floor(W / 3)))
       const optW = Math.max(8, W - tabW - 8)
       const ticked = ask.picks[ask.current] ?? []
       const given = ask.answers[ask.current]
       panel = (
-        <Box flexDirection="column" width={layout.isSplit ? W : undefined} marginTop={layout.isSplit ? 0 : 1} flexShrink={0}>
+        <Box key="ask" flexDirection="column" width={W} marginTop={isSplit ? 0 : 1} flexShrink={0}>
           <Box borderStyle="round" borderColor={pal.accent} paddingX={1} width="100%">
             <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
               <Text wrap="truncate-end">
@@ -705,18 +674,9 @@ export function registerCleanView(on: On): void {
     }
 
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor={border} paddingX={1} width="100%">
-        {panel && layout.isSplit ? (
-          <Box>
-            {checklist}
-            <Box marginLeft={1}>{panel}</Box>
-          </Box>
-        ) : (
-          <>
-            {checklist}
-            {panel}
-          </>
-        )}
+      <Box flexDirection={isSplit ? 'row' : 'column'} columnGap={isSplit ? 1 : undefined} width="100%">
+        {checklist}
+        {panel}
       </Box>
     )
   })

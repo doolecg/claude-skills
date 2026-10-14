@@ -1,3 +1,13 @@
+# Clean View 1.4.0
+
+## Changed
+- The band looks like Flightdeck now. The job is an outlined bar with its name and time set into the top edge and Step N of M and the percent in the bottom edge.
+- Every step is its own outlined bar, side by side like Flightdeck's usage limits, wrapping onto more rows on a narrow terminal. The current step's outline is in the accent colour.
+- The job's outline shows its state: amber for Needs you, red for Stuck, green for All done.
+- Bars and colours are the Sidebar's own, so Clean View and Flightdeck match exactly.
+
+---
+
 # Clean View 1.3.0
 
 ## Changed
