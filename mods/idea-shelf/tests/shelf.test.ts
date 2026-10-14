@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { cleanIdea, folderOf, ideaKey, isIdea, newId, parseEdit, shelfPrefix } from '../hooks/shelf'
+import { ageOf, cleanIdea, folderOf, ideaKey, isIdea, newId, parseEdit, shelfPrefix } from '../hooks/shelf'
 
 test('a shelf is keyed by the project folder, and folders do not share a prefix with subfolders', () => {
   const backslash = String.fromCharCode(92)
@@ -30,4 +30,11 @@ test('/idea edit <n> <text> is read as an edit, anything else as a new idea', ()
   expect(parseEdit('edit 1')).toEqual({ n: 1, text: '' })
   expect(parseEdit('add dark mode')).toBe(null)
   expect(parseEdit('edit x text')).toBe(null)
+})
+
+test('an idea shows its age as minutes, hours or days', () => {
+  expect(ageOf(1000, 1000)).toBe('now')
+  expect(ageOf(5 * 60000, 0)).toBe('5m')
+  expect(ageOf(3 * 3600000, 0)).toBe('3h')
+  expect(ageOf(2 * 86400000, 0)).toBe('2d')
 })

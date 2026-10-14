@@ -269,23 +269,22 @@ test('the on/off mode is published for the bottom bar', async ($, on) => {
   expect(seen[seen.length - 1]).toEqual({ simple: { label: 'Clean View', isOn: false } })
 })
 
-test('pixel meters are thin, rise through random pixels and build up over time', () => {
+test('pixel meters are dense dot-matrix cells that fade up to a solid head and build up over time', () => {
   const look = { stops: ['#E8A06A', '#D9667F'], track: '#3A3531', tint: '#FFF6EC', tick: 0 }
   const bits = (p: { ch: string }) => p.ch.charCodeAt(0) - 0x2800
   const count = (list: { ch: string }[]) => list.reduce((n, p) => n + [...bits(p).toString(2)].filter(b => b === '1').length, 0)
-  for (const f of [0, 0.3, 0.5, 1]) {
-    for (const p of pixelMeter(20, f, look)) expect(bits(p) & ~0x36).toBe(0)
-  }
-  expect(count(pixelMeter(20, 0, look))).toBeLessThan(40)
+  expect(count(pixelMeter(20, 0, look))).toBeLessThan(60)
   const done = pixelMeter(20, 1, look)
-  expect(count(done)).toBe(80)
+  expect(count(done)).toBe(160)
+  expect(done.every(p => bits(p) === 0xff)).toBe(true)
   expect(pixelMeter(20, 1, { ...look, tick: 9 }).map(p => p.color)).toEqual(done.map(p => p.color))
   const half = pixelMeter(20, 0.5, look)
-  expect(count(half.slice(0, 8))).toBeGreaterThan(count(half.slice(12)))
+  expect(half[9]!.ch.charCodeAt(0) - 0x2800).toBe(0xff)
+  expect(count(half.slice(0, 4))).toBeLessThan(count(half.slice(5, 9)))
+  expect(count(half.slice(10))).toBeLessThan(40)
   const other = pixelMeter(20, 0.5, { ...look, seed: 4 })
   expect(other.map(p => p.ch).join('')).not.toBe(half.map(p => p.ch).join(''))
-  expect(count(pixelMeter(20, 0.6, look).slice(0, 12))).toBeGreaterThanOrEqual(count(half.slice(0, 12)) - 4)
-  const sweep = pixelSweep(10, { ...look, tick: 5 })
+    const sweep = pixelSweep(10, { ...look, tick: 5 })
   expect(sweep.some(p => p.color !== sweep[9]!.color)).toBe(true)
   expect(rasterCells(half)).toMatch(/^[A-Za-z0-9+/]+={0,2}$/)
   expect(rasterCells(half).length).toBe(Math.ceil((20 * 12) / 3) * 4)

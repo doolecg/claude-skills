@@ -47,3 +47,16 @@ export function describeOther(tracker: Tracker, cwd: string): string {
   const count = tracker.files.length
   return `Other session: ${tracker.phase} — editing ${relativeTo(cwd, last.path)} (${count} file${count === 1 ? '' : 's'})`
 }
+
+export function agoOf(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  return `${Math.floor(m / 60)}h ago`
+}
+
+/** The paths in `mine` that `other` also edited, as `other` spelled them. */
+export function sharedFiles(mine: readonly TrackedFile[], other: readonly TrackedFile[]): string[] {
+  return other.filter(f => mine.some(m => sameFile(m.path, f.path))).map(f => f.path)
+}

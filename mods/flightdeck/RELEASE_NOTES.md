@@ -1,3 +1,14 @@
+# Flightdeck 1.1.0
+
+## New
+- Works as a tab in the Sidebar mod: it draws under the Sidebar's tab strip with a title row and a Settings button, and tells the Sidebar when you close it.
+
+## Changed
+- Opens at 56 columns wide, the Sidebar's width, instead of 60.
+- The bars are now the Sidebar's dense dot-matrix meters, in the Sidebar and on their own.
+
+---
+
 # Flightdeck 1.0.0
 
 ## New

@@ -98,3 +98,7 @@ Hitting a budget stops the run and says which.
 - The session and the background learner share `state.json`; two runs at the same moment can overwrite each other's record (job files keep one learner per session).
 - A draft is edited in its file under `<config>/self-improve/drafts/`, then reloaded in the pane; the pane has no multi-line editor.
 - Text fields and pickers are not shown on mobile surfaces.
+
+## In the Sidebar
+
+With the Sidebar mod on, Self Improve is a tab in it: the same review pane in the Sidebar's look, with the number of lessons and drafts waiting for review as the tab's badge. `/learn open` and `/learn close` open and close the pane; `/learn` alone still opens it.

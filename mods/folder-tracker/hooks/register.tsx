@@ -1,6 +1,9 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Phase, Tracker } from '../types'
+import { drawFolders } from './pane'
+import { sbKit, sbPalette } from './sidebar-kit'
+import type { SbStrip } from './sidebar-kit'
 import { PRUNE_MS, SAVE_EVERY_MS, addFile, describeOther, isLive, isTracker, relativeTo, sameFile, trackerKey, trackerPrefix } from './tracker'
 
 let last: { phase: Phase; savedAt: number } | undefined
@@ -16,6 +19,7 @@ async function record($: EngineInterface, patch: { phase: Phase; file?: string }
   const base: Tracker = isTracker(before) ? before : { id: key.slice(trackerPrefix(cwd).length), cwd, phase: patch.phase, at: now, files: [] }
   const files = patch.file === undefined ? base.files : addFile(base.files, patch.file, now)
   await $.store.set(key, { ...base, cwd, phase: patch.phase, at: now, files })
+  await publishBadge($)
   $.ui.invalidate('ui.render')
 }
 
@@ -28,6 +32,12 @@ async function otherSessions($: EngineInterface): Promise<Tracker[]> {
   return values.filter(isTracker).filter(tracker => isLive(tracker, now)).sort((a, b) => b.at - a.at)
 }
 
+async function publishBadge($: EngineInterface): Promise<void> {
+  try {
+    await $.state.set({ plugin: 'folder-tracker', key: 'sidebarBadge' }, (await otherSessions($)).length)
+  } catch {}
+}
+
 async function prune($: EngineInterface): Promise<void> {
   const cwd = await $.session.cwd()
   const now = await $.clock.now()
@@ -37,9 +47,24 @@ async function prune($: EngineInterface): Promise<void> {
   }
 }
 
+const PANE = 'folders'
+
+async function readStrip($: EngineInterface): Promise<SbStrip | undefined> {
+  try {
+    return (await $.state.get({ plugin: 'sidebar', key: 'strip' })).value
+  } catch {
+    return undefined
+  }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     try {
+      await $.command.register({
+        name: 'folders',
+        description: 'Open or close the Folder Tracker pane: other sessions working in this folder',
+        argumentHint: '[open|close]',
+      })
       await prune($)
       await record($, { phase: 'idle' })
     } catch {
@@ -105,5 +130,37 @@ export const register: Register = on => {
         ))}
       </Box>
     )
+  })
+
+  on('command.run', { command: 'folders' }, async ($, e) => {
+    const isOpen = (await $.ui.panes()).some(p => p.id === PANE)
+    const arg = e.args.trim().toLowerCase()
+    const wantOpen = arg === 'open' || arg === 'on' ? true : arg === 'close' || arg === 'off' ? false : !isOpen
+    if (!wantOpen) {
+      await $.ui.close({ id: PANE })
+      return { text: 'Folder Tracker closed.' }
+    }
+    const opened = await $.ui.open({ id: PANE, title: 'Folder Tracker', columns: 56 })
+    return { text: opened.isPlaced ? 'Folder Tracker opened.' : `Folder Tracker opened; it shows once there is room: ${opened.reason}` }
+  })
+
+  on('ui.close', async ($, e, next) => {
+    const ran = await next(e)
+    if (e.id === PANE && e.origin.kind === 'person') {
+      const strip = await readStrip($)
+      if (strip?.isOn && strip.active === 'folder-tracker') {
+        await $.command.run({ command: 'sidebar', args: 'closed folder-tracker' }).catch(() => {})
+      }
+    }
+    return ran
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const els = $.ui.resolve(e) as unknown as Record<string, any>
+    const strip = await readStrip($)
+    const k = sbKit(els, e.surface, sbPalette(strip?.theme ?? 'dark', strip?.colour), e.props.bodyColumns, 0)
+    const cwd = await $.session.cwd()
+    const mine: unknown = await $.store.get(trackerKey(cwd, await $.session.id()))
+    return drawFolders(k, strip, c => $.command.run(c), cwd, await $.clock.now(), isTracker(mine) ? mine : undefined, await otherSessions($))
   })
 }

@@ -1,3 +1,10 @@
+# Clean View 1.2.0
+
+## Changed
+- Loading bars use the denser dot-matrix look shared with the Sidebar.
+
+---
+
 # Clean View 1.1.0
 
 ## New

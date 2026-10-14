@@ -29,6 +29,9 @@ export type PaneUi = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'self-improve': { session: SessionInfo | null; brief: string; band: BandInfo; ui: PaneUi }
+    'self-improve': { session: SessionInfo | null; brief: string; band: BandInfo; ui: PaneUi; sidebarBadge: number }
+    sidebar: {
+      strip: { isOn: boolean; active: string; tabs: { id: string; icon: string; name: string; badge: number }[]; theme: string; colour: string }
+    }
   }
 }

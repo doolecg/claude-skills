@@ -110,6 +110,12 @@
       "source": "./mods/flightdeck"
     },
     {
+      "name": "sidebar",
+      "description": "One sidebar with a tab for each of your mods (Flightdeck, Self Improve, Clean View, Idea Shelf, Folder Tracker and the rest), each with its settings page, in the Bottom Bar's colours.",
+      "category": "productivity",
+      "source": "./mods/sidebar"
+    },
+    {
       "name": "prompt-enhancer",
       "description": "An Enhance Prompt button in the Bottom Bar (or its own row) that rewrites the prompt in the box using Hindsight, CodeGraph, the session, your soul.md and your skills, with recall counts and Undo.",
       "category": "productivity",

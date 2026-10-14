@@ -17,6 +17,7 @@ import { loadState, saveState, type Run } from './core/state'
 import { clean } from './core/text'
 import { messageEvents, type MessageRow } from './core/transcript'
 import { drawPane, type Els, type PaneActions } from './pane'
+import { isSidebarTab, sbPalette, SIDEBAR_COLUMNS, type SbStrip } from './sidebar-kit'
 
 const PLUGIN = 'self-improve'
 const PANE = 'self-improve'
@@ -24,6 +25,7 @@ const PANE = 'self-improve'
 const sessionAtom = atom({ plugin: 'self-improve', key: 'session' } as const, null as SessionInfo | null)
 const briefAtom = atom({ plugin: 'self-improve', key: 'brief' } as const, '')
 const bandAtom = atom({ plugin: 'self-improve', key: 'band' } as const, { line: '', isRunning: false } as BandInfo)
+const badgeAtom = atom({ plugin: 'self-improve', key: 'sidebarBadge' } as const, 0)
 const uiAtom = atom({ plugin: 'self-improve', key: 'ui' } as const, {
   tab: 'lessons',
   kind: 'all',
@@ -53,9 +55,19 @@ async function hindsight(io: Io): Promise<HindsightState> {
   return rt.lastHindsight
 }
 
+async function readStrip($: EngineInterface): Promise<SbStrip | undefined> {
+  try {
+    return (await $.state.get({ plugin: 'sidebar', key: 'strip' } as const)).value as SbStrip | undefined
+  } catch {
+    return undefined
+  }
+}
+
 async function refreshBand($: EngineInterface, io: Io, isRunning = false): Promise<void> {
   const session = await read($, sessionAtom)
   const state = await loadState(io)
+  const waiting = state.lessons.filter(l => l.status === 'pending').length + state.drafts.filter(d => d.status === 'pending').length
+  if ((await read($, badgeAtom)) !== waiting) await update($, badgeAtom, () => waiting)
   const hs = rt.lastHindsight ? (rt.lastHindsight.on ? { on: true, reason: '' } : { on: false, reason: rt.lastHindsight.reason }) : null
   const line = rt.s.mode === 'off' ? '' : bandLine(state, session?.cwd ?? '', hs)
   await update($, bandAtom, () => ({ line, isRunning }))
@@ -157,7 +169,7 @@ export const register: Register = (on, options) => {
         await $.command.register({ name: 'done', description: 'Mark this session done and learn from it (Self Improve)', argumentHint: '[what was achieved]', immediate: true })
         await $.command.register({ name: 'learn-now', description: 'Learn from this session now (Self Improve)', immediate: true })
         await $.command.register({ name: 'learn-off', description: 'Turn Self Improve off for this session', immediate: true })
-        await $.command.register({ name: 'learn', description: 'Self Improve: review lessons, skill drafts, the scorecard, changes, runs and soul.md', argumentHint: '[status|approve <id>|reject <id>]', immediate: true })
+        await $.command.register({ name: 'learn', description: 'Self Improve: review lessons, skill drafts, the scorecard, changes, runs and soul.md', argumentHint: '[open|close|status|approve <id>|reject <id>]', immediate: true })
         await $.tool.register({
           name: 'recall',
           description: 'Search what past sessions learned about this project and about the user: lessons, decisions, preferences. Searches Hindsight (when set up), then soul.md and the local lessons. Set why=true to ask Hindsight to reflect on why something was decided.',
@@ -178,6 +190,7 @@ export const register: Register = (on, options) => {
             : { id, cwd: e.cwd, startHead, transcriptPath: transcriptPathFor(io.config, e.cwd, id, io.isWindows), edits: 0, editsAtLearn: 0, learnedAt: 0, note: '', isOff: false },
         )
         await buildBrief($, io, e.cwd).catch(() => '')
+        await refreshBand($, io).catch(() => undefined)
         $.clock.after(3000, () => {
           void background($, id)
         })
@@ -305,8 +318,27 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
       return { text: r.message }
     }
-    await $.ui.open({ id: PANE, title: 'Self Improve', closeOnEscape: true })
+    if (verb === 'close') {
+      await $.ui.close({ id: PANE })
+      return {}
+    }
+    const strip = await readStrip($)
+    await $.ui.open({ id: PANE, title: 'Self Improve', closeOnEscape: true, ...(strip?.isOn ? { columns: SIDEBAR_COLUMNS } : {}) })
     return {}
+  })
+
+  // The person closing the tab in the sidebar (Escape, its close mark) tells the sidebar, so its strip lets go too.
+  on('ui.close', async ($, e, next) => {
+    const ran = await next(e)
+    if (e.id === PANE && e.origin.kind === 'person') {
+      try {
+        const strip = await readStrip($)
+        if (strip && strip.isOn && strip.active === PLUGIN) await $.command.run({ command: 'sidebar', args: 'closed self-improve' })
+      } catch {
+        // the sidebar is not there
+      }
+    }
+    return ran
   })
 
   // The detached learner's command: runs one saved job to the end, then the headless run exits.
@@ -364,6 +396,8 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const io = await engineIo($)
+    const strip = await readStrip($)
+    const sb = isSidebarTab(strip, PLUGIN) && strip ? { strip, pal: sbPalette(strip.theme, strip.colour), columns: e.props.bodyColumns, surface: e.surface, run: (c: { command: string; args: string }) => $.command.run(c) } : undefined
     const state = await loadState(io)
     const soulText = await readSoul(io)
     const ui = await read($, uiAtom)
@@ -411,7 +445,7 @@ export const register: Register = (on, options) => {
       },
       test: () => done(testModel(io, s)),
     }
-    return drawPane($.ui.resolve(e) as unknown as Els, e.surface, { state, soulText, ui, settings: s, loads, folder: session?.cwd ?? '', soulFile: joinPath(io.isWindows, io.config, 'soul.md'), draftsDir: joinPath(io.isWindows, io.config, 'self-improve', 'drafts'), hindsight: rt.lastHindsight, actions })
+    return drawPane($.ui.resolve(e) as unknown as Els, e.surface, { state, soulText, ui, settings: s, loads, folder: session?.cwd ?? '', soulFile: joinPath(io.isWindows, io.config, 'soul.md'), draftsDir: joinPath(io.isWindows, io.config, 'self-improve', 'drafts'), hindsight: rt.lastHindsight, actions, sb })
   })
 }
 

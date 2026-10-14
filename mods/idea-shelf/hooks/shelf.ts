@@ -32,3 +32,12 @@ export function isIdea(value: unknown): value is Idea {
   return typeof value === 'object' && value !== null
     && typeof (value as Idea).text === 'string' && typeof (value as Idea).at === 'number'
 }
+
+/** How long ago an idea was parked: `now`, `5m`, `2h`, `3d`. */
+export function ageOf(now: number, at: number): string {
+  const minutes = Math.max(0, Math.floor((now - at) / 60000))
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes}m`
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}h`
+  return `${Math.floor(minutes / 1440)}d`
+}

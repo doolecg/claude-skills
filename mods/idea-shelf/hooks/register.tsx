@@ -2,11 +2,14 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Editing } from '../types'
-import { cleanIdea, ideaKey, isIdea, newId, parseEdit, shelfPrefix } from './shelf'
+import { ageOf, cleanIdea, ideaKey, isIdea, newId, parseEdit, shelfPrefix } from './shelf'
+import { SIDEBAR_COLUMNS, isSidebarTab, sbActions, sbButton, sbCard, sbCommand, sbFrame, sbKit, sbPalette, sbSplit, sbTitle } from './sidebar-kit'
+import type { SbStrip } from './sidebar-kit'
 
 type Row = { id: string; text: string; at: number }
 
 const editing = atom({ plugin: 'idea-shelf', key: 'editing' } as const, null as Editing | null)
+const badge = atom({ plugin: 'idea-shelf', key: 'sidebarBadge' } as const, 0)
 
 async function listIdeas($: EngineInterface, cwd: string): Promise<Row[]> {
   const prefix = shelfPrefix(cwd)
@@ -16,6 +19,23 @@ async function listIdeas($: EngineInterface, cwd: string): Promise<Row[]> {
     return isIdea(value) ? { id: key.slice(prefix.length), text: value.text, at: value.at } : null
   }))
   return rows.filter((row): row is Row => row !== null).sort((a, b) => a.at - b.at)
+}
+
+/** The Sidebar's strip, or undefined when the Sidebar is not installed. */
+async function readStrip($: EngineInterface): Promise<SbStrip | undefined> {
+  try {
+    return (await $.state.get({ plugin: 'sidebar', key: 'strip' } as const)).value
+  } catch {
+    return undefined
+  }
+}
+
+/** Tells the Sidebar how many ideas this project has, for its tab badge. */
+async function publishBadge($: EngineInterface): Promise<void> {
+  try {
+    const count = (await listIdeas($, await $.session.cwd())).length
+    await update($, badge, () => count)
+  } catch {}
 }
 
 export const register: Register = on => {
@@ -30,11 +50,13 @@ export const register: Register = on => {
       await $.command.register({
         name: 'ideas',
         description: 'Open the Idea Shelf to send, edit or delete parked ideas',
+        argumentHint: '[open|close]',
         immediate: true,
       })
     } catch {
       $.ui.toast('Idea Shelf: could not register its commands')
     }
+    await publishBadge($)
     return next(e)
   })
 
@@ -62,6 +84,7 @@ export const register: Register = on => {
       const at = await $.clock.now()
       await $.store.set(ideaKey(cwd, newId(at, Math.random())), { text, at })
       $.ui.toast('Idea parked on this project\'s shelf (/ideas to review)')
+      await publishBadge($)
       $.ui.invalidate('ui.render')
     } catch {
       $.ui.toast('Idea Shelf: could not save the idea')
@@ -69,17 +92,39 @@ export const register: Register = on => {
     return {}
   })
 
-  on('command.run', { command: 'ideas' }, async $ => {
-    await $.ui.open({ id: 'ideas', title: 'Idea Shelf', closeOnEscape: true })
+  on('command.run', { command: 'ideas' }, async ($, e) => {
+    if (e.args.trim().toLowerCase() === 'close') {
+      await $.ui.close({ id: 'ideas' })
+      return {}
+    }
+    const strip = await readStrip($)
+    await $.ui.open({ id: 'ideas', title: 'Idea Shelf', closeOnEscape: true, ...(strip?.isOn ? { columns: SIDEBAR_COLUMNS } : {}) })
     return {}
   })
 
+  // The person closing the tab pane takes the sidebar down with it.
+  on('ui.close', async ($, e, next) => {
+    const ran = await next(e)
+    if (e.id === 'ideas' && e.origin.kind === 'person') {
+      const strip = await readStrip($)
+      if (strip?.isOn && strip.active === 'idea-shelf') {
+        try {
+          await $.command.run({ command: 'sidebar', args: 'closed idea-shelf' })
+        } catch {}
+      }
+    }
+    return ran
+  }).catch(($, e, next) => next(e))
+
   on('ui.render', { component: 'Pane', requestId: 'ideas' }, async ($, e) => {
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const els = $.ui.resolve(e) as unknown as Record<string, any>
+    const { Box, Button, Text } = els
     const cwd = await $.session.cwd()
     const ideas = await listIdeas($, cwd)
     const current = await read($, editing)
     const folder = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd
+    const strip = await readStrip($)
+    const now = await $.clock.now()
 
     const send = async (idea: Row) => {
       try {
@@ -89,12 +134,28 @@ export const register: Register = on => {
         return
       }
       await $.store.delete(ideaKey(cwd, idea.id))
+      await publishBadge($)
+      $.ui.invalidate('ui.render')
+    }
+
+    const add = async (value: string) => {
+      const text = cleanIdea(value)
+      if (text === null) return
+      try {
+        const at = await $.clock.now()
+        await $.store.set(ideaKey(cwd, newId(at, Math.random())), { text, at })
+      } catch {
+        $.ui.toast('Idea Shelf: could not save the idea')
+        return
+      }
+      await publishBadge($)
       $.ui.invalidate('ui.render')
     }
 
     const remove = async (idea: Row) => {
       await $.store.delete(ideaKey(cwd, idea.id))
       if ((await read($, editing))?.id === idea.id) await update($, editing, () => null)
+      await publishBadge($)
       $.ui.invalidate('ui.render')
     }
 
@@ -138,6 +199,41 @@ export const register: Register = on => {
           </Box>
         </Box>
       )
+    }
+
+    if (strip !== undefined && isSidebarTab(strip, 'idea-shelf')) {
+      const k = sbKit(els, e.surface, sbPalette(strip.theme, strip.colour), e.props.bodyColumns, 0)
+      const body: unknown[] = [
+        sbTitle(
+          k,
+          { icon: '◇', name: 'Idea Shelf', status: `${ideas.length} ${ideas.length === 1 ? 'idea' : 'ideas'} · ${folder}` },
+          { label: 'Settings', onPress: () => sbCommand(c => $.command.run(c), 'settings idea-shelf') },
+        ),
+      ]
+      if (e.surface !== 'mobile') {
+        const { Input } = els
+        body.push(sbCard(k, 'sb-add', <Input key="add" value="" placeholder="Park an idea" submitLabel="Add" onSubmit={(value: string) => add(value)} />))
+      }
+      if (ideas.length === 0) body.push(<Text key="sb-empty" color={k.pal.dim}>The shelf is empty.</Text>)
+      ideas.forEach((idea, index) => {
+        body.push(
+          sbCard(
+            k,
+            `sb-idea:${idea.id}`,
+            current?.id === idea.id
+              ? editor(idea, index)
+              : [
+                  sbSplit(k, `sb-text:${idea.id}`, <Text color={k.pal.text}>{idea.text}</Text>, <Text color={k.pal.dim}>{ageOf(now, idea.at)}</Text>),
+                  <Box key={`sb-btns:${idea.id}`} columnGap={1}>
+                    {sbButton(k, `send:${idea.id}`, 'Send', () => send(idea), true)}
+                    {sbButton(k, `edit:${idea.id}`, 'Edit', () => startEdit(idea))}
+                    {sbButton(k, `delete:${idea.id}`, '✕', () => remove(idea))}
+                  </Box>,
+                ],
+          ),
+        )
+      })
+      return sbFrame(k, strip, sbActions(c => $.command.run(c)), body)
     }
 
     return (

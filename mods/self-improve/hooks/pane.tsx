@@ -11,6 +11,7 @@ import { afterChange, cardStats, correctionRate, trend } from './core/skills'
 import { parseSoul, SECTION_ORDER, SECTION_TITLES } from './core/soul'
 import { LESSON_KINDS, runLine, type Lesson, type State } from './core/state'
 import { similarity } from './core/text'
+import { sbActions, sbButton, sbCard, sbCommand, sbFrame, sbKit, sbTitle, type SbPalette, type SbStrip } from './sidebar-kit'
 
 export type PaneActions = {
   set: (patch: Partial<PaneUi>) => Promise<unknown>
@@ -43,6 +44,8 @@ export type PaneData = {
   draftsDir: string
   hindsight: HindsightState | null
   actions: PaneActions
+  /** Set when the pane is drawn as the Sidebar's Self Improve tab. */
+  sb?: { strip: SbStrip; pal: SbPalette; columns: number; surface: string; run: (c: { command: string; args: string }) => Promise<unknown> }
 }
 
 // The surface's element table; Input and Select are drawn only where the surface has them (not on mobile).
@@ -91,6 +94,18 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
   const pendingLessons = state.lessons.filter(l => l.status === 'pending').length
   const pendingDrafts = state.drafts.filter(x => x.status === 'pending').length
   const flagged = Object.entries(state.skills).filter(([, c]) => c.flagged)
+
+  const k = d.sb ? sbKit(els, d.sb.surface, d.sb.pal, d.sb.columns, 0) : null
+
+  // Buttons and item cards take the sidebar's look when the pane is a tab there.
+  const btn = (key: string, label: string, onPress: () => void, primary = false) =>
+    k ? sbButton(k, key, label, onPress, primary) : <Button key={key} label={label} variant={primary ? 'primary' : undefined} onPress={onPress} />
+  const card = (key: string, children: unknown) =>
+    k ? sbCard(k, key, children) : (
+      <Box key={key} flexDirection="column" marginTop={1}>
+        {children}
+      </Box>
+    )
 
   const input = (key: string, value: string, label: string, onSubmit: (v: string) => void) => {
     if (!hasInput) return <Text dimColor>Editing needs the terminal or the desktop app.</Text>
@@ -146,31 +161,31 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
           const editKey = `lesson:${l.id}`
           const similar = list.filter(o => o.id !== l.id && o.scope === l.scope && o.status === l.status && similarity(o.text, l.text) >= 0.4)
           return (
-            <Box key={`l${l.id}`} flexDirection="column" marginTop={1}>
-              <Text>
+            card(`l${l.id}`, [
+              <Text key="text">
                 <Text bold>#{l.id}</Text> <Text color="cyan">[{l.kind}]</Text> {l.text}
-              </Text>
-              <Text dimColor>
+              </Text>,
+              <Text key="meta" dimColor>
                 {l.scope === 'user' ? 'about you' : l.folder ? 'this project' : `project ${l.project}`} · {storeOf(l)}
                 {l.reviewReason ? ` · waits: ${l.reviewReason}` : ''}
                 {l.files.length ? ` · ${cut(l.files.join(', '), 60)}` : ''} · seen {l.hits}x
-              </Text>
-              {ui.editing?.key === editKey ? (
-                <Box flexDirection="column">
+              </Text>,
+              ui.editing?.key === editKey ? (
+                <Box key="editing" flexDirection="column">
                   {input(`edit-${l.id}`, ui.editing.value, `Lesson ${l.id}`, v => void a.editLesson(l.id, v))}
-                  <Button key={`edit-cancel-${l.id}`} label="Cancel" onPress={() => void a.set({ editing: null })} />
+                  {btn(`edit-cancel-${l.id}`, 'Cancel', () => void a.set({ editing: null }))}
                 </Box>
               ) : (
-                <Box flexWrap="wrap">
-                  {l.status === 'pending' && <Button key={`approve-${l.id}`} label="Approve" variant="primary" onPress={() => void a.approveLesson(l.id)} />}
-                  {l.status === 'pending' && <Button key={`reject-${l.id}`} label="Reject" onPress={() => void a.rejectLesson(l.id)} />}
-                  <Button key={`edit-${l.id}`} label="Edit" onPress={() => void a.set({ editing: { key: editKey, value: l.text } })} />
-                  <Button key={`move-${l.id}`} label={l.scope === 'user' ? 'Move to project' : 'Move to soul.md'} onPress={() => void a.moveLesson(l.id, l.scope === 'user' ? 'project' : 'user')} />
-                  {similar.length > 0 && <Button key={`merge-${l.id}`} label={`Merge ${similar.length} similar`} onPress={() => void a.mergeLessons(l.id, similar.map(o => o.id))} />}
-                  <Button key={`delete-${l.id}`} label="Delete" onPress={() => void a.set({ confirm: { action: 'delete-lessons', ids: [l.id], label: `Delete lesson #${l.id} (1 lesson)?` } })} />
+                <Box key="actions" flexWrap="wrap">
+                  {l.status === 'pending' && btn(`approve-${l.id}`, 'Approve', () => void a.approveLesson(l.id), true)}
+                  {l.status === 'pending' && btn(`reject-${l.id}`, 'Reject', () => void a.rejectLesson(l.id))}
+                  {btn(`edit-${l.id}`, 'Edit', () => void a.set({ editing: { key: editKey, value: l.text } }))}
+                  {btn(`move-${l.id}`, l.scope === 'user' ? 'Move to project' : 'Move to soul.md', () => void a.moveLesson(l.id, l.scope === 'user' ? 'project' : 'user'))}
+                  {similar.length > 0 && btn(`merge-${l.id}`, `Merge ${similar.length} similar`, () => void a.mergeLessons(l.id, similar.map(o => o.id)))}
+                  {btn(`delete-${l.id}`, 'Delete', () => void a.set({ confirm: { action: 'delete-lessons', ids: [l.id], label: `Delete lesson #${l.id} (1 lesson)?` } }))}
                 </Box>
-              )}
-            </Box>
+              ),
+            ])
           )
         })}
         {list.length > 30 && <Text dimColor>+{list.length - 30} more; narrow the filter.</Text>}
@@ -184,22 +199,22 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
       <Box flexDirection="column">
         <Text dimColor>Edit a draft in its file under {d.draftsDir}, then press Reload. Approve installs it.</Text>
         {list.length === 0 && <Text dimColor>No skill drafts yet. Procedures seen in two or more sessions, and corrections that name a skill, become drafts.</Text>}
-        {list.map(x => (
-          <Box key={`d${x.id}`} flexDirection="column" marginTop={1}>
-            <Text>
+        {list.map(x =>
+          card(`d${x.id}`, [
+            <Text key="name">
               <Text bold>{x.name}</Text> <Text dimColor>({x.kind}{x.isOverride ? ', local override of a plugin skill' : ''}, {x.status})</Text>
-            </Text>
-            <Text color={x.validation ? 'yellow' : 'green'}>{x.validation ? `Fails validation: ${x.validation}` : 'Passes validation'}</Text>
-            <Code key={`diff-${x.id}`} source={unifiedDiff(x.previousBody ?? (x.kind === 'new' ? '' : x.previousBody ?? ''), x.body)} format="diff" />
-            {x.status === 'pending' && (
-              <Box>
-                <Button key={`dapprove-${x.id}`} label="Approve" variant="primary" onPress={() => void a.approveDraft(x.id)} />
-                <Button key={`dreload-${x.id}`} label="Reload (after edit)" onPress={() => void a.reloadDraft(x.id)} />
-                <Button key={`dreject-${x.id}`} label="Reject" onPress={() => void a.rejectDraft(x.id)} />
+            </Text>,
+            <Text key="valid" color={x.validation ? 'yellow' : 'green'}>{x.validation ? `Fails validation: ${x.validation}` : 'Passes validation'}</Text>,
+            <Code key={`diff-${x.id}`} source={unifiedDiff(x.previousBody ?? (x.kind === 'new' ? '' : x.previousBody ?? ''), x.body)} format="diff" />,
+            x.status === 'pending' && (
+              <Box key="actions">
+                {btn(`dapprove-${x.id}`, 'Approve', () => void a.approveDraft(x.id), true)}
+                {btn(`dreload-${x.id}`, 'Reload (after edit)', () => void a.reloadDraft(x.id))}
+                {btn(`dreject-${x.id}`, 'Reject', () => void a.rejectDraft(x.id))}
               </Box>
-            )}
-          </Box>
-        ))}
+            ),
+          ]),
+        )}
       </Box>
     )
   }
@@ -329,20 +344,47 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
 
   const body = { lessons: lessonsTab, drafts: draftsTab, skills: skillsTab, changes: changesTab, runs: runsTab, soul: soulTab }[ui.tab]
 
+  const tabLabel = (t: (typeof TABS)[number]) =>
+    t.id === 'lessons' && pendingLessons ? `${t.label} (${pendingLessons})` : t.id === 'drafts' && pendingDrafts ? `${t.label} (${pendingDrafts})` : t.id === 'skills' && flagged.length ? `${t.label} (!)` : t.id === 'soul' && state.soul.pending.length ? `${t.label} (${state.soul.pending.length})` : t.label
+  const modeLine = <Text dimColor>Mode: {d.settings.mode}{d.settings.mode === 'suggest' ? ' (everything waits for you)' : ''} · learn model: {d.settings.learnModel}</Text>
+
+  if (k && d.sb) {
+    const { pal } = k
+    const waiting = pendingLessons + pendingDrafts
+    const chip = (key: string, label: string, isActive: boolean, onPress: () => void) => (
+      <Button key={key} plain onPress={onPress}>
+        <Text backgroundColor={isActive ? pal.pillBg : undefined} color={isActive ? pal.pillFg : pal.dim} bold={isActive}>{` ${label} `}</Text>
+      </Button>
+    )
+    return sbFrame(k, d.sb.strip, sbActions(d.sb.run), [
+      sbTitle(k, { icon: '✺', name: 'Self Improve', status: waiting ? `${waiting} to review` : `mode ${d.settings.mode}` }, { label: 'Settings', onPress: () => sbCommand(d.sb!.run, 'settings self-improve') }),
+      <Box key="tabs" flexWrap="wrap">
+        {TABS.map(t => chip(`tab-${t.id}`, tabLabel(t), ui.tab === t.id, () => void a.set({ tab: t.id, editing: null, confirm: null })))}
+        {chip('test', 'Test', false, () => void a.test())}
+      </Box>,
+      <Box key="mode">{modeLine}</Box>,
+      ui.message ? <Text key="message" color="cyan">{ui.message}</Text> : null,
+      confirmRow(),
+      <Box key="body" flexDirection="column">
+        {body()}
+      </Box>,
+    ])
+  }
+
   return (
     <Box flexDirection="column">
       <Box flexWrap="wrap">
         {TABS.map(t => (
           <Button
             key={`tab-${t.id}`}
-            label={t.id === 'lessons' && pendingLessons ? `${t.label} (${pendingLessons})` : t.id === 'drafts' && pendingDrafts ? `${t.label} (${pendingDrafts})` : t.id === 'skills' && flagged.length ? `${t.label} (!)` : t.id === 'soul' && state.soul.pending.length ? `${t.label} (${state.soul.pending.length})` : t.label}
+            label={tabLabel(t)}
             variant={ui.tab === t.id ? 'primary' : undefined}
             onPress={() => void a.set({ tab: t.id, editing: null, confirm: null })}
           />
         ))}
         <Button key="test" label="Test" onPress={() => void a.test()} />
       </Box>
-      <Text dimColor>Mode: {d.settings.mode}{d.settings.mode === 'suggest' ? ' (everything waits for you)' : ''} · learn model: {d.settings.learnModel}</Text>
+      {modeLine}
       {ui.message ? <Text color="cyan">{ui.message}</Text> : null}
       {confirmRow()}
       {body()}

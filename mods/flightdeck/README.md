@@ -41,6 +41,10 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 - In a fullscreen terminal it docks beside the transcript from 110 columns wide; otherwise it sits above the prompt.
 - If you leave it open, it opens again in your next session.
 
+## In the Sidebar
+
+With the Sidebar mod installed, Flightdeck can be one of its tabs. It then draws under the Sidebar's tab strip, with its name and a Settings button in place of its own header, and closing it tells the Sidebar. Without the Sidebar it looks as it always did.
+
 ## What it shows
 
 - **Main session:** the model and its context size, effort, whether Claude is working, a context meter with the session's cost, your 5-hour and 7-day usage meters (when your plan reports them), how long the turn has run and how many requests it made.

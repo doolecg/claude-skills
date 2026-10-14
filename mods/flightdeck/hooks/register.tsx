@@ -17,12 +17,12 @@ import {
   wantOpen,
 } from './logic'
 import { drawPane } from './pane'
+import { SIDEBAR_COLUMNS, isSidebarTab, type SbStrip } from './sidebar-kit'
 
 type Dollar = EngineInterface
 
 const PANE = 'flightdeck'
 const TITLE = 'Flightdeck'
-const COLUMNS = 60
 
 const isOpenAtom = atom({ plugin: 'flightdeck', key: 'isOpen' } as const, false)
 const mainAtom = atom({ plugin: 'flightdeck', key: 'main' } as const, EMPTY_MAIN)
@@ -34,6 +34,15 @@ const modesAtom = atom({ plugin: 'flightdeck', key: 'modes' } as const, {})
 
 let ticker: Timer | undefined
 let frames = 0
+
+/** The Sidebar's strip; undefined when that mod is not installed. */
+async function stripOf($: Dollar): Promise<SbStrip | undefined> {
+  try {
+    return (await $.state.get({ plugin: 'sidebar', key: 'strip' })).value
+  } catch {
+    return undefined
+  }
+}
 
 /** A failure in the sidebar's own bookkeeping never reaches the session. */
 async function quiet(fn: () => Promise<unknown>): Promise<void> {
@@ -109,7 +118,7 @@ async function setOpen($: Dollar, isOn: boolean): Promise<void> {
   await syncTicker($)
 }
 
-const openPane = ($: Dollar) => $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS })
+const openPane = ($: Dollar) => $.ui.open({ id: PANE, title: TITLE, columns: SIDEBAR_COLUMNS })
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -174,7 +183,13 @@ export const register: Register = on => {
   // The person's close mark or key, or an unload: the mode reads off.
   on('ui.close', async ($, e, next) => {
     const ran = await next(e)
-    if (e.id === PANE && e.origin.kind !== 'unload') await quiet(() => setOpen($, false))
+    if (e.id === PANE && e.origin.kind !== 'unload') {
+      await quiet(() => setOpen($, false))
+      if (e.origin.kind === 'person') {
+        const strip = await stripOf($)
+        if (strip && isSidebarTab(strip, PANE)) await quiet(() => $.command.run({ command: 'sidebar', args: `closed ${PANE}` }))
+      }
+    }
     return ran
   })
 
@@ -251,8 +266,13 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e) as unknown as Record<string, any>
-    return drawPane(els, e.surface === 'terminal', {
-      pal: paletteFor(await read($, themeAtom)),
+    const theme = await read($, themeAtom)
+    const strip = await stripOf($)
+    return drawPane(els, e.surface, {
+      pal: paletteFor(theme),
+      theme,
+      strip: isSidebarTab(strip, PANE) ? strip : undefined,
+      run: c => $.command.run(c),
       main: await read($, mainAtom),
       usage: await read($, usageAtom),
       agents: await read($, agentsAtom),

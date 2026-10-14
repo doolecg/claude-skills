@@ -78,10 +78,6 @@ export const LIGHT: Palette = {
 export const paletteFor = (theme: unknown): Palette =>
   typeof theme === 'string' && theme.startsWith('light') ? LIGHT : DARK
 
-/** A usage meter's gradient: warm, turning amber then red as it fills up. */
-export const levelStops = (pct: number, pal: Palette): string[] =>
-  pct >= 80 ? [pal.warn, pal.bad] : pct >= 60 ? [pal.warmFrom, pal.warn] : [pal.warmFrom, pal.warmTo]
-
 // ---- models and prices ---------------------------------------------------------
 
 const FAMILIES = ['opus', 'sonnet', 'haiku', 'fable', 'mythos'] as const

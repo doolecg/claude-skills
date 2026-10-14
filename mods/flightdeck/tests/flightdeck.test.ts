@@ -19,7 +19,7 @@ import {
   wantOpen,
   windowOf,
 } from '../hooks/logic'
-import { THIN_FULL, pixelMeter, pixelSweep, rasterCells } from '../hooks/pixels'
+import { DENSE_FULL, sbMeter, sbRasterCells, sbSweep } from '../hooks/sidebar-kit'
 
 const PLUGIN = 'flightdeck'
 const T0 = 1_800_000_000_000
@@ -109,11 +109,11 @@ describe('logic', () => {
 
   test('pixel meters and critters have the size they are drawn at', () => {
     const look = { stops: ['#E8A06A', '#D9667F'], track: '#3A3531', tint: '#FFF6EC', tick: 3 }
-    expect(pixelMeter(20, 0.4, look)).toHaveLength(20)
-    expect(pixelSweep(20, look)).toHaveLength(20)
-    expect(pixelMeter(8, 1, look).every(p => p.ch === THIN_FULL)).toBe(true)
+    expect(sbMeter(20, 0.4, look)).toHaveLength(20)
+    expect(sbSweep(20, look)).toHaveLength(20)
+    expect(sbMeter(8, 1, look).every(p => p.ch === DENSE_FULL)).toBe(true)
     // Three 32-bit words per cell, base64: 12 bytes is 16 characters.
-    expect(rasterCells(pixelMeter(5, 0.5, look), '#24201D')).toHaveLength(5 * 16)
+    expect(sbRasterCells(sbMeter(5, 0.5, look), '#24201D')).toHaveLength(5 * 16)
     const r = rasterOf(critterPixels('agent-1'))
     expect([r.columns, r.rows]).toEqual([12, 6])
     expect(critterOf('agent-1')).toEqual(critterOf('agent-1'))
@@ -196,7 +196,7 @@ describe('wiring', () => {
     expect(w.modes.at(-1)).toEqual({ flightdeck: { label: 'Flightdeck', isOn: false } })
     const opened = await $.command.run(command())
     expect(opened.text).toBe('Flightdeck opened.')
-    expect(w.opened[0]).toMatchObject({ id: 'flightdeck', title: 'Flightdeck', columns: 60 })
+    expect(w.opened[0]).toMatchObject({ id: 'flightdeck', title: 'Flightdeck', columns: 56 })
     expect(w.modes.at(-1)).toEqual({ flightdeck: { label: 'Flightdeck', isOn: true } })
     const closed = await $.command.run(command())
     expect(closed.text).toBe('Flightdeck closed.')

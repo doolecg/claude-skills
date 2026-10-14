@@ -8,7 +8,6 @@ import {
   fmtUsd,
   groupAgents,
   isFinished,
-  levelStops,
   limitLabel,
   modelName,
   summaryOf,
@@ -17,7 +16,22 @@ import {
   windowOf,
   type Palette,
 } from './logic'
-import { pixelMeter, pixelRuns, pixelSweep, rasterCells, type Pixel } from './pixels'
+import {
+  sbBar,
+  sbCommand,
+  sbFrame,
+  sbGood,
+  sbKit,
+  sbLevel,
+  sbMeter,
+  sbSweep,
+  sbTitle,
+  sbWarm,
+  sbActions,
+  sbPalette,
+  type SbLook,
+  type SbStrip,
+} from './sidebar-kit'
 
 export type PaneData = {
   pal: Palette
@@ -27,31 +41,27 @@ export type PaneData = {
   tick: number
   now: number
   columns: number
+  /** The Sidebar's strip when this pane is its open tab; the pane then draws as a tab. */
+  strip?: SbStrip
+  theme: unknown
+  run: (c: { command: string; args: string }) => Promise<unknown>
 }
 
 const CRITTER = 12
 
 /** The sidebar: a card for the main session, the subagents' totals, then a card per subagent. */
-export function drawPane(els: Record<string, any>, isTerminal: boolean, d: PaneData) {
+export function drawPane(els: Record<string, any>, surface: string, d: PaneData) {
   const { Box, Text } = els
+  const isTerminal = surface === 'terminal'
   const Raster = isTerminal && 'Raster' in els ? els.Raster : undefined
   const Svg = !isTerminal && 'Svg' in els ? els.Svg : undefined
-  const { pal, main, usage, tick, now } = d
+  const { main, usage, tick, now, strip } = d
+  const k = sbKit(els, surface, sbPalette(strip?.theme ?? d.theme, strip?.colour), d.columns, tick)
+  const pal = strip ? k.pal : d.pal
   const inner = Math.max(16, d.columns - 4)
   const groups = groupAgents(d.agents)
 
-  // The terminal draws a meter as one Raster of braille pixels on the card's colour; other surfaces as coloured text.
-  const meter = (key: string, pixels: Pixel[]) =>
-    pixels.length === 0 ? null : Raster ? (
-      <Raster key={key} columns={pixels.length} rows={1} cells={rasterCells(pixels, pal.panel)} />
-    ) : (
-      pixelRuns(pixels).map((r, i) => (
-        <Text key={`${key}-${i}`} color={r.color}>
-          {r.text}
-        </Text>
-      ))
-    )
-  const look = (stops: string[], seed = 0) => ({ stops, track: pal.track, tint: pal.tint, tick, seed })
+  const meter = (key: string, pixels: ReturnType<typeof sbMeter>) => sbBar(k, key, pixels, pal.panel)
 
   const card = (key: string, children: unknown, direction: 'row' | 'column' = 'column') => (
     <Box
@@ -84,21 +94,27 @@ export function drawPane(els: Record<string, any>, isTerminal: boolean, d: PaneD
 
   // ---- header ----
   const working = groups.working.length
-  const header = split(
-    'header',
-    <Text wrap="truncate-end">
-      <Text color={pal.accent} bold>
-        ✈ FLIGHTDECK
-      </Text>
-      <Text color={pal.dim}>{working > 0 ? ` · ${working} agent${working === 1 ? '' : 's'} working` : ' · no agents working'}</Text>
-    </Text>,
-    <Text>
-      <Text color={pal.accent}>■</Text>
-      <Text color={pal.dim}> main </Text>
-      <Text color={pal.info}>■</Text>
-      <Text color={pal.dim}> agents</Text>
-    </Text>,
-  )
+  const header = strip
+    ? sbTitle(
+        k,
+        { icon: '✈', name: 'Flightdeck', status: working > 0 ? `${working} agent${working === 1 ? '' : 's'} working` : 'no agents working' },
+        { label: 'Settings', onPress: () => sbCommand(d.run, 'settings flightdeck') },
+      )
+    : split(
+        'header',
+        <Text wrap="truncate-end">
+          <Text color={pal.accent} bold>
+            ✈ FLIGHTDECK
+          </Text>
+          <Text color={pal.dim}>{working > 0 ? ` · ${working} agent${working === 1 ? '' : 's'} working` : ' · no agents working'}</Text>
+        </Text>,
+        <Text>
+          <Text color={pal.accent}>■</Text>
+          <Text color={pal.dim}> main </Text>
+          <Text color={pal.info}>■</Text>
+          <Text color={pal.dim}> agents</Text>
+        </Text>,
+      )
 
   // ---- main session ----
   const model = modelName(main.model) || 'Main session'
@@ -126,7 +142,7 @@ export function drawPane(els: Record<string, any>, isTerminal: boolean, d: PaneD
   const ctxRow = (
     <Box key="main-ctx">
       <Text color={pal.dim}>ctx </Text>
-      {meter('ctx', pixelMeter(ctxBar, pct / 100, look(levelStops(pct, pal), 1)))}
+      {meter('ctx', sbMeter(ctxBar, pct / 100, sbLevel(k, pct, 1)))}
       <Text color={pal.text}>{` ${pctText}`}</Text>
       {cost ? <Text color={pal.dim}>{' · '}</Text> : null}
       {cost ? <Text color={pal.text}>{cost}</Text> : null}
@@ -147,7 +163,7 @@ export function drawPane(els: Record<string, any>, isTerminal: boolean, d: PaneD
             <Text key={`l${i}`} color={pal.dim}>
               {label}
             </Text>,
-            meter(`lim${i}`, pixelMeter(bar, l.pct / 100, look(levelStops(l.pct, pal), 2 + i))),
+            meter(`lim${i}`, sbMeter(bar, l.pct / 100, sbLevel(k, l.pct, 2 + i))),
             <Text key={`v${i}`} color={l.pct >= 80 ? pal.bad : l.pct >= 60 ? pal.warn : pal.text}>
               {value}
             </Text>,
@@ -193,14 +209,15 @@ export function drawPane(els: Record<string, any>, isTerminal: boolean, d: PaneD
           : a.status === 'failed'
             ? ['✗', pal.bad]
             : ['■', pal.dim]
+  const flat = (stops: string[], seed = 0): SbLook => ({ stops, track: pal.track, tint: pal.tint, tick, seed })
   const agentBar = (a: FdAgent, i: number, ctx: number | undefined) =>
     a.status === 'running'
-      ? pixelSweep(textWidth, look([pal.warmFrom, pal.warmTo], 10 + i))
+      ? sbSweep(textWidth, sbWarm(k, 10 + i))
       : a.status === 'done'
-        ? pixelMeter(textWidth, 1, look([pal.goodFrom, pal.goodTo]))
+        ? sbMeter(textWidth, 1, sbGood(k))
         : a.status === 'failed'
-          ? pixelMeter(textWidth, 1, look([pal.bad, pal.bad]))
-          : pixelMeter(textWidth, (ctx ?? 0) / 100, look(a.status === 'waiting' ? [pal.warn, pal.warn] : [pal.sep, pal.dim], 10 + i))
+          ? sbMeter(textWidth, 1, flat([pal.bad, pal.bad]))
+          : sbMeter(textWidth, (ctx ?? 0) / 100, flat(a.status === 'waiting' ? [pal.warn, pal.warn] : [pal.sep, pal.dim], 10 + i))
 
   const agentCard = (a: FdAgent, i: number) => {
     const c = critterOf(a.id)
@@ -301,6 +318,7 @@ export function drawPane(els: Record<string, any>, isTerminal: boolean, d: PaneD
     }
   }
 
+  if (strip) return sbFrame(k, strip, sbActions(d.run), parts)
   return (
     <Box flexDirection="column" width="100%">
       {parts}

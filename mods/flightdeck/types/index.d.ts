@@ -53,5 +53,15 @@ declare module 'claude-code' {
       theme: string
       modes: Record<string, FdMode>
     }
+    /** The Sidebar mod's strip, as it publishes it (the same shape as its SbStrip). */
+    'sidebar': {
+      strip: {
+        isOn: boolean
+        active: string
+        tabs: { id: string; icon: string; name: string; badge: number }[]
+        theme: string
+        colour: string
+      }
+    }
   }
 }

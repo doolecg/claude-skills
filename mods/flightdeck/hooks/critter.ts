@@ -2,7 +2,27 @@
 // a tint and a nickname picked by an FNV-1a hash of the agent id, so one agent always
 // looks the same.
 
-import { base64, colourWord } from './pixels'
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+
+function base64(bytes: Uint8Array): string {
+  let out = ''
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i]!
+    const b = bytes[i + 1]
+    const c = bytes[i + 2]
+    const n = (a << 16) | ((b ?? 0) << 8) | (c ?? 0)
+    out += B64[(n >> 18) & 63]! + B64[(n >> 12) & 63]!
+    out += b === undefined ? '=' : B64[(n >> 6) & 63]!
+    out += c === undefined ? '=' : B64[n & 63]!
+  }
+  return out
+}
+
+/** The Raster word for the terminal's own colour. */
+const DEFAULT_COLOUR = 0x01000000
+
+/** A `#RRGGBB` as a Raster colour word; the terminal's own colour for anything else. */
+const colourWord = (c: string | undefined): number => (c && /^#[0-9a-fA-F]{6}$/.test(c) ? parseInt(c.slice(1), 16) : DEFAULT_COLOUR)
 
 export const HATS = ['cap', 'hardhat', 'beanie', 'chef', 'headphones', 'flag', 'bow', 'crown'] as const
 export const TINTS = ['coral', 'peach', 'butter'] as const

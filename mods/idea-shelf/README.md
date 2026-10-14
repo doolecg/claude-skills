@@ -14,6 +14,9 @@ Commands:
 - Edit shows the idea in a text field with Save and Cancel. Enter also saves. Save with empty text is refused.
 - Delete removes the idea.
 
+In the Sidebar:
+- With the Sidebar mod installed, `/ideas` opens as the Idea Shelf tab: a field to add an idea, and each idea with its age and Send, Edit and ✕ buttons. `/ideas close` closes it. The tab's badge shows how many ideas this project has.
+
 Limits:
 - Ideas are kept per project folder, matched case-insensitively, and a subfolder has its own shelf.
 - Ideas are stored in the plugin store, which is shared by all sessions on this machine. The pane refreshes when this session draws it.

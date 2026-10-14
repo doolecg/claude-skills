@@ -376,15 +376,14 @@ export const gradientText = (text: string, stops: readonly string[]): Run[] => {
 /** One terminal cell of a pixel meter: a braille glyph and its colour. */
 export type Pixel = { ch: string; color: string }
 
-// A meter lights only the middle two dot rows of each braille cell (2 dots across, 2 down),
-// so it reads as a thin line of pixels with a gap above and below it.
-const THIN_BITS = [
-  [0x02, 0x04],
-  [0x10, 0x20],
+// A meter lights all four dot rows of each braille cell (2 dots across, 4 down), a dense dot matrix.
+const DENSE_BITS = [
+  [0x01, 0x02, 0x04, 0x40],
+  [0x08, 0x10, 0x20, 0x80],
 ] as const
 
 export const BLANK = '⠀'
-export const THIN_FULL = String.fromCharCode(0x2800 + 0x02 + 0x04 + 0x10 + 0x20)
+export const DENSE_FULL = String.fromCharCode(0x28ff)
 
 /** A steady pseudo-random 0..1 for a pixel on a frame, so pixels twinkle without real randomness. */
 export function noise(i: number, tick: number, seed = 0): number {
@@ -400,53 +399,48 @@ const frame = (tick: number) => Math.floor(tick / 2)
 export type MeterLook = { stops: readonly string[]; track: string; tint: string; tick: number; seed?: number }
 
 /**
- * A thin band of pixels `width` cells wide, lit between `from` and `to` (fractions 0..1).
- * Each pixel has its own random threshold, so the lit part rises through scattered pixels
- * rather than a straight edge; the newest pixels glow toward `tint`, a few lit ones blink
- * off and on, and the unlit track keeps a sparse, shimmering scatter of dim pixels.
+ * A dot-matrix band `width` cells wide, lit between `from` and `to` (fractions 0..1). Each cell is a
+ * braille glyph: 2 dots across, 4 down. The lit part fades in from its tail: dim and sparse there,
+ * brighter and fuller toward the front, which ends in a solid, bright head. A few dots blink each
+ * frame, and the empty track keeps a sparse scatter of faint specks.
  */
 function pixelBand(width: number, from: number, to: number, look: MeterLook): Pixel[] {
-  // A finished meter is solid: every pixel lit, steady colour, no twinkle.
   if (from <= 0 && to >= 1) {
-    return Array.from({ length: width }, (_, i) => ({ ch: THIN_FULL, color: along(look.stops, width <= 1 ? 0 : i / (width - 1)) }))
+    return Array.from({ length: width }, (_, i) => ({ ch: DENSE_FULL, color: along(look.stops, width <= 1 ? 0 : i / (width - 1)) }))
   }
-  const across = width * 2
-  const spread = Math.min(0.3, 5 / across)
-  const edge = Math.min(0.15, 2.5 / across)
   const seed = look.seed ?? 0
   const t = frame(look.tick)
+  const start = Math.max(0, from)
+  const span = Math.max(1e-6, Math.min(1, to) - start)
+  const head = Math.min(width - 1, Math.floor(Math.min(1, to) * width - 1e-6))
   const out: Pixel[] = []
   for (let i = 0; i < width; i++) {
-    let lit = 0
-    let trackBits = 0
-    let filled = 0
-    let glowing = 0
-    for (let dx = 0; dx < 2; dx++) {
-      for (let dy = 0; dy < 2; dy++) {
-        const x = i * 2 + dx
-        const bit = THIN_BITS[dx]![dy]!
-        const at = (x + 0.5) / across + (noise(x * 13 + dy * 7, 0, seed + 11) - 0.5) * spread
-        const isOn = (to >= 1 || at < to) && (from <= 0 || at >= from)
-        if (isOn) {
-          filled++
-          if (to < 1 && to - at < edge) {
-            glowing++
-            lit |= bit
-          } else if (noise(x * 5 + dy * 3, t, seed + 3) > 0.1) {
-            lit |= bit
-          }
-        } else if (noise(x * 3 + dy * 11, Math.floor(t / 2), seed + 5) < 0.2) {
-          trackBits |= bit
+    const mid = (i + 0.5) / width
+    const isLit = mid >= start && mid < to
+    let bits = 0
+    if (to > 0 && i === head && to < 1) {
+      out.push({ ch: DENSE_FULL, color: mix(along(look.stops, 1), look.tint, 0.7) })
+      continue
+    }
+    if (isLit) {
+      // 0 at the tail, 1 just behind the head.
+      const b = Math.max(0, Math.min(1, (mid - start) / span))
+      const fill = 0.35 + 0.62 * b
+      for (let dx = 0; dx < 2; dx++) {
+        for (let dy = 0; dy < 4; dy++) {
+          if (noise(i * 8 + dx * 4 + dy, t, seed + 3) < fill) bits |= DENSE_BITS[dx]![dy]!
         }
       }
-    }
-    const base = along(look.stops, width <= 1 ? 0 : i / (width - 1))
-    if (glowing > 0) {
-      out.push({ ch: String.fromCharCode(0x2800 + lit), color: mix(base, look.tint, 0.55) })
-    } else if (filled > 0) {
-      out.push({ ch: String.fromCharCode(0x2800 + lit), color: mix(base, look.tint, 0.03 + noise(i, t, seed) * 0.22) })
+      const base = along(look.stops, width <= 1 ? 0 : i / (width - 1))
+      const shade = mix(look.track, base, 0.35 + 0.65 * b)
+      out.push({ ch: String.fromCharCode(0x2800 + bits), color: mix(shade, look.tint, b * b * 0.35 + noise(i, t, seed) * 0.08) })
     } else {
-      out.push({ ch: String.fromCharCode(0x2800 + trackBits), color: mix(look.track, look.tint, 0.12 + noise(i, t, seed + 7) * 0.12) })
+      for (let dx = 0; dx < 2; dx++) {
+        for (let dy = 0; dy < 4; dy++) {
+          if (noise(i * 8 + dx * 4 + dy, Math.floor(t / 2), seed + 5) < 0.14) bits |= DENSE_BITS[dx]![dy]!
+        }
+      }
+      out.push({ ch: String.fromCharCode(0x2800 + bits), color: mix(look.track, look.tint, 0.1 + noise(i, t, seed + 7) * 0.14) })
     }
   }
   return out
