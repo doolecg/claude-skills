@@ -1,6 +1,6 @@
-# Adds the dooles-tools marketplace to Claude Code and installs its plugins.
+# Adds the dooles-tools marketplace to Claude Code and installs its mods.
 #   .\install.ps1                          everything
-#   .\install.ps1 blockdesigner,minecraft-modding   just those
+#   .\install.ps1 sidebar,bottom-bar             just those
 # Safe to run again: it refreshes the marketplace and updates what's installed.
 param([string[]] $Plugins)
 
@@ -13,7 +13,6 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# The repo is private, so git on this PC must be signed in to GitHub (Git Credential Manager does this).
 $known = claude plugin marketplace list 2>$null | Out-String
 if ($known -match [regex]::Escape($Market)) {
     Write-Host "Updating marketplace $Market..."

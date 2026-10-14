@@ -1,96 +1,12 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "dooles-tools",
-  "description": "doolecg's Claude Code plugins: BlockDesigner, Claude Agent Viewer and Operant releases, Minecraft modding, and the Bottom Bar, Clean View, Flightdeck, Prompt Enhancer, Self Improve, Idea Shelf, Sidebar, Context and Rule Guard mods.",
+  "description": "doolecg's Claude Code mods: Sidebar, Flightdeck, Bottom Bar, Clean View, Self Improve, Prompt Enhancer, Idea Shelf, Context and Rule Guard. The skills are in doolecg/Dooles_Skills.",
   "owner": {
     "name": "doolecg",
     "email": "doolecg@gmail.com"
   },
   "plugins": [
-    {
-      "name": "blockdesigner",
-      "description": "Release BlockDesigner and its plugins, and scaffold new plugin repos (blockdesigner-release, blockdesigner-plugin-release, blockdesigner-plugin-new).",
-      "category": "development",
-      "source": "./plugins/blockdesigner"
-    },
-    {
-      "name": "agent-viewer",
-      "description": "Release Claude Agent Viewer: version bump, RELEASE_NOTES.md, launch check, dev branch, tag, MSI build and release check.",
-      "category": "development",
-      "source": "./plugins/agent-viewer"
-    },
-    {
-      "name": "operant",
-      "description": "Operant control (tiles, workers, task board, memory) and releasing Operant: version bump, RELEASE_NOTES.md, launch check, dev branch, tag, MSI build and release check.",
-      "category": "development",
-      "source": "./plugins/operant"
-    },
-    {
-      "name": "voxel-icons",
-      "description": "Draw app icons, plugin logos and mod icons as isometric voxel art in the BlockDesigner house style, and write every size a project needs.",
-      "category": "design",
-      "source": "./plugins/voxel-icons"
-    },
-    {
-      "name": "minecraft-modding",
-      "description": "Fabric and NeoForge modding with version-matched APIs, and migrating mods from 1.21.x to 26.1 (from siredvin/minecraft-modding-skills, MIT).",
-      "category": "development",
-      "author": {
-        "name": "minecraft-modding-skills contributors"
-      },
-      "homepage": "https://github.com/siredvin/minecraft-modding-skills",
-      "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/siredvin/minecraft-modding-skills.git",
-        "path": "skills",
-        "ref": "main",
-        "sha": "b8e1133597d08eb41ac0d00d5d9555af8c1ba895"
-      },
-      "strict": false,
-      "skills": [
-        "./fabric-modding",
-        "./neoforge-modding",
-        "./minecraft-26-1-migration"
-      ]
-    },
-    {
-      "name": "minecraft-multiloader",
-      "description": "Architectury mods that share one codebase across NeoForge and Fabric, for Minecraft 26.x or 1.21.x (from jahrome907/minecraft-agent-skills, MIT).",
-      "category": "development",
-      "author": {
-        "name": "jahrome907"
-      },
-      "homepage": "https://github.com/jahrome907/minecraft-agent-skills",
-      "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/jahrome907/minecraft-agent-skills.git",
-        "path": ".agents/skills",
-        "ref": "main",
-        "sha": "dd57c5a97741cdc0eb5bb3a8f876581a4f09eeb0"
-      },
-      "strict": false,
-      "skills": [
-        "./minecraft-multiloader"
-      ]
-    },
-    {
-      "name": "minecraft-mod-dev",
-      "description": "General Minecraft mod development: mod APIs (JEI, AE2, Create), dev environments and version migration (from mcpmarket).",
-      "category": "development",
-      "source": "./plugins/minecraft-mod-dev"
-    },
-    {
-      "name": "design",
-      "description": "Critique a UI from a screenshot with a ranked fix list (before/after shots), and design screens from colour, type, spacing and layout fundamentals. For desktop apps, Minecraft mod GUIs and HTML pages.",
-      "category": "design",
-      "source": "./plugins/design"
-    },
-    {
-      "name": "core",
-      "description": "How I work, as skills: team work in Operant, the UI before/after flow, Minecraft test setup, desktop app baseline, general release flow and plain writing.",
-      "category": "productivity",
-      "source": "./plugins/core"
-    },
     {
       "name": "bottom-bar",
       "description": "A compact rounded bar at the bottom of the terminal (model, effort, context, 5-hour and 7-day usage, agents) with a Doole's Tools pill that holds the mods you pick and opens a toolbox.",

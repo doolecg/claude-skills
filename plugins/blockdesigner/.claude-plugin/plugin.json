@@ -1,8 +1,0 @@
-{
-  "name": "blockdesigner",
-  "description": "Release BlockDesigner and its plugins, and scaffold new plugin repos.",
-  "author": {
-    "name": "doolecg",
-    "email": "doolecg@gmail.com"
-  }
-}
