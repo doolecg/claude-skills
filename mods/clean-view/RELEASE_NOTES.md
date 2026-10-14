@@ -1,3 +1,10 @@
+# Clean View 1.6.1
+
+## Fixed
+- It now shows in the Claude desktop app. The app's own Claude Code refused its spacing, so nothing was drawn there.
+
+---
+
 # Clean View 1.6.0
 
 ## New

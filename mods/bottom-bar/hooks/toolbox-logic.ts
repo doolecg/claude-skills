@@ -22,6 +22,13 @@ export const pad = (text: string, width: number): string => text + ' '.repeat(Ma
 export const launchList = (all: readonly BarTool[], modes: Record<string, BarMode>): BarTool[] =>
   all.filter(c => isModCommand(c) && !modes[c.name])
 
+/** Quick Launch: the chosen commands first, in their order, then the rest of `launchList`. */
+export function quickLaunch(all: readonly BarTool[], chosen: readonly string[], modes: Record<string, BarMode>): BarTool[] {
+  const byName = new Map(all.map(c => [c.name, c]))
+  const picked = chosen.map(name => byName.get(name) ?? { name, description: '', plugin: '', source: 'plugin' })
+  return [...picked, ...launchList(all, modes).filter(c => !chosen.includes(c.name))]
+}
+
 /** A launcher's mark and its colour, taken in turn. */
 export const ICONS = ['✦', '◆', '★', '▦', '●', '▲'] as const
 export const iconColor = (i: number, pal: Palette): string =>

@@ -1,3 +1,19 @@
+# Bottom Bar 1.7.0
+
+## New
+- The context figure shows the tokens used as well as the percentage, like `5% · 50K/1M`.
+- In the desktop app the bar sits just above the prompt: Enhance Prompt, the context meter, 5h and 7d usage, agents, and Doole's Tools at the right end. The model and effort are left to the app's own footer.
+
+## Changed
+- The bar's only buttons are now other mods' segments (like Enhance Prompt) and Doole's Tools. The commands you pick go at the front of the toolbox's Quick Launch instead of being pills in the bar.
+- The toolbox's Launch section is now called Quick Launch.
+- In the desktop app the toolbox is one panel with Model, Effort, Mods and Quick Launch, instead of four separate cards.
+
+## Fixed
+- The bar and the toolbox never showed in the desktop app: the app's own Claude Code refused their spacing.
+
+---
+
 # Bottom Bar 1.6.0
 
 ## New

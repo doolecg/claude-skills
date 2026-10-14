@@ -157,3 +157,18 @@ test("published segments sit in their own box, which gives way before the bar's 
   expect((own as any)?.props?.flexShrink).toBe(1)
   expect(await bar.find({ key: 'pill' })).toBeDefined()
 })
+
+test('in the app the bar hosts a published segment as the first Button, before the figures, and pressing it runs it', { plugins: [PUB_MOD] }, async ($, on) => {
+  world(on)
+  await startSession($)
+  const bar = await $.ui.mount({ plugin: 'bottom-bar', surface: 'desktop', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10 } as any })
+  expect(await bar.find({ key: 'bottom-bar-segments' })).toBeDefined()
+  expect((await bar.find({ key: 'seg:pub-mod:main' }))?.text).toBe('Enhance Prompt')
+  const keys = JSON.stringify(await bar.drawn())
+  expect(keys.indexOf('seg:pub-mod:main')).toBeLessThan(keys.indexOf('"ctx"'))
+  expect(keys.indexOf('"ctx"')).toBeLessThan(keys.indexOf('"pill"'))
+
+  await bar.press({ key: 'seg:pub-mod:main' })
+  expect(await bar.find({ type: 'Text', text: 'Hindsight 6 · CodeGraph 3' })).toBeDefined()
+  expect((await bar.find({ key: 'seg:pub-mod:main:0' }))?.text).toBe('Undo')
+})

@@ -365,7 +365,7 @@ export function sbCard(k: SbKit, key: string, children: unknown, opts: { directi
   const direction = opts.direction ?? 'column'
   if (!k.isTerminal) {
     return (
-      <Box key={key} flexDirection={direction} gap="xs" borderStyle="round" borderColor={opts.border ?? k.pal.border} padding="sm" width="100%">
+      <Box key={key} flexDirection={direction} gap={1} borderStyle="round" borderColor={opts.border ?? k.pal.border} padding={1} width="100%">
         {children}
       </Box>
     )
@@ -390,7 +390,7 @@ export function sbSplit(k: SbKit, key: string, left: unknown, right?: unknown) {
   const { Box } = k.els
   if (!k.isTerminal) {
     return (
-      <Box key={key} width="100%" justifyContent="space-between" alignItems="center" gap="sm">
+      <Box key={key} width="100%" justifyContent="space-between" alignItems="center" gap={1}>
         <Box flexShrink={1}>{left}</Box>
         {right ? <Box flexShrink={0}>{right}</Box> : null}
       </Box>
@@ -416,7 +416,7 @@ export function sbSection(k: SbKit, key: string, text: string, width = k.columns
   const label = text.toUpperCase()
   if (!k.isTerminal) {
     return (
-      <Box key={key} marginTop="sm">
+      <Box key={key} marginTop={1}>
         <Text color={k.pal.dim} bold>
           {label}
         </Text>
@@ -537,12 +537,12 @@ export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
         <Text color={pal.accent} bold>
           ◆ DOOLE'S SIDEBAR
         </Text>,
-        <Box gap="xs">
+        <Box gap={1}>
           <Button key="sb-menu" label="⋯" variant={strip.active === 'sidebar' ? 'primary' : 'secondary'} onPress={a.onMenu} />
           <Button key="sb-close" label="✕" variant="secondary" onPress={a.onClose} />
         </Box>,
       ),
-      <Box key="sb-tabs" flexDirection="row" flexWrap="wrap" gap="xs">
+      <Box key="sb-tabs" flexDirection="row" flexWrap="wrap" gap={1}>
         {strip.tabs.map(t => {
           const isOpen = t.id === strip.active
           return (
@@ -683,13 +683,13 @@ export function sbFramedBar(k: SbKit, key: string, f: SbFramed) {
   if (!k.isTerminal) {
     const labels = (left: readonly SbSeg[], right: readonly SbSeg[], id: string) =>
       left.length + right.length === 0 ? null : (
-        <Box key={`${key}-${id}`} width="100%" justifyContent="space-between" gap="sm">
-          <Box gap="xs">{drawSegs(k, `${key}-${id}l`, left)}</Box>
-          <Box gap="xs">{drawSegs(k, `${key}-${id}r`, right)}</Box>
+        <Box key={`${key}-${id}`} width="100%" justifyContent="space-between" gap={1}>
+          <Box gap={1}>{drawSegs(k, `${key}-${id}l`, left)}</Box>
+          <Box gap={1}>{drawSegs(k, `${key}-${id}r`, right)}</Box>
         </Box>
       )
     return (
-      <Box key={key} flexDirection="column" gap="xs" borderStyle="round" borderColor={color} padding="sm" width="100%">
+      <Box key={key} flexDirection="column" gap={1} borderStyle="round" borderColor={color} padding={1} width="100%">
         {labels(f.top ?? [], f.topRight ?? [], 'top')}
         {sbSvgBar(k, `${key}-bar`, f.bar(cells), 240)}
         {labels(f.bottom ?? [], f.bottomRight ?? [], 'bot')}
@@ -782,7 +782,7 @@ export function sbFooter(k: SbKit, f: SbFooter) {
   if (!k.isTerminal) {
     const note = atLimit ? 'ask before more' : p.editedSince && p.count > 0 ? 'fix waiting' : ''
     return sbCard(k, 'sb-footer', [
-      <Box key="ft-sources" flexDirection="row" flexWrap="wrap" gap="md">
+      <Box key="ft-sources" flexDirection="row" flexWrap="wrap" gap={2}>
         <Text>
           <Text color={hs[0]}>{`${hs[1]} `}</Text>
           <Text color={f.hindsight === 'up' ? pal.text : pal.dim}>{f.hindsight === 'down' ? 'Hindsight down' : f.hindsight === 'off' ? 'Hindsight off' : 'Hindsight'}</Text>
@@ -806,7 +806,7 @@ export function sbFooter(k: SbKit, f: SbFooter) {
           ⎇ not a git repo
         </Text>
       ),
-      <Box key="ft-passes" flexDirection="row" flexWrap="wrap" gap="xs">
+      <Box key="ft-passes" flexDirection="row" flexWrap="wrap" gap={1}>
         <Text color={pal.dim} bold>
           PASSES
         </Text>
@@ -853,7 +853,7 @@ export function sbFrame(k: SbKit, strip: SbStrip, a: SbStripActions, body: unkno
   const { Box } = k.els
   if (!k.isTerminal) {
     return (
-      <Box flexDirection="column" gap="sm" width="100%">
+      <Box flexDirection="column" gap={1} width="100%">
         {sbStrip(k, strip, a)}
         {body}
         {strip.footer ? sbFooter(k, strip.footer) : null}

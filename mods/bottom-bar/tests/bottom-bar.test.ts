@@ -21,6 +21,7 @@ import {
   segmentOffset,
   segments,
   toolLabel,
+  usedLabel,
   windowLabel,
 } from '../hooks/bar-logic'
 import { toolboxWidth } from '../hooks/toolbox'
@@ -30,6 +31,7 @@ import {
   launchList,
   modLines,
   pickInstalls,
+  quickLaunch,
   spaced,
 } from '../hooks/toolbox-logic'
 
@@ -438,26 +440,27 @@ test('picker: choose opens the pane and pick:<name> toggles a command in the sto
   expect(seen.closed).toEqual([PICKER])
 })
 
-test('picker: the chosen commands become buttons in the bar and run when pressed', async ($, on) => {
+test('picker: the chosen commands lead Quick Launch, not the bar, and run when pressed', async ($, on) => {
   const seen = world(on)
 
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
   await bar.press({ key: 'tb-choose' })
   const pane = await mountPane($)
-  await pane.press({ key: 'pick:clean-view' })
   await pane.press({ key: 'pick:prompt-upgrade' })
 
-  // The tools row shows one button per chosen command, labelled as a title.
-  const tool = await bar.find({ key: 'tool:clean-view' })
-  expect(tool).toBeDefined()
-  expect(tool?.text).toContain('Clean View')
-  expect(await bar.find({ key: 'tool:prompt-upgrade' })).toBeDefined()
-  expect(await bar.find({ type: 'Text', text: 'Nothing in the pill yet' })).toBeUndefined()
+  // The bar has no buttons for them; the toolbox's Quick Launch lists the chosen one first.
+  expect(await bar.find({ key: 'tool:prompt-upgrade' })).toBeUndefined()
+  await bar.press({ key: 'pill' })
+  const launch = await bar.find({ key: 'tb-launch:prompt-upgrade' })
+  expect(launch?.text).toContain('Prompt Upgrade')
+  const text = textsOf(await bar.drawn()).join(' ')
+  expect(text).toContain('QUICK LAUNCH')
+  expect(text.indexOf('Prompt Upgrade')).toBeLessThan(text.indexOf('Clean View', text.indexOf('QUICK LAUNCH')))
 
-  // Pressing one runs the command and closes the row.
-  await bar.press({ key: 'tool:clean-view' })
-  expect(seen.ran).toEqual(['clean-view'])
+  // Pressing one runs the command and closes the toolbox.
+  await bar.press({ key: 'tb-launch:prompt-upgrade' })
+  expect(seen.ran).toEqual(['prompt-upgrade'])
   expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
 })
 
@@ -483,8 +486,9 @@ test('saved tools come back at session start', async ($, on) => {
   await startSession($)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
-  expect(await bar.find({ key: 'tool:clean-view' })).toBeDefined()
-  expect(await bar.find({ key: 'tool:prompt-upgrade' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-launch:clean-view' })).toBeDefined()
+  expect(await bar.find({ key: 'tb-launch:prompt-upgrade' })).toBeDefined()
+  expect(await bar.find({ key: 'tool:clean-view' })).toBeUndefined()
 })
 
 test('a saved command that is gone shows a toast instead of failing', async ($, on) => {
@@ -493,8 +497,8 @@ test('a saved command that is gone shows a toast instead of failing', async ($, 
   await startSession($)
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
-  expect(await bar.find({ key: 'tool:gone-mod' })).toBeDefined()
-  await bar.press({ key: 'tool:gone-mod' })
+  expect(await bar.find({ key: 'tb-launch:gone-mod' })).toBeDefined()
+  await bar.press({ key: 'tb-launch:gone-mod' })
   expect(seen.toasts.join(' ')).toContain('/gone-mod is not available')
 })
 
@@ -723,18 +727,19 @@ const DEMO_MOD = {
   }) as any,
 }
 
-test('a mod that publishes its mode shows on and off in its pill, live', { plugins: [DEMO_MOD] }, async ($, on) => {
+test('a mod that publishes its mode shows on and off in the toolbox, live', { plugins: [DEMO_MOD] }, async ($, on) => {
   const DEMO = cmd('demo', 'demo-mode', 'plugin', 'Flip the demo mode')
   world(on, { tools: ['demo'] }, [DEMO, COMPACT])
   on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }) as any)
   await startSession($)
   const bar = await mountBar($)
-  expect((await bar.find({ key: 'tool:demo' }))?.text).toContain('● Demo Mode')
-
-  await bar.press({ key: 'tool:demo' })
-  expect((await bar.find({ key: 'tool:demo' }))?.text).toContain('○ Demo Mode')
-
+  expect(await bar.find({ key: 'tool:demo' })).toBeUndefined()
   await bar.press({ key: 'pill' })
+  expect((await bar.find({ key: 'mod:tb-mode:demo' }))?.text).toContain('● Demo Mode')
+
+  await bar.press({ key: 'tb-mode:demo' })
+  expect((await bar.find({ key: 'mod:tb-mode:demo' }))?.text).toContain('○ Demo Mode')
+
   await bar.press({ key: 'tb-choose' })
   const pane = await mountPane($)
   expect((await pane.find({ key: 'pick:demo' }))?.text).toContain('Demo Mode on/off button, now off')
@@ -1052,6 +1057,29 @@ test('currentAlias finds the alias of the model in use', () => {
   expect(currentAlias(aliases, '')).toBe('')
 })
 
+test('usedLabel and the ctx segment show the used tokens over the window', () => {
+  expect(usedLabel(50_000, 1_000_000)).toBe('50K/1M')
+  expect(usedLabel(800, 200_000)).toBe('800/200K')
+  expect(usedLabel(null, 1_000_000)).toBe('')
+  expect(usedLabel(5000, 0)).toBe('')
+  const ctx = segments({ ...EMPTY_FIGURES, ctx: 5, tokens: 50_000, window: 1_000_000 }, DARK).find(s => s.key === 'ctx')
+  expect(ctx!.parts.map(p => p.text).join('')).toBe('ctx ▰▱▱▱▱▱▱▱▱▱ 5% · 50K/1M')
+  const bare = segments({ ...EMPTY_FIGURES, ctx: 5 }, DARK).find(s => s.key === 'ctx')
+  expect(bare!.parts.map(p => p.text).join('')).toBe('ctx ▰▱▱▱▱▱▱▱▱▱ 5%')
+  expect(sameFigures(EMPTY_FIGURES, { ...EMPTY_FIGURES, tokens: 10 })).toBe(false)
+})
+
+test('quickLaunch lists the chosen commands first, then the other mod commands once', () => {
+  const ALL = [cmd('clean-view', 'clean-view', 'plugin'), cmd('prompt-upgrade', 'pu', 'plugin'), cmd('superpowers:brainstorming', 'superpowers', 'plugin')]
+  expect(quickLaunch(ALL, [], {}).map(c => c.name)).toEqual(['clean-view', 'prompt-upgrade'])
+  expect(quickLaunch(ALL, ['superpowers:brainstorming', 'prompt-upgrade'], {}).map(c => c.name)).toEqual([
+    'superpowers:brainstorming',
+    'prompt-upgrade',
+    'clean-view',
+  ])
+  expect(quickLaunch(ALL, ['gone'], {}).map(c => c.name)).toEqual(['gone', 'clean-view', 'prompt-upgrade'])
+})
+
 test("launchList keeps the mods' commands and drops the ones with an on/off mode", () => {
   const modes = { 'prompt-upgrade': { label: 'Prompt', isOn: true, plugin: 'prompt-upgrade' } }
   expect(launchList(ALL, {}).map(c => c.name)).toEqual(['clean-view', 'prompt-upgrade'])
@@ -1132,27 +1160,29 @@ test(
   },
 )
 
-test('a chosen mode pill follows a reply from a command someone else ran', { plugins: [QUIET_MOD] }, async ($, on) => {
+test("a mode's toolbox row follows a reply from a command someone else ran", { plugins: [QUIET_MOD] }, async ($, on) => {
   world(on, { tools: ['quiet'] }, [QUIET, COMPACT])
   registerCommands(on)
   await startSession($)
   const bar = await mountBar($)
-  expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('● Quiet Mode')
+  await bar.press({ key: 'pill' })
+  expect((await bar.find({ key: 'mod:tb-mode:quiet' }))?.text).toContain('● Quiet Mode')
 
   await runCommand($, 'quiet')
-  expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('○ Quiet Mode')
+  expect((await bar.find({ key: 'mod:tb-mode:quiet' }))?.text).toContain('○ Quiet Mode')
 })
 
-test('a command that is no mode and no pill leaves the mode pills alone', { plugins: [QUIET_MOD] }, async ($, on) => {
+test('a command that is no mode and no pick leaves the modes alone', { plugins: [QUIET_MOD] }, async ($, on) => {
   const seen = world(on, { tools: ['quiet'] }, [QUIET, COMPACT])
   registerCommands(on)
   await startSession($)
   const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
 
   // The world's catch-all replies "ran compact": no state in it, and compact is no mode.
   await runCommand($, 'compact')
   expect(seen.ran).toContain('compact')
-  expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('● Quiet Mode')
+  expect((await bar.find({ key: 'mod:tb-mode:quiet' }))?.text).toContain('● Quiet Mode')
 })
 
 // ------------------------------------------------- colour, mods
@@ -1406,20 +1436,41 @@ const textsOf = (tree: any, out: string[] = []): string[] => {
 }
 const GLYPHS = /[◖◗│─┌┐└┘╭╮╰╯▰▱]/
 
+const ABOVE_PROPS = { hasSurvey: false, isWorking: false, maxRows: 10 } as any
+const mountAppBar = ($: any) => $.ui.mount({ plugin: 'bottom-bar', surface: 'desktop', component: 'AbovePrompt', props: ABOVE_PROPS })
+
+test('app: the bar sits above the prompt with no model or effort, and the footer keeps its own labels', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  on('ui.render', { component: 'SessionMode' }, ($: any, e: any) => (globalThis as any).h($.ui.resolve(e).Text, {}, 'Opus 5.5 High'))
+  await startSession($)
+  const footer = await mountBar($, 'desktop')
+  expect(textsOf(await footer.drawn()).join(' ')).toBe('Opus 5.5 High')
+  expect(await footer.find({ key: 'bottom-bar-segments' })).toBeDefined()
+  expect(await footer.find({ key: 'pill' })).toBeUndefined()
+  const bar = await mountAppBar($)
+  const all = textsOf(await bar.drawn()).join(' ')
+  expect(all).not.toContain('Opus')
+  expect(all).not.toContain('effort')
+  expect(all.indexOf('context')).toBeLessThan(all.indexOf('0 agents'))
+})
+
 test('app: the bar is one row of figures, a toolbox Button, no Raster and no glyph art', async ($, on) => {
   const seen = world(on)
   registerCommands(on)
   seedModel(on)
   await startSession($)
-  const bar = await mountBar($, 'desktop')
+  const bar = await mountAppBar($)
   const all = textsOf(await bar.drawn()).join(' ')
-  expect(all).toContain('Opus')
   expect(all).toContain('10%')
   expect(all).toContain('0 agents')
   expect(all).not.toMatch(GLYPHS)
   expect(await bar.find({ type: 'Raster' } as any)).toBeUndefined()
   expect(await bar.find({ type: 'Svg' })).toBeDefined()
   expect(await bar.find({ key: 'pill' })).toBeDefined()
+  expect(all).not.toMatch(/[●○]/)
+  expect(all).not.toMatch(/ {2,}/)
   await bar.press({ key: 'pill' })
   expect(seen.opened).toContain(TOOLBOX)
 })
@@ -1438,7 +1489,10 @@ test('app: the toolbox pane has the pickers and mods as Buttons, and picking a m
   })
   expect(await pane.find({ key: 'tb-choose' })).toBeDefined()
   expect(await pane.find({ key: 'tb-effort:low' })).toBeDefined()
-  expect(textsOf(await pane.drawn()).join(' ')).not.toMatch(GLYPHS)
+  const paneText = textsOf(await pane.drawn()).join(' ')
+  expect(paneText).not.toMatch(GLYPHS)
+  expect(paneText).not.toMatch(/[●○]/)
+  for (const heading of ['Model', 'Effort', 'Mods', 'Quick Launch']) expect(paneText).toContain(heading)
   expect(await pane.find({ type: 'Raster' } as any)).toBeUndefined()
   await pane.press({ key: 'tb-model:sonnet' })
   expect(engine.configSets).toContainEqual({ key: 'model', value: 'sonnet' })

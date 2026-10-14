@@ -5,6 +5,7 @@ export const EMPTY_FIGURES: BarFigures = {
   window: 0,
   effort: '',
   ctx: null,
+  tokens: null,
   fiveHour: null,
   sevenDay: null,
   agents: 0,
@@ -100,6 +101,13 @@ export function windowLabel(tokens: number): string {
   return `${Math.round(tokens / 1000)}K`
 }
 
+/** The context's used tokens over its window: `50K/1M`, `800/200K`; `` while either is unknown. */
+export function usedLabel(tokens: number | null, window: number): string {
+  if (tokens === null || !(tokens >= 0) || !(window > 0)) return ''
+  const used = tokens >= 1000 ? windowLabel(tokens) : String(Math.round(tokens))
+  return `${used}/${windowLabel(window)}`
+}
+
 export function effortLabel(effort: string | number | undefined | null): string {
   if (effort === undefined || effort === null) return ''
   return String(effort)
@@ -148,15 +156,15 @@ export function segments(f: BarFigures, pal: Palette): Segment[] {
     const pct = f.ctx ?? 0
     const filled = Math.round(Math.min(Math.max(pct, 0), 100) / 10)
     const color = level(pct, pal)
-    out.push({
-      key: 'ctx',
-      parts: [
-        { text: 'ctx ', color: pal.dim },
-        { text: '▰'.repeat(filled), color },
-        { text: '▱'.repeat(10 - filled), color: pal.sep },
-        { text: ` ${Math.round(pct)}%`, color },
-      ],
-    })
+    const parts: Part[] = [
+      { text: 'ctx ', color: pal.dim },
+      { text: '▰'.repeat(filled), color },
+      { text: '▱'.repeat(10 - filled), color: pal.sep },
+      { text: ` ${Math.round(pct)}%`, color },
+    ]
+    const used = usedLabel(f.tokens, f.window)
+    if (used) parts.push({ text: ` · ${used}`, color: pal.dim })
+    out.push({ key: 'ctx', parts })
   }
   if (f.fiveHour !== null) {
     out.push({
@@ -231,6 +239,7 @@ export const sameFigures = (a: BarFigures, b: BarFigures): boolean =>
   a.window === b.window &&
   a.effort === b.effort &&
   a.ctx === b.ctx &&
+  a.tokens === b.tokens &&
   a.fiveHour === b.fiveHour &&
   a.sevenDay === b.sevenDay &&
   a.agents === b.agents

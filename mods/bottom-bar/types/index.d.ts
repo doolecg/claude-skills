@@ -3,6 +3,8 @@ export type BarFigures = {
   window: number
   effort: string
   ctx: number | null
+  /** Tokens in the context window now. */
+  tokens: number | null
   fiveHour: number | null
   sevenDay: number | null
   agents: number

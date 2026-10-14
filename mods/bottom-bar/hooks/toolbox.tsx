@@ -3,7 +3,7 @@ import type { Elements } from 'claude-code'
 import type { BarFigures, BarMod, BarMode, BarTool } from '../types'
 import { EFFORTS, clip, modelChoiceLabel, toolLabel } from './bar-logic'
 import type { Palette } from './bar-logic'
-import { ICONS, currentAlias, effortName, iconColor, launchList, modLines, pad, spaced } from './toolbox-logic'
+import { ICONS, currentAlias, effortName, iconColor, modLines, pad, quickLaunch, spaced } from './toolbox-logic'
 import type { ModLine } from './toolbox-logic'
 
 /** The box's width on a terminal `columns` wide: room for the rows, never past the edge. */
@@ -20,6 +20,8 @@ export type ToolboxArgs = {
   modes: Record<string, BarMode>
   mods: BarMod[]
   choices: BarTool[]
+  /** The commands picked for Quick Launch, listed first there. */
+  chosen: string[]
   pickModel: (alias: string) => void
   pickEffort: (level: string) => void
   flip: (command: string) => void
@@ -148,11 +150,11 @@ export function toolboxRows(a: ToolboxArgs): JSX.Element[] {
     rows.push(line(`mod:${l.key}`, l.label, l.about, toggle(l.key, l.isOn, press), 7, l.isOn))
   }
 
-  rows.push(section('Launch'))
+  rows.push(section('Quick Launch'))
   const third = Math.floor(width / 3)
   const cells: JSX.Element[] = [
     link('tb-choose', '✎', 'Choose pills', a.choosePills),
-    ...launchList(a.choices, a.modes).map((c, i) => (
+    ...quickLaunch(a.choices, a.chosen, a.modes).map((c, i) => (
       <Button key={`tb-launch:${c.name}`} plain onPress={() => a.launch(c.name)}>
         <Text color={iconColor(i, pal)}>{`${ICONS[i % ICONS.length]} `}</Text>
         <Text color={pal.text}>{clip(toolLabel(c.name), third - 3)}</Text>

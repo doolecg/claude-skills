@@ -76,7 +76,7 @@ function cleanView(k: SbKit, d: ViewData) {
       const pixels = active && !t.hasReported && !isDone ? sbSweep(10, look) : sbMeter(10, done ? 1 : active ? t.percent / 100 : 0, look)
       if (!k.isTerminal) {
         return (
-          <Box key={`step:${t.id}`} alignItems="center" gap="sm">
+          <Box key={`step:${t.id}`} alignItems="center" gap={1}>
             <Text color={done ? pal.good : active ? pal.accent : pal.faint}>{done ? '✓' : active ? '▶' : '○'}</Text>
             <Box flexGrow={1} flexShrink={1}>
               <Text color={done ? pal.dim : active ? pal.text : pal.faint} bold={active}>
@@ -217,7 +217,7 @@ function sidebarPage(k: SbKit, d: ViewData) {
         {sbToggle(k, `sb-show:${id}`, isShown, () => d.setHidden(id, isShown))}
       </Box>
       ) : (
-        <Box gap="xs" alignItems="center">
+        <Box gap={1} alignItems="center">
           <Button key={`sb-up:${id}`} label="▲" variant="secondary" onPress={() => d.moveTab(id, -1)} />
           <Button key={`sb-down:${id}`} label="▼" variant="secondary" onPress={() => d.moveTab(id, 1)} />
           {sbToggle(k, `sb-show:${id}`, isShown, () => d.setHidden(id, isShown))}
@@ -243,7 +243,7 @@ function sidebarPage(k: SbKit, d: ViewData) {
           </Text>,
         ]
       : []),
-    <Box key="reload" marginTop={k.isTerminal ? 1 : 'sm'}>
+    <Box key="reload" marginTop={1}>
       {sbButton(k, 'sb-reopen', 'Reload the list', () => d.openTab(SIDEBAR_TAB), false)}
     </Box>,
   ]

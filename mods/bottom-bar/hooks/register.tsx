@@ -94,6 +94,7 @@ async function refresh($: Dollar, opts: { settings?: boolean } = {}): Promise<vo
       model: modelName(modelId),
       window: usage.context.window,
       ctx: usage.context.percent ?? f.ctx,
+      tokens: usage.context.tokens ?? f.tokens,
       fiveHour: five ? five.percentUsed : f.fiveHour,
       sevenDay: seven ? seven.percentUsed : f.sevenDay,
       agents: agents.filter(a => a.status === 'running' || a.status === 'pending' || a.status === 'waiting').length,
@@ -239,6 +240,7 @@ async function toolboxTree(
     modes: await read($, modeStates),
     mods: await read($, mods),
     choices: await read($, choices),
+    chosen: await read($, tools),
     pickModel: alias => void pickModel($, alias, true),
     pickEffort: level => void pickEffort($, level, true),
     flip: command => void runCommand($, command),
@@ -267,7 +269,7 @@ export const register: Register = (on, options) => {
     } catch {}
     void loadMods($).catch(() => {})
     $.clock.every(4000, () => void refresh($))
-    await $.command.register({ name: CHOOSE, description: 'Choose which mods get a pill in the bottom bar' })
+    await $.command.register({ name: CHOOSE, description: 'Choose which commands are in Quick Launch in the toolbox' })
     return ran
   })
 
@@ -278,6 +280,7 @@ export const register: Register = (on, options) => {
       ...f,
       window: e.context.window || f.window,
       ctx: e.context.percent ?? f.ctx,
+      tokens: e.context.tokens ?? f.tokens,
       fiveHour: five ? five.percentUsed : f.fiveHour,
       sevenDay: seven ? seven.percentUsed : f.sevenDay,
     }))
@@ -345,35 +348,39 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  // In the app the bar is the band above the prompt: the footer slot below it holds about two items.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
+    const openToolbox = async () => {
+      void loadMods($).catch(() => {})
+      try {
+        await loadChoices($)
+      } catch {}
+      await update($, menu, () => 'tools')
+      await $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
+    }
+    const pal = paletteFor(await read($, theme), colour)
+    return desktopBar({
+      els: $.ui.resolve(e) as AppEls,
+      pal,
+      title: await read($, label),
+      figures: await read($, figures),
+      published: publishedSegments(await read($, published), pal),
+      runCommand: command => void runCommand($, command),
+      openToolbox: () => void openToolbox(),
+    })
+  })
+
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
-    if (e.surface === 'desktop' || e.surface === 'mobile') {
-      const names = e.props.modes.length > 0 ? e.props.modes.join(' & ') : ''
-      const openToolbox = async () => {
-        void loadMods($).catch(() => {})
-        try {
-          await loadChoices($)
-        } catch {}
-        await update($, menu, () => 'tools')
-        await $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
-      }
-      return desktopBar({
-        els: $.ui.resolve(e) as AppEls,
-        pal: paletteFor(await read($, theme), colour),
-        title: await read($, label),
-        figures: await read($, figures),
-        modes: names,
-        chosen: await read($, tools),
-        states: await read($, toolStates),
-        onOff: await read($, modeStates),
-        runTool: name => void runCommand($, name),
-        openToolbox: () => void openToolbox(),
-      })
+    // The app keeps its own footer labels; the key tells a mod with a fallback button that the bar hosts it.
+    if (e.surface === 'desktop') {
+      const { Box: AppBox } = $.ui.resolve(e)
+      return <AppBox key="bottom-bar-segments">{await next(e)}</AppBox>
     }
     if (e.surface !== 'terminal') return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const pal = paletteFor(await read($, theme), colour)
     const f = await read($, figures)
-    const chosen = await read($, tools)
     const shown = await read($, menu)
     const loaded = await read($, models)
     const modelList = loaded.length > 0 ? loaded : modelChoices(undefined)
@@ -448,22 +455,16 @@ export const register: Register = (on, options) => {
     }
     const title = await read($, label)
 
-    const states = await read($, toolStates)
-    const onOff = await read($, modeStates)
-    const pill = (key: string, label: string, onPress: () => void, opts: { mark?: string; state?: string } = {}) => {
-      const lead = opts.mark ?? (opts.state === 'on' ? '●' : opts.state === 'off' ? '○' : '')
-      const [left, right] = pillPad([...label].length + (lead ? 2 : 0))
-      const leadColor = opts.mark ? pal.accent : opts.state === 'on' ? pal.good : pal.dim
+    const pill = (key: string, label: string, onPress: () => void, mark: string) => {
+      const [left, right] = pillPad([...label].length + 2)
       return (
         <Button key={key} plain onPress={onPress}>
           <Text color={pal.pillBg}>◖</Text>
           <Text backgroundColor={pal.pillBg}>{left}</Text>
-          {lead ? (
-            <Text color={leadColor} backgroundColor={pal.pillBg}>
-              {`${lead} `}
-            </Text>
-          ) : null}
-          <Text color={opts.state === 'off' ? pal.dim : pal.pillFg} backgroundColor={pal.pillBg}>
+          <Text color={pal.accent} backgroundColor={pal.pillBg}>
+            {`${mark} `}
+          </Text>
+          <Text color={pal.pillFg} backgroundColor={pal.pillBg}>
             {label}
           </Text>
           <Text backgroundColor={pal.pillBg}>{right}</Text>
@@ -529,12 +530,7 @@ export const register: Register = (on, options) => {
           </Box>
           <Box flexShrink={0} marginLeft={1} columnGap={1}>
             {modes ? <Text color={pal.dim}>{modes}</Text> : null}
-            {chosen.map(name => {
-              const mode = onOff[name]
-              const state = mode ? (mode.isOn ? 'on' : 'off') : states[name]
-              return pill(`tool:${name}`, mode?.label ?? toolLabel(name), () => void runTool(name), { state })
-            })}
-            {pill('pill', `${title} ${shown === 'tools' ? '▼' : '▲'}`, () => void openTools(), { mark: '✻' })}
+            {pill('pill', `${title} ${shown === 'tools' ? '▼' : '▲'}`, () => void openTools(), '✻')}
           </Box>
         </Box>
         {options.length > 0 && floats && box}
@@ -554,6 +550,7 @@ export const register: Register = (on, options) => {
         modes: await read($, modeStates),
         mods: await read($, mods),
         choices: await read($, choices),
+        chosen: await read($, tools),
         pickModel: alias => void pickModel($, alias, true),
         pickEffort: level => void pickEffort($, level, true),
         flip: command => void runCommand($, command),
@@ -635,7 +632,7 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column">
-        <Text color={pal.dim}>Click a command to add it as a pill in the bar, or to take it out.</Text>
+        <Text color={pal.dim}>Click a command to add it to Quick Launch in the toolbox, or to take it out.</Text>
         {Input && (
           <Input
             key="filter"
@@ -645,7 +642,7 @@ export const register: Register = (on, options) => {
             onSubmit={(value: string) => void update($, filter, () => value)}
           />
         )}
-        {heading('In the pill')}
+        {heading('In Quick Launch')}
         {inPill.length === 0 ? <Text color={pal.dim}>Nothing yet.</Text> : inPill.map(c => item(c, true))}
         {heading('Mods')}
         {mods.length === 0 ? (
