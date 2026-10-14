@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, On, Timer } from 'claude-code'
+import type { EngineInterface, On, RenderChildren, Timer } from 'claude-code'
 
 import type { CvAsk, CvChecklist } from '../types'
 import {
@@ -20,20 +20,17 @@ import {
   addTask,
   answerOther,
   answersMessage,
-  askLayout,
   classifyError,
   clampPercent,
   confirmPicks,
   easeToward,
   ensureJob,
   formatElapsed,
-  fitOption,
   fromTodos,
   hasRealPlan,
   isAnswered,
   isLive,
   overall,
-  padTo,
   paletteFor,
   parseAsk,
   pickQuestion,
@@ -46,9 +43,10 @@ import {
   titleFromReply,
   unfinished,
   updateTask,
+  wrapText,
   type TodoItem,
 } from './clean-logic'
-import { sbFramedBar, sbGood, sbKit, sbMeter, sbPalette, sbSweep, sbWarm, type SbSeg } from './sidebar-kit'
+import { sbFrameEdge, sbFramedBar, sbGood, sbKit, sbMeter, sbPalette, sbSweep, sbWarm, type SbSeg } from './sidebar-kit'
 
 type Dollar = EngineInterface
 
@@ -435,14 +433,11 @@ export function registerCleanView(on: On): void {
     // On and off live in the bottom bar's pill and /simple; the band shows only a job.
     const ask = await read($, askAtom)
     if (!isOn || (cl.phase === 'idle' && !ask.isOpen)) return next(e)
-    // A question with no job on screen: the checklist side only says it is waiting.
-    const isBare = ask.isOpen && (cl.phase === 'idle' || cl.phase === 'done')
-
     const cols = e.props.bodyColumns
     const took = formatElapsed((cl.finishedAt > 0 ? cl.finishedAt : now) - cl.startedAt)
 
-    // Shown once the job is no longer running (finished, stopped, stuck, waiting) or a question is up.
-    const hasClose = cl.phase !== 'working' || ask.isOpen || cl.helpers > 0
+    // Shown once the job is no longer running (finished, stopped, stuck, waiting).
+    const hasClose = cl.phase !== 'working' || cl.helpers > 0
     const onClose = () => void dismissBand($).catch(() => {})
 
     if (cl.phase === 'done' && cl.isCollapsed && !ask.isOpen) {
@@ -469,6 +464,116 @@ export function registerCleanView(on: On): void {
     const k = sbKit(els, e.surface, sbPalette(theme, colour), cols, tick)
     const kp = k.pal
 
+    // A question takes the whole band in the same outlined look; the steps come back once it is answered.
+    if (ask.isOpen) {
+      const Input = 'Input' in els ? els.Input : undefined
+      const q = ask.questions[ask.current]!
+      const ticked = ask.picks[ask.current] ?? []
+      const given = ask.answers[ask.current]
+      const W = Math.max(16, cols)
+      const inner = W - 4
+      const many = ask.questions.length > 1
+      const row = (key: string, body: RenderChildren) => (
+        <Box key={key} width={W} height={1}>
+          <Text color={kp.warn}>{'│ '}</Text>
+          <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
+            {body}
+          </Box>
+          <Text color={kp.warn}>{' │'}</Text>
+        </Box>
+      )
+      const asked = wrapText(q.question, inner - 2).map((line, i) =>
+        row(
+          `qt${i}`,
+          <Text>
+            <Text color={kp.warn} bold>
+              {i === 0 ? '? ' : '  '}
+            </Text>
+            <Text color={kp.text} bold>
+              {line}
+            </Text>
+          </Text>,
+        ),
+      )
+      const options = q.options.flatMap((o, i) => {
+        const isOn = q.multiSelect ? ticked.includes(o.label) : given === o.label
+        const mark = q.multiSelect ? (isOn ? '◼' : '◻') : isOn ? '●' : '○'
+        const notes = o.description !== '' && o.description !== o.label ? wrapText(o.description, inner - 4) : []
+        return [
+          row(
+            `ob${i}`,
+            <Button key={`o${i}`} plain hotkey={String(i + 1)} onPress={() => void changeAsk($, a => pressOption(a, o.label)).catch(() => {})}>
+              <Text color={kp.faint}>{`${i + 1} `}</Text>
+              <Text color={isOn ? kp.good : kp.accent}>{`${mark} `}</Text>
+              <Text color={isOn ? kp.good : kp.text} bold>
+                {o.label}
+              </Text>
+            </Button>,
+          ),
+          ...notes.map((line, j) => row(`od${i}-${j}`, <Text color={kp.dim}>{`    ${line}`}</Text>)),
+        ]
+      })
+      const tabs: SbSeg[] = ask.questions.flatMap((t, i) => {
+            const isNow = i === ask.current
+            const isDone = ask.answers[i] !== null
+            return [
+              ...(i > 0 ? [{ text: '  ', color: kp.warn }] : []),
+              {
+                text: `${isDone ? '✓' : isNow ? '▶' : '○'} ${t.header}`,
+                color: isDone ? kp.good : isNow ? kp.text : kp.dim,
+                bold: isNow,
+                key: `q${i}`,
+                onPress: () => void update($, askAtom, a => pickQuestion(a, i)).catch(() => {}),
+              },
+            ]
+          })
+      return (
+        <Box flexDirection="column" width={W} flexShrink={0} backgroundColor={kp.panel}>
+          {sbFrameEdge(
+            k,
+            'ask-top',
+            W,
+            ['╭', '╮'],
+            [
+              { text: '‖ Needs you', color: kp.warn, bold: true },
+              { text: many ? ` · Question ${ask.current + 1} of ${ask.questions.length}` : ' · A question for you', color: kp.dim },
+            ],
+            [
+              { text: 'Skip', color: kp.dim, key: 'skip', onPress: () => void closeAsk($, SKIPPED).catch(() => {}) },
+              { text: ' ', color: kp.warn },
+              { text: '✕', color: kp.dim, key: 'close', onPress: onClose },
+            ],
+            kp.warn,
+          )}
+          {asked}
+          {row('gap', <Text> </Text>)}
+          {options}
+          {Input
+            ? row(
+                'other-row',
+                <Input
+                  key="other"
+                  placeholder={OTHER_HINT}
+                  submitLabel="answer"
+                  onSubmit={(value: string) => void changeAsk($, a => answerOther(a, value)).catch(() => {})}
+                />,
+              )
+            : null}
+          {q.multiSelect
+            ? row(
+                'done-row',
+                <Button key="done" plain hotkey="d" onPress={() => void changeAsk($, a => confirmPicks(a)).catch(() => {})}>
+                  <Text color={ticked.length > 0 ? kp.good : kp.faint} bold>
+                    d: Done
+                  </Text>
+                </Button>,
+              )
+            : null}
+          {sbFrameEdge(k, 'ask-bot', W, ['╰', '╯'], tabs, [], kp.warn)}
+        </Box>
+      )
+    }
+
     const animate = isAnimated(cl)
     if (shown.size > 200) shown.clear()
     const eased = (id: string, target: number): number => {
@@ -481,21 +586,13 @@ export function registerCleanView(on: On): void {
     }
 
     const full = Math.max(16, cols)
-    const isAsking = ask.isOpen
-    const isSplit = isAsking && askLayout(Math.max(10, cols - 4)).isSplit
-    const leftW = isSplit ? Math.floor((full - 1) / 2) : full
     const sum = overall(cl)
     const isWorking = cl.phase === 'working'
     const isPaused = cl.phase === 'needs-you'
 
     const outline =
-      isBare || isPaused ? kp.warn : cl.phase === 'done' ? kp.good : cl.phase === 'stuck' ? kp.bad : cl.phase === 'stopped' ? kp.faint : kp.dim
-    const top: SbSeg[] = isBare
-      ? [
-          { text: '‖ Needs you', color: kp.warn, bold: true },
-          { text: ' · Waiting for your answer', color: kp.text },
-        ]
-      : isPaused
+      isPaused ? kp.warn : cl.phase === 'done' ? kp.good : cl.phase === 'stuck' ? kp.bad : cl.phase === 'stopped' ? kp.faint : kp.dim
+    const top: SbSeg[] = isPaused
         ? [
             { text: '‖ Needs you', color: kp.warn, bold: true },
             { text: ` · ${cl.needsYouReason}`, color: kp.text },
@@ -520,14 +617,14 @@ export function registerCleanView(on: On): void {
                   { text: cl.title, color: kp.text, bold: true },
                   ...(cl.helpers > 0 ? [{ text: ` · Waiting for ${cl.helpers} ${cl.helpers === 1 ? 'helper' : 'helpers'}`, color: kp.dim }] : []),
                 ]
-    const timeText = isBare ? '' : cl.phase === 'done' ? `took ${took}` : cl.phase === 'stopped' ? '' : took
+    const timeText = cl.phase === 'done' ? `took ${took}` : cl.phase === 'stopped' ? '' : took
     const topRight: SbSeg[] = [
       ...(timeText ? [{ text: hasClose ? `${timeText} ` : timeText, color: kp.dim }] : []),
       ...(hasClose ? [{ text: '✕', color: kp.dim, onPress: onClose, key: 'close' }] : []),
     ]
-    const hasSteps = sum.total > 0 && !isBare
+    const hasSteps = sum.total > 0
     const jobFrame = sbFramedBar(k, 'job', {
-      width: leftW,
+      width: full,
       color: outline,
       bar: cells =>
         hasSteps
@@ -544,10 +641,13 @@ export function registerCleanView(on: On): void {
     })
 
     // One outlined bar per step, side by side in rows like Flightdeck's usage limits.
-    const n = isBare ? 0 : cl.tasks.length
-    const lines = Math.ceil(n / Math.max(1, Math.min(n, Math.floor((leftW + 1) / (STEP_MIN + 1)))))
+    // Each bar is wide enough for the longest step name, its marker, its label and the outline.
+    const n = cl.tasks.length
+    const longest = Math.max(0, ...cl.tasks.map(t => [...t.name].length))
+    const stepMin = Math.min(full, Math.max(STEP_MIN, longest + 16))
+    const lines = Math.ceil(n / Math.max(1, Math.min(n, Math.floor((full + 1) / (stepMin + 1)))))
     const across = Math.max(1, Math.ceil(n / Math.max(1, lines)))
-    const each = Math.floor((leftW - (across - 1)) / across)
+    const each = Math.floor((full - (across - 1)) / across)
     const stepFrame = (i: number, width: number) => {
       const t = cl.tasks[i]!
       const isDone = t.status === 'done'
@@ -574,109 +674,15 @@ export function registerCleanView(on: On): void {
       const count = Math.min(across, n - first)
       return (
         <Box key={`steps${r}`} columnGap={1}>
-          {Array.from({ length: count }, (_, j) => stepFrame(first + j, j === across - 1 ? leftW - (across - 1) * (each + 1) : each))}
+          {Array.from({ length: count }, (_, j) => stepFrame(first + j, j === across - 1 ? full - (across - 1) * (each + 1) : each))}
         </Box>
       )
     })
 
-    const checklist = (
-      <Box key="checklist" flexDirection="column" width={leftW} flexShrink={0}>
+    return (
+      <Box key="checklist" flexDirection="column" width={full} flexShrink={0}>
         {jobFrame}
         {stepRows}
-      </Box>
-    )
-
-    let panel = null
-    if (isAsking) {
-      const Input = 'Input' in els ? els.Input : undefined
-      const q = ask.questions[ask.current]!
-      const W = isSplit ? full - 1 - leftW : full
-      const tabW = Math.max(8, Math.min(16, Math.floor(W / 3)))
-      const optW = Math.max(8, W - tabW - 8)
-      const ticked = ask.picks[ask.current] ?? []
-      const given = ask.answers[ask.current]
-      panel = (
-        <Box key="ask" flexDirection="column" width={W} marginTop={isSplit ? 0 : 1} flexShrink={0}>
-          <Box borderStyle="round" borderColor={pal.accent} paddingX={1} width="100%">
-            <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
-              <Text wrap="truncate-end">
-                <Text color={pal.accent} bold>
-                  {'? '}
-                </Text>
-                <Text color={pal.text} bold>
-                  {q.question}
-                </Text>
-              </Text>
-            </Box>
-            <Box flexShrink={0} marginLeft={1}>
-              <Button key="skip" plain dimColor onPress={() => void closeAsk($, SKIPPED).catch(() => {})}>
-                Skip
-              </Button>
-            </Box>
-          </Box>
-          <Box>
-            <Box flexDirection="column" borderStyle="round" borderColor={pal.faint} paddingX={1} width={tabW} flexShrink={0}>
-              {ask.questions.map((t, i) => {
-                const isNow = i === ask.current
-                const mark = ask.answers[i] !== null ? '✓' : isNow ? '▶' : '○'
-                const color = ask.answers[i] !== null ? pal.good : isNow ? pal.accent : pal.faint
-                return (
-                  <Button key={`q${i}`} plain onPress={() => void update($, askAtom, a => pickQuestion(a, i)).catch(() => {})}>
-                    <Text color={color}>{`${mark} `}</Text>
-                    <Text color={isNow ? pal.text : pal.dim} bold={isNow}>
-                      {padTo(t.header, tabW - 6).trimEnd()}
-                    </Text>
-                  </Button>
-                )
-              })}
-            </Box>
-            <Box flexDirection="column" flexGrow={1} marginLeft={1}>
-              {q.options.map((o, i) => {
-                const isOn = q.multiSelect ? ticked.includes(o.label) : given === o.label
-                const fit = fitOption(o.label, o.description, optW - 6)
-                const mark = q.multiSelect ? (isOn ? '◼' : '◻') : isOn ? '●' : '○'
-                return (
-                  <Button
-                    key={`o${i}`}
-                    plain
-                    hotkey={String(i + 1)}
-                    onPress={() => void changeAsk($, a => pressOption(a, o.label)).catch(() => {})}
-                  >
-                    <Text color={isOn ? pal.good : pal.accent}>{`${mark} `}</Text>
-                    <Text color={isOn ? pal.good : pal.text} bold>
-                      {fit.label}
-                    </Text>
-                    {fit.description ? <Text color={pal.dim}>{` · ${fit.description}`}</Text> : null}
-                  </Button>
-                )
-              })}
-              <Box>
-                <Box flexGrow={1}>
-                  {Input ? (
-                    <Input
-                      key="other"
-                      placeholder={OTHER_HINT}
-                      submitLabel="answer"
-                      onSubmit={(value: string) => void changeAsk($, a => answerOther(a, value)).catch(() => {})}
-                    />
-                  ) : null}
-                </Box>
-                {q.multiSelect ? (
-                  <Button key="done" plain hotkey="d" onPress={() => void changeAsk($, a => confirmPicks(a)).catch(() => {})}>
-                    <Text color={ticked.length > 0 ? pal.good : pal.faint} bold>{' d: Done'}</Text>
-                  </Button>
-                ) : null}
-              </Box>
-            </Box>
-          </Box>
-        </Box>
-      )
-    }
-
-    return (
-      <Box flexDirection={isSplit ? 'row' : 'column'} columnGap={isSplit ? 1 : undefined} width="100%">
-        {checklist}
-        {panel}
       </Box>
     )
   })

@@ -110,6 +110,26 @@ export function critterPixels(agentId: string, isDown = false): number[][] {
   return isDown ? [Array<number>(12).fill(-1), ...grid.slice(0, 11)] : grid
 }
 
+/** The 12x12 pixels as 6x6: each 2x2 block becomes its eye colour if it has one, else its most common colour, else empty. */
+export function smallPixels(pixels: number[][]): number[][] {
+  return Array.from({ length: 6 }, (_, r) =>
+    Array.from({ length: 6 }, (_, c) => {
+      const block = [pixels[r * 2]![c * 2]!, pixels[r * 2]![c * 2 + 1]!, pixels[r * 2 + 1]![c * 2]!, pixels[r * 2 + 1]![c * 2 + 1]!].filter(p => p >= 0)
+      if (block.includes(EYE)) return EYE
+      let best = -1
+      let most = 0
+      for (const p of block) {
+        const n = block.filter(q => q === p).length
+        if (n > most) {
+          best = p
+          most = n
+        }
+      }
+      return best
+    }),
+  )
+}
+
 const UPPER = 0x2580
 const LOWER = 0x2584
 

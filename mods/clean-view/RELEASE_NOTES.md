@@ -1,3 +1,15 @@
+# Clean View 1.5.0
+
+## Changed
+- A question from Claude now takes the whole band, in the same outlined look as the steps, and the steps come back once you answer.
+- The question and each option's description wrap onto as many lines as they need instead of being cut off.
+- The question tabs sit in the bottom edge of the box; click one to switch. Options are numbered, and Skip and ✕ sit in the top edge.
+
+## Fixed
+- Step names are no longer cut off. Each step's bar is as wide as the longest step name, and the steps take another row when they don't fit side by side.
+
+---
+
 # Clean View 1.4.0
 
 ## Changed

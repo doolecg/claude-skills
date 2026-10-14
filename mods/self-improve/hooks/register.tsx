@@ -256,7 +256,7 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   // Claude marked the session completed in the app's sidebar because the person asked: learn once it succeeded.
-  on('tool.call', { tool: 'mcp__ccd_sidebar__mark_completed' }, async ($, e, next) => {
+  on('tool.call', { tool: /^mcp__ccd_sidebar__mark_completed$/ }, async ($, e, next) => {
     const r = await next(e)
     if (!rt.isWorker && !('deny' in r && r.deny) && !('isError' in r && r.isError)) {
       const session = await read($, sessionAtom)

@@ -1,6 +1,6 @@
 // The /learn pane: Lessons, Drafts, Skills, Changes, Runs and Soul tabs, drawn from the surface's own elements.
 
-import type { Elements } from 'claude-code'
+import type { Elements, RenderChildren } from 'claude-code'
 
 import type { PaneUi } from '../types'
 import { unifiedDiff } from './core/diff'
@@ -100,7 +100,7 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
   // Buttons and item cards take the sidebar's look when the pane is a tab there.
   const btn = (key: string, label: string, onPress: () => void, primary = false) =>
     k ? sbButton(k, key, label, onPress, primary) : <Button key={key} label={label} variant={primary ? 'primary' : undefined} onPress={onPress} />
-  const card = (key: string, children: unknown) =>
+  const card = (key: string, children: RenderChildren) =>
     k ? sbCard(k, key, children) : (
       <Box key={key} flexDirection="column" marginTop={1}>
         {children}

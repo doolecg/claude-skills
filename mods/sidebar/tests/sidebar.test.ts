@@ -178,7 +178,7 @@ describe('kit strip asks', () => {
     const ask = sbAsker(async args => void log.push(`ask ${args}`), 'flightdeck', async () => void log.push('close'))
     for (const args of ['tab clean-view', 'tab flightdeck', 'settings flightdeck']) {
       ask(args)
-      for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0))
+      for (let i = 0; i < 5; i++) await new Promise(r => (globalThis as any).setTimeout(r, 0))
     }
     expect(log).toEqual(['close', 'ask tab clean-view', 'ask tab flightdeck', 'close', 'ask settings flightdeck'])
   })
@@ -233,7 +233,7 @@ function world(on: any): World {
 
 /** The installed list loads in the background after session start; this lets it finish. */
 const settle = async () => {
-  for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0))
+  for (let i = 0; i < 20; i++) await new Promise(r => (globalThis as any).setTimeout(r, 0))
 }
 
 async function texts($: any) {

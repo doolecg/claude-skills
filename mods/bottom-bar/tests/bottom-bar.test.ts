@@ -779,13 +779,16 @@ test('a blank configured name falls back to the default', { options: { name: '  
   expect((await bar.find({ key: 'pill' }))?.text).toContain("Doole's Tools")
 })
 
+const runCommand = ($: any, command: string) =>
+  $.command.run({ command, args: '', origin: { kind: 'plugin', name: 'bottom-bar' }, presentation: { isFullscreen: false, columns: 80 } })
+
 test('the configured name is trimmed and titles the picker pane', { options: { name: " Tristen's Tools " } }, async ($, on) => {
   const seen = world(on)
   registerCommands(on)
   await startSession($)
   const bar = await mountBar($)
   expect((await bar.find({ key: 'pill' }))?.text).toContain("Tristen's Tools")
-  await $.command.run({ command: 'choose-pills', args: '' })
+  await runCommand($, 'choose-pills')
   expect(seen.opened).toEqual([PICKER])
   expect(seen.titles).toEqual(["Tristen's Tools"])
 })
@@ -1241,14 +1244,14 @@ test('/choose-pills is registered at session start', async ($, on) => {
   expect(registered).toEqual([])
   await startSession($)
   expect(registered.map(r => r.name)).toEqual(['choose-pills'])
-  expect(registered[0].description).toBeTruthy()
+  expect(registered[0]!.description).toBeTruthy()
 })
 
 test('/choose-pills opens the picker pane, with every mod listed', async ($, on) => {
   const seen = world(on)
   registerCommands(on)
   await startSession($)
-  const reply = await $.command.run({ command: 'choose-pills', args: '' })
+  const reply = await runCommand($, 'choose-pills')
   expect(seen.opened).toEqual([PICKER])
   // The mod answers it itself; nothing underneath ran.
   expect(seen.ran).toEqual([])
@@ -1267,7 +1270,7 @@ test('/choose-pills closes an open box on the bar', async ($, on) => {
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
   expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
-  await $.command.run({ command: 'choose-pills', args: '' })
+  await runCommand($, 'choose-pills')
   expect(seen.opened).toEqual([PICKER])
   expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
 })
@@ -1295,11 +1298,11 @@ test(
     world(on, {}, [QUIET, COMPACT])
     registerCommands(on)
     await startSession($)
-    await $.command.run({ command: 'choose-pills', args: '' })
+    await runCommand($, 'choose-pills')
     const pane = await mountPane($)
     expect((await pane.find({ key: 'pick:quiet' }))?.text).toContain('now on')
 
-    await $.command.run({ command: 'quiet', args: '' })
+    await runCommand($, 'quiet')
     expect((await pane.find({ key: 'pick:quiet' }))?.text).toContain('Quiet Mode on/off button, now off')
   },
 )
@@ -1311,7 +1314,7 @@ test('a chosen mode pill follows a reply from a command someone else ran', { plu
   const bar = await mountBar($)
   expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('● Quiet Mode')
 
-  await $.command.run({ command: 'quiet', args: '' })
+  await runCommand($, 'quiet')
   expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('○ Quiet Mode')
 })
 
@@ -1322,7 +1325,7 @@ test('a command that is no mode and no pill leaves the mode pills alone', { plug
   const bar = await mountBar($)
 
   // The world's catch-all replies "ran compact": no state in it, and compact is no mode.
-  await $.command.run({ command: 'compact', args: '' })
+  await runCommand($, 'compact')
   expect(seen.ran).toContain('compact')
   expect((await bar.find({ key: 'tool:quiet' }))?.text).toContain('● Quiet Mode')
 })

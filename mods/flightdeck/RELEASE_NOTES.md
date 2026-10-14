@@ -1,3 +1,10 @@
+# Flightdeck 1.4.0
+
+## Changed
+- Each running agent has its pixel critter again, a small one beside its outlined bar, bobbing while it works.
+
+---
+
 # Flightdeck 1.3.0
 
 ## New

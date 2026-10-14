@@ -515,9 +515,6 @@ export function easeToward(from: number, to: number, elapsed: number, ms = 900):
 
 export const EMPTY_ASK: CvAsk = { isOpen: false, toolUseId: '', questions: [], current: 0, answers: [], picks: [] }
 
-/** Narrower than this, the question panel stacks under the checklist instead of beside it. */
-export const SPLIT_COLUMNS = 110
-
 export const OTHER_HINT = '✎ Other: type your own'
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '')
@@ -596,21 +593,26 @@ export function askAnswers(a: CvAsk): Record<string, string> {
   return out
 }
 
-/** Widths of the checklist and the question panel inside the band, side by side or stacked. */
-export function askLayout(inner: number): { isSplit: boolean; left: number; right: number } {
-  if (inner + 4 < SPLIT_COLUMNS) return { isSplit: false, left: inner, right: inner }
-  const left = Math.floor((inner - 1) / 2)
-  return { isSplit: true, left, right: inner - 1 - left }
-}
-
-/** An option's label and description cut to fit `width` cells together. */
-export function fitOption(label: string, description: string, width: number): { label: string; description: string } {
-  const l = [...label]
-  if (l.length >= width) return { label: padTo(label, Math.max(1, width)).trimEnd(), description: '' }
-  const room = width - l.length - 3
-  if (description === '' || description === label || room < 4) return { label, description: '' }
-  const d = [...description]
-  return { label, description: d.length > room ? `${d.slice(0, room - 1).join('')}…` : description }
+/** `text` broken into lines of at most `width` cells, at spaces where it can and mid-word where it must. */
+export function wrapText(text: string, width: number): string[] {
+  const w = Math.max(1, width)
+  const lines: string[] = []
+  let line = ''
+  for (const word of text.split(' ').filter(x => x !== '')) {
+    let rest = [...word]
+    if (line !== '' && [...line].length + 1 + rest.length <= w) {
+      line += ` ${word}`
+      continue
+    }
+    if (line !== '') lines.push(line)
+    while (rest.length > w) {
+      lines.push(rest.slice(0, w).join(''))
+      rest = rest.slice(w)
+    }
+    line = rest.join('')
+  }
+  if (line !== '' || lines.length === 0) lines.push(line)
+  return lines
 }
 
 export const SKIPPED = 'Skip those questions: carry on without answers, or ask again in other words.'

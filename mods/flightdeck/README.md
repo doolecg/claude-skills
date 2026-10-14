@@ -1,6 +1,6 @@
 # Flightdeck
 
-A Claude Code mod that puts a sidebar beside the transcript showing the main session and every subagent working right now. Each running subagent is a small outlined pixel bar with its task, nickname, model, context, estimated cost, time and a stop button; finished ones take a line each. It uses the Bottom Bar's colours, light or dark to match your theme.
+A Claude Code mod that puts a sidebar beside the transcript showing the main session and every subagent working right now. Each running subagent is a small outlined pixel bar, with its pixel critter beside it, showing its task, nickname, model, context, estimated cost, time and a stop button; finished ones take a line each. It uses the Bottom Bar's colours, light or dark to match your theme.
 
 ```
 ✈ FLIGHTDECK · 2 agents working

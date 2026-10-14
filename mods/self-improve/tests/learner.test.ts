@@ -4,7 +4,7 @@ import { rollback, approveLesson, approveDraft } from '../hooks/core/actions'
 import { connectHindsight } from '../hooks/core/hindsight'
 import { learn, type Job } from '../hooks/core/learner'
 import { DEFAULT_SETTINGS, type Settings } from '../hooks/core/settings'
-import { loadState, saveState } from '../hooks/core/state'
+import { loadState, saveState, type Store } from '../hooks/core/state'
 import { CONFIG, fakeIo, hindsightConfig, jsonl, lesson, turns, type Fake, type FakeOptions } from './fakeIo'
 
 const FOLDER = '/code/shop'
@@ -222,7 +222,7 @@ describe('without Hindsight, without CodeGraph, with neither', () => {
   test('a bank that answers 500 does not hold up waiting lessons for other banks', async () => {
     const io = setup()
     const st = await loadState(io)
-    const base = { kind: 'convention', supersedes: [], scope: 'project', section: '', files: [], symbols: [], skill: null, sessions: ['old'], status: 'active', stores: [], hindsightPending: true, reviewReason: '', hits: 1, createdAt: 0, updatedAt: 0 } as const
+    const base = { kind: 'convention', supersedes: [] as number[], scope: 'project', section: '', files: [] as string[], symbols: [] as string[], skill: null, sessions: ['old'] as string[], status: 'active', stores: [] as Store[], hindsightPending: true, reviewReason: '', hits: 1, createdAt: 0, updatedAt: 0 } as const
     st.lessons.push({ ...base, id: 1, folder: '', project: 'broken', text: 'Goes to a bank the server cannot make' }, { ...base, id: 2, folder: '', project: 'shop', text: 'Goes to a bank that works' })
     await saveState(io, st)
     io.banks = new Map()

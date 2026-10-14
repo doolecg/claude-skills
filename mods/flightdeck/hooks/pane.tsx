@@ -1,5 +1,6 @@
+import type { RenderElement } from 'claude-code'
 import type { FdAgent, FdMain, FdUsage } from '../types'
-import { critterOf } from './critter'
+import { critterOf, critterPixels, rasterOf, smallPixels, svgOf } from './critter'
 import {
   agentMetrics,
   fmtDuration,
@@ -79,8 +80,11 @@ export function scrollThumb(rows: number, total: number, shown: number, offset: 
 }
 
 /** The sidebar: the main session's outlined meters, then a list of running agents and one of finished agents, each scrolling on its own. */
-export function drawPane(els: Record<string, any>, surface: string, d: PaneData): { el: unknown; layout: PaneLayout } {
+export function drawPane(els: Record<string, any>, surface: string, d: PaneData): { el: RenderElement; layout: PaneLayout } {
   const { Box, Text, Button } = els
+  const isTerminal = surface === 'terminal'
+  const Raster = isTerminal && 'Raster' in els ? els.Raster : undefined
+  const Svg = !isTerminal && 'Svg' in els ? els.Svg : undefined
   const { main, usage, tick, now, strip } = d
   const k = sbKit(els, surface, sbPalette(strip?.theme ?? d.theme, strip?.colour), d.columns, tick)
   const pal = strip ? k.pal : d.pal
@@ -243,7 +247,20 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
   const flat = (stops: string[], seed = 0): SbLook => ({ stops, track: pal.track, tint: pal.tint, tick, seed })
 
   const runScrolls = working > runShown
-  const cardWidth = full - (runScrolls ? 1 : 0)
+  const listWidth = full - (runScrolls ? 1 : 0)
+  const critterWidth = Raster ? 6 : Svg ? 3 : 0
+  const cardWidth = listWidth - (critterWidth ? critterWidth + 1 : 0)
+  const critter = (a: FdAgent) => {
+    if (Raster) {
+      const r = rasterOf(smallPixels(critterPixels(a.id, Math.floor(tick / 2) % 2 === 1)), pal.panel)
+      return <Raster key={`critter:${a.id}`} columns={r.columns} rows={r.rows} cells={r.cells} />
+    }
+    if (Svg) {
+      const c = critterOf(a.id)
+      return <Svg key={`critter:${a.id}`} source={svgOf(a.id, true)} alt={`${c.name}, a ${c.tint} critter in a ${c.hat}`} width={18} height={18} />
+    }
+    return null
+  }
   const runCard = (a: FdAgent, i: number) => {
     const [glyph, glyphColor] = mark(a)
     const win = windowOf(a.model, main.model, usage.window)
@@ -252,7 +269,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
     const metrics = agentMetrics(a, win, now).split('  ')
     const time = metrics.pop() ?? ''
     const stop: SbSeg = { text: '■ stop', color: pal.bad, onPress: () => d.onStop(a.id), key: `stop:${a.id}` }
-    return sbFramedBar(k, `agent:${a.id}`, {
+    const framed = sbFramedBar(k, `agent:${a.id}`, {
       width: cardWidth,
       color: a.status === 'waiting' ? pal.warn : pal.dim,
       bar: cells =>
@@ -270,6 +287,15 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       ],
       bottomRight: metrics.length > 0 ? [{ text: metrics.join(' '), color: pal.dim }] : [],
     })
+    if (!critterWidth) return framed
+    return (
+      <Box key={`row:${a.id}`} width={listWidth} height={RUN_ROWS} columnGap={1}>
+        <Box width={critterWidth} height={RUN_ROWS} flexShrink={0} overflow="hidden">
+          {critter(a)}
+        </Box>
+        {framed}
+      </Box>
+    )
   }
 
   const doneScrolls = groups.finished.length > doneShown
@@ -298,7 +324,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       line('run-empty', <Text color={pal.dim}>{d.agents.length === 0 ? '  Subagents show here while they work.' : '  None running.'}</Text>)
     ) : (
       <Box key="run-list" width={full}>
-        <Box flexDirection="column" width={cardWidth} flexShrink={0}>
+        <Box flexDirection="column" width={listWidth} flexShrink={0}>
           {groups.working.slice(runOffset, runOffset + runShown).map((a, i) => runCard(a, runOffset + i))}
         </Box>
         {runScrolls ? bar('run-scroll', Math.min(working, runShown) * RUN_ROWS, working, runShown, runOffset) : null}

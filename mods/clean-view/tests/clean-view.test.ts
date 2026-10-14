@@ -7,7 +7,6 @@ import {
   answerOther,
   answersMessage,
   askAnswers,
-  askLayout,
   confirmPicks,
   isAnswered,
   parseAsk,
@@ -21,6 +20,7 @@ import {
   planSteps,
   rasterCells,
   reportProgress,
+  wrapText,
 } from '../hooks/clean-logic'
 
 const PLAN = 'mcp__clean-view__plan_steps'
@@ -370,12 +370,10 @@ test('typing under Other answers a question, after the ticked labels on a multi-
   expect(answerOther(a, '   ')).toBe(a)
 })
 
-test('the panel sits beside the checklist from 110 columns and under it below', () => {
-  expect(askLayout(150).isSplit).toBe(true)
-  expect(askLayout(150).left + askLayout(150).right + 1).toBe(150)
-  expect(askLayout(80).isSplit).toBe(false)
-  expect(askLayout(106).isSplit).toBe(true)
-  expect(askLayout(105).isSplit).toBe(false)
+test('question text wraps at spaces, and a word too long for a line is broken', () => {
+  expect(wrapText('Which colour should the page be?', 12)).toEqual(['Which colour', 'should the', 'page be?'])
+  expect(wrapText('abcdefghij', 4)).toEqual(['abcd', 'efgh', 'ij'])
+  expect(wrapText('', 10)).toEqual([''])
 })
 
 /** Lets a pending tool call reach the point where it waits for the person. */
@@ -391,7 +389,7 @@ async function planned($: any) {
 const mountBand = ($: any, cols: number) =>
   $.ui.mount({ plugin: 'clean-view', surface: 'terminal', component: 'AbovePrompt', props: { ...BAND, bodyColumns: cols } })
 
-test('a question splits the band in two; answering it sends the answers and brings the single checklist back', async ($, on) => {
+test('a question takes the whole band; answering it sends the answers and brings the steps back', async ($, on) => {
   world(on)
   await planned($)
   const before = await band($, 'terminal')
@@ -401,7 +399,7 @@ test('a question splits the band in two; answering it sends the answers and brin
   const ran: any = await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS.slice(0, 1) } as any)
   expect(ran.deny).toContain('end your turn')
   const wide = await mountBand($, 140)
-  expect(String((await wide.find({ key: 'p0' }))?.text)).toContain('Read your brand notes')
+  expect(await wide.find({ key: 'p0' })).toBeUndefined()
   expect(await wide.find({ key: 'o0' })).toBeDefined()
   expect(await wide.find({ key: 'o1' })).toBeDefined()
   expect(await wide.find({ key: 'q0' })).toBeDefined()
@@ -415,6 +413,7 @@ test('a question splits the band in two; answering it sends the answers and brin
   const after = await band($, 'terminal')
   expect(await after.ui.find({ key: 'o0' })).toBeUndefined()
   expect(after.all).toContain('Step 1 of 2')
+  expect(await after.ui.find({ key: 'p0' })).toBeDefined()
   await after.ui.unmount()
 })
 
@@ -423,7 +422,7 @@ test('a multi-select question ticks options and finishes on Done; Other types an
   await planned($)
   await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS } as any)
   const narrow = await mountBand($, 90)
-  expect(await narrow.find({ key: 'p0' })).toBeDefined()
+  expect(await narrow.find({ key: 'p0' })).toBeUndefined()
   expect(await narrow.find({ key: 'o0' })).toBeDefined()
   await narrow.press({ key: 'q1' })
   await narrow.press({ key: 'o0' })
@@ -445,13 +444,13 @@ test('a multi-select question ticks options and finishes on Done; Other types an
   await ui.unmount()
 })
 
-test('a question with no job running still gets the panel, beside a waiting line', async ($, on) => {
+test('a question with no job running still gets the panel', async ($, on) => {
   world(on)
   await $.session.start({ cwd: '.' } as any)
   await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS.slice(0, 1) } as any)
   const ui = await mountBand($, 140)
   const texts = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join(' ')
-  expect(texts).toContain('Waiting for your answer')
+  expect(texts).toContain('Which colour should the page be?')
   expect(await ui.find({ key: 'o0' })).toBeDefined()
   await ui.press({ key: 'o0' })
   await ui.unmount()

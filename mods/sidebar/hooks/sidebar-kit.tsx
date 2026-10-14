@@ -538,7 +538,7 @@ function drawSegs(k: SbKit, key: string, segs: readonly SbSeg[]) {
 }
 
 /** One edge of a frame `width` cells across: a corner, ` left `, a rule to fill, ` right `, a corner. */
-function frameEdge(k: SbKit, key: string, width: number, corners: [string, string], left: readonly SbSeg[], right: readonly SbSeg[], color: string) {
+export function sbFrameEdge(k: SbKit, key: string, width: number, corners: [string, string], left: readonly SbSeg[], right: readonly SbSeg[], color: string) {
   const { Box, Text } = k.els
   const inner = Math.max(0, width - 2)
   // The left label keeps at least two fifths of the edge; the right one is cut to what is left.
@@ -584,13 +584,13 @@ export function sbFramedBar(k: SbKit, key: string, f: SbFramed) {
   const cells = Math.max(1, f.width - 2)
   return (
     <Box key={key} flexDirection="column" width={f.width} flexShrink={0} backgroundColor={k.pal.panel}>
-      {frameEdge(k, `${key}-top`, f.width, ['╭', '╮'], f.top ?? [], f.topRight ?? [], color)}
+      {sbFrameEdge(k, `${key}-top`, f.width, ['╭', '╮'], f.top ?? [], f.topRight ?? [], color)}
       <Box key={`${key}-mid`} height={1} overflow="hidden">
         <Text color={color}>│</Text>
         {sbBar(k, `${key}-bar`, f.bar(cells))}
         <Text color={color}>│</Text>
       </Box>
-      {frameEdge(k, `${key}-bot`, f.width, ['╰', '╯'], f.bottom ?? [], f.bottomRight ?? [], color)}
+      {sbFrameEdge(k, `${key}-bot`, f.width, ['╰', '╯'], f.bottom ?? [], f.bottomRight ?? [], color)}
     </Box>
   )
 }
