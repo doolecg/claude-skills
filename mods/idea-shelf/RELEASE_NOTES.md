@@ -1,3 +1,10 @@
+# Idea Shelf 0.4.0
+
+## New
+- A proper Claude desktop app version of the shelf, with native buttons. The terminal looks the same as before.
+
+---
+
 # Idea Shelf 0.3.3
 
 ## Changed

@@ -351,14 +351,17 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
   if (k && d.sb) {
     const { pal } = k
     const waiting = pendingLessons + pendingDrafts
-    const chip = (key: string, label: string, isActive: boolean, onPress: () => void) => (
+    const chip = (key: string, label: string, isActive: boolean, onPress: () => void) =>
+      d.sb!.surface !== 'terminal' ? (
+        <Button key={key} label={label} variant={isActive ? 'primary' : undefined} onPress={onPress} />
+      ) : (
       <Button key={key} plain onPress={onPress}>
         <Text backgroundColor={isActive ? pal.pillBg : undefined} color={isActive ? pal.pillFg : pal.dim} bold={isActive}>{` ${label} `}</Text>
       </Button>
-    )
+      )
     return sbFrame(k, d.sb.strip, sbActions(d.sb.ask), [
       sbTitle(k, { icon: '✺', name: 'Self Improve', status: waiting ? `${waiting} to review` : `mode ${d.settings.mode}` }),
-      <Box key="tabs" flexWrap="wrap">
+      <Box key="tabs" flexWrap="wrap" columnGap={d.sb.surface !== 'terminal' ? 1 : undefined}>
         {TABS.map(t => chip(`tab-${t.id}`, tabLabel(t), ui.tab === t.id, () => void a.set({ tab: t.id, editing: null, confirm: null })))}
         {chip('test', 'Test', false, () => void a.test())}
       </Box>,

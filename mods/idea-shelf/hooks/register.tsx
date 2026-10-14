@@ -246,7 +246,7 @@ export const register: Register = on => {
                   <Box key={`sb-btns:${idea.id}`} columnGap={1}>
                     {sbButton(k, `send:${idea.id}`, 'Send', () => send(idea), true)}
                     {sbButton(k, `edit:${idea.id}`, 'Edit', () => startEdit(idea))}
-                    {sbButton(k, `delete:${idea.id}`, '✕', () => remove(idea))}
+                    {sbButton(k, `delete:${idea.id}`, e.surface === 'terminal' ? '✕' : 'Delete', () => remove(idea))}
                   </Box>,
                 ],
           ),

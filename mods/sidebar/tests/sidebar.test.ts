@@ -520,3 +520,38 @@ describe('context footer', () => {
     await ui.unmount()
   })
 })
+
+describe('other surfaces', () => {
+  const BOX_DRAWING = /[\u2500-\u257f\u2580-\u259f\u2800-\u28ff\u25d6\u25d7]/
+
+  async function open($: any, on: any, tab: string) {
+    world(on)
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command(`tab ${tab}`))
+  }
+
+  for (const tab of ['clean-view', 'sidebar']) {
+    test(`on the desktop the ${tab} view is Buttons, with no Raster and no box-drawing characters`, async ($, on) => {
+      await open($, on, tab)
+      const ui = await $.ui.mount({ ...pane(), surface: 'desktop' })
+      const buttons = await ui.findAll({ type: 'Button' })
+      expect(buttons.length).toBeGreaterThan(2)
+      expect(await ui.find({ key: 'sb-close' })).toBeDefined()
+      expect(await ui.findAll({ type: 'Raster' })).toHaveLength(0)
+      const texts = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
+      expect(texts.join('\n')).toContain("DOOLE'S SIDEBAR")
+      for (const t of texts) expect(t).not.toMatch(BOX_DRAWING)
+      await ui.unmount()
+    })
+  }
+
+  test('on mobile it draws without an Input', async ($, on) => {
+    await open($, on, 'clean-view')
+    const ui = await $.ui.mount({ ...pane(), surface: 'mobile' })
+    expect((await ui.findAll({ type: 'Button' })).length).toBeGreaterThan(0)
+    expect(await ui.findAll({ type: 'Input' })).toHaveLength(0)
+    expect(await ui.findAll({ type: 'Raster' })).toHaveLength(0)
+    await ui.unmount()
+  })
+})

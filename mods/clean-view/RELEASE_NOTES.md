@@ -1,3 +1,11 @@
+# Clean View 1.6.0
+
+## New
+- A Style setting in /plugin: Clean (the full band, tool calls hidden) or Steps only (a small checklist, one line per step, with tool calls, diffs, command output and reasoning shown as normal).
+- A proper Claude desktop app version: a rounded card, native buttons for questions, and smooth progress bars instead of text meters. The terminal looks the same as before.
+
+---
+
 # Clean View 1.5.1
 
 ## Changed

@@ -408,6 +408,14 @@ export const register: Register = (on, options) => {
     const band = await read($, bandAtom)
     if (!band.line && !band.isRunning) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
+    if (e.surface !== 'terminal') {
+      return (
+        <Box borderStyle="round" borderDimColor paddingX={1} columnGap={1} flexWrap="wrap" alignItems="center">
+          <Text dimColor>{band.isRunning ? 'Self Improve: learning from this session...' : band.line}</Text>
+          <Button key="open" label="Review" onPress={() => void $.ui.open({ id: PANE, title: 'Self Improve', closeOnEscape: true })} />
+        </Box>
+      )
+    }
     return (
       <Box>
         <Text dimColor>{band.isRunning ? 'Self Improve: learning from this session...' : band.line} </Text>

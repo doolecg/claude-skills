@@ -273,14 +273,14 @@ describe('wiring', () => {
     await $.command.run(command('open'))
     for (const surface of ['terminal', 'desktop'] as const) {
       const { ui, all } = await texts($, surface)
-      expect(all).toContain('FLIGHTDECK')
+      expect(all).toContain(surface === 'terminal' ? 'FLIGHTDECK' : 'Flightdeck')
       expect(all).toContain('Opus 5.5')
       expect(all).toContain('high')
       expect(all).toContain('23%')
       expect(all).toContain('$1.42')
       expect(all).toContain('5h')
       expect(all).toContain('7d')
-      expect(all).toContain('╭')
+      if (surface === 'terminal') expect(all).toContain('╭')
       expect(all).toContain('Subagents show here while they work.')
       await ui.unmount()
     }

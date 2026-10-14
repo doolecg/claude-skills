@@ -2,7 +2,7 @@
 // Every mod that draws a sidebar tab keeps a copy of this file as hooks/sidebar-kit.tsx.
 // Edit it in mods/sidebar/hooks and run `python mods/sidebar/copy-kit.py` so the copies stay the same.
 
-export const KIT_VERSION = 4
+export const KIT_VERSION = 5
 
 /** The pane id every sidebar tab is drawn under its own plugin, and the width they all open at. */
 export const SIDEBAR_COLUMNS = 56
@@ -121,6 +121,10 @@ export function sbAlong(stops: readonly string[], t: number): string {
 }
 
 export type SbPixel = { ch: string; color: string }
+/** What a meter is, beside its pixels: the lit span (fractions 0..1) and its colours, so a surface with no pixel cells can draw it as a bar. */
+export type SbMeterInfo = { from: number; to: number; stops: readonly string[]; track: string }
+export type SbPixels = SbPixel[] & { meter?: SbMeterInfo }
+const withMeter = (pixels: SbPixel[], meter: SbMeterInfo): SbPixels => Object.assign(pixels, { meter })
 export type SbRun = { text: string; color: string }
 export type SbLook = { stops: readonly string[]; track: string; tint: string; tick: number; seed?: number }
 
@@ -189,15 +193,19 @@ function band(width: number, from: number, to: number, look: SbLook): SbPixel[] 
 }
 
 /** A meter `width` cells wide with `fraction` (0..1) of it lit. */
-export const sbMeter = (width: number, fraction: number, look: SbLook): SbPixel[] =>
-  band(Math.max(0, width), 0, Math.max(0, Math.min(1, fraction)), look)
+export const sbMeter = (width: number, fraction: number, look: SbLook): SbPixel[] => {
+  const to = Math.max(0, Math.min(1, fraction))
+  return withMeter(band(Math.max(0, width), 0, to, look), { from: 0, to, stops: look.stops, track: look.track })
+}
 
 /** Work with no percent yet: a short scatter of lit pixels running along the track. */
 export function sbSweep(width: number, look: SbLook): SbPixel[] {
   const span = 0.3
   const steps = width + 4
   const front = ((look.tick % steps) / (steps - 1)) * (1 + span)
-  return band(Math.max(0, width), front - span, Math.min(front, 0.999), look)
+  const from = front - span
+  const to = Math.min(front, 0.999)
+  return withMeter(band(Math.max(0, width), from, to, look), { from, to, stops: look.stops, track: look.track })
 }
 
 export function sbRuns(pixels: readonly SbPixel[]): SbRun[] {
@@ -300,11 +308,35 @@ export const sbKit = (els: Els, surface: string, pal: SbPalette, columns: number
 export const sbRows = (props: { placement?: string; scroll?: { bodyRows?: number } }): number =>
   props.placement === 'dock' ? Math.max(0, Math.floor(props.scroll?.bodyRows ?? 0)) : 0
 
+/** A meter off the terminal: a small rounded track with the lit span drawn over it, as an inline Svg. */
+export function sbSvgBar(k: SbKit, key: string, pixels: SbPixel[], width = 120, height = 8) {
+  const { Svg } = k.els
+  if (!Svg || pixels.length === 0) return null
+  const m = (pixels as SbPixels).meter
+  const stops = m?.stops ?? [pixels[0]!.color, pixels[pixels.length - 1]!.color]
+  const track = m?.track ?? k.pal.track
+  const from = Math.max(0, Math.min(1, m?.from ?? 0))
+  const to = Math.max(from, Math.min(1, m?.to ?? 1))
+  const x = Math.round(from * width * 10) / 10
+  const w = Math.round((to - from) * width * 10) / 10
+  const r = height / 2
+  const id = `g${key.replace(/[^a-zA-Z0-9]/g, '')}`
+  const grad = stops.map((c, i) => `<stop offset="${stops.length === 1 ? 0 : i / (stops.length - 1)}" stop-color="${c}"/>`).join('')
+  const source =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+    `<defs><linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0">${grad}</linearGradient></defs>` +
+    `<rect x="0" y="0" width="${width}" height="${height}" rx="${r}" fill="${track}"/>` +
+    (w > 0 ? `<rect x="${x}" y="0" width="${Math.max(w, height)}" height="${height}" rx="${r}" fill="url(#${id})"/>` : '') +
+    `</svg>`
+  return <Svg key={key} source={source} width={width} height={height} alt={`Meter ${Math.round((to - from) * 100)}% full`} />
+}
+
 /** A meter as one Raster of braille pixels on `bg` (the terminal's own background by default) in the terminal, coloured text elsewhere. */
 export function sbBar(k: SbKit, key: string, pixels: SbPixel[], bg?: string) {
   const { Text } = k.els
   if (pixels.length === 0) return null
-  if (k.isTerminal && 'Raster' in k.els) {
+  if (!k.isTerminal) return sbSvgBar(k, key, pixels)
+  if ('Raster' in k.els) {
     const Raster = k.els.Raster
     return <Raster key={key} columns={pixels.length} rows={1} cells={sbRasterCells(pixels, bg)} />
   }
@@ -331,6 +363,13 @@ export const sbLevel = (k: SbKit, pct: number, seed = 0): SbLook => ({
 export function sbCard(k: SbKit, key: string, children: unknown, opts: { direction?: 'row' | 'column'; border?: string } = {}) {
   const { Box } = k.els
   const direction = opts.direction ?? 'column'
+  if (!k.isTerminal) {
+    return (
+      <Box key={key} flexDirection={direction} gap="xs" borderStyle="round" borderColor={opts.border ?? k.pal.border} padding="sm" width="100%">
+        {children}
+      </Box>
+    )
+  }
   return (
     <Box
       key={key}
@@ -349,6 +388,14 @@ export function sbCard(k: SbKit, key: string, children: unknown, opts: { directi
 /** A row with a left part that clips and a right part that stays whole. */
 export function sbSplit(k: SbKit, key: string, left: unknown, right?: unknown) {
   const { Box } = k.els
+  if (!k.isTerminal) {
+    return (
+      <Box key={key} width="100%" justifyContent="space-between" alignItems="center" gap="sm">
+        <Box flexShrink={1}>{left}</Box>
+        {right ? <Box flexShrink={0}>{right}</Box> : null}
+      </Box>
+    )
+  }
   return (
     <Box key={key} width="100%">
       <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
@@ -367,6 +414,15 @@ export function sbSplit(k: SbKit, key: string, left: unknown, right?: unknown) {
 export function sbSection(k: SbKit, key: string, text: string, width = k.columns) {
   const { Box, Text } = k.els
   const label = text.toUpperCase()
+  if (!k.isTerminal) {
+    return (
+      <Box key={key} marginTop="sm">
+        <Text color={k.pal.dim} bold>
+          {label}
+        </Text>
+      </Box>
+    )
+  }
   return (
     <Box key={key} height={1} overflow="hidden" marginTop={1}>
       <Text color={k.pal.dim} bold>
@@ -380,6 +436,7 @@ export function sbSection(k: SbKit, key: string, text: string, width = k.columns
 /** A small filled button: `primary` in the accent colour, the rest on the pill colour. */
 export function sbButton(k: SbKit, key: string, label: string, onPress: () => void, primary = false) {
   const { Button, Text } = k.els
+  if (!k.isTerminal) return <Button key={key} label={label} variant={primary ? 'primary' : 'secondary'} onPress={onPress} />
   return (
     <Button key={key} plain onPress={onPress}>
       <Text backgroundColor={primary ? k.pal.accent : k.pal.pillBg} color={primary ? k.pal.ink : k.pal.pillFg} bold={primary}>
@@ -391,6 +448,7 @@ export function sbButton(k: SbKit, key: string, label: string, onPress: () => vo
 
 export function sbToggle(k: SbKit, key: string, isOn: boolean, onPress: () => void) {
   const { Button, Text } = k.els
+  if (!k.isTerminal) return <Button key={key} label={isOn ? 'On' : 'Off'} variant={isOn ? 'primary' : 'secondary'} onPress={onPress} />
   return (
     <Button key={key} plain onPress={onPress}>
       {isOn ? (
@@ -471,6 +529,32 @@ export const sbStripRows = (k: SbKit, strip: SbStrip): number => 3 + Math.max(1,
 export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
   const { Box, Text, Button } = k.els
   const { pal } = k
+  if (!k.isTerminal) {
+    return sbCard(k, 'sb-strip', [
+      sbSplit(
+        k,
+        'sb-head',
+        <Text color={pal.accent} bold>
+          ◆ DOOLE'S SIDEBAR
+        </Text>,
+        <Box gap="xs">
+          <Button key="sb-menu" label="⋯" variant={strip.active === 'sidebar' ? 'primary' : 'secondary'} onPress={a.onMenu} />
+          <Button key="sb-close" label="✕" variant="secondary" onPress={a.onClose} />
+        </Box>,
+      ),
+      <Box key="sb-tabs" flexDirection="row" flexWrap="wrap" gap="xs">
+        {strip.tabs.map(t => {
+          const isOpen = t.id === strip.active
+          return (
+            <Button key={`sb-tab:${t.id}`} variant={isOpen ? 'primary' : 'secondary'} onPress={() => a.onTab(t.id)}>
+              <Text bold={isOpen}>{sbTabText(t)}</Text>
+              {t.badge > 0 ? <Text color={isOpen ? pal.ink : pal.accent}>{` ${Math.min(t.badge, 99)}`}</Text> : null}
+            </Button>
+          )
+        })}
+      </Box>,
+    ])
+  }
   const rows = sbTabRows(strip.tabs, sbStripWidth(k)).map((r, ri) => (
     <Box key={`sb-tabs:${ri}`} height={1} overflow="hidden">
       {r.tabs.map((t, i) => {
@@ -542,7 +626,7 @@ function drawSegs(k: SbKit, key: string, segs: readonly SbSeg[]) {
       </Text>
     )
     return s.onPress ? (
-      <Button key={s.key ?? `${key}:b${i}`} plain onPress={s.onPress}>
+      <Button key={s.key ?? `${key}:b${i}`} plain={k.isTerminal ? true : undefined} onPress={s.onPress}>
         {text}
       </Button>
     ) : (
@@ -596,6 +680,22 @@ export function sbFramedBar(k: SbKit, key: string, f: SbFramed) {
   const { Box, Text } = k.els
   const color = f.color ?? k.pal.dim
   const cells = Math.max(1, f.width - 2)
+  if (!k.isTerminal) {
+    const labels = (left: readonly SbSeg[], right: readonly SbSeg[], id: string) =>
+      left.length + right.length === 0 ? null : (
+        <Box key={`${key}-${id}`} width="100%" justifyContent="space-between" gap="sm">
+          <Box gap="xs">{drawSegs(k, `${key}-${id}l`, left)}</Box>
+          <Box gap="xs">{drawSegs(k, `${key}-${id}r`, right)}</Box>
+        </Box>
+      )
+    return (
+      <Box key={key} flexDirection="column" gap="xs" borderStyle="round" borderColor={color} padding="sm" width="100%">
+        {labels(f.top ?? [], f.topRight ?? [], 'top')}
+        {sbSvgBar(k, `${key}-bar`, f.bar(cells), 240)}
+        {labels(f.bottom ?? [], f.bottomRight ?? [], 'bot')}
+      </Box>
+    )
+  }
   return (
     <Box key={key} flexDirection="column" width={f.width} flexShrink={0}>
       {sbFrameEdge(k, `${key}-top`, f.width, ['╭', '╮'], f.top ?? [], f.topRight ?? [], color)}
@@ -612,6 +712,7 @@ export function sbFramedBar(k: SbKit, key: string, f: SbFramed) {
 /** A one-row bar with thin outline caps either side (`▕bar▏`), for bars that sit in a line of text. */
 export function sbCappedBar(k: SbKit, key: string, pixels: SbPixel[], bg?: string) {
   const { Text } = k.els
+  if (!k.isTerminal) return sbBar(k, key, pixels, bg)
   return [
     <Text key={`${key}-l`} color={k.pal.dim}>
       ▕
@@ -631,6 +732,19 @@ export function sbTitle(
 ) {
   const { Text, Button } = k.els
   const { pal } = k
+  if (!k.isTerminal) {
+    return sbSplit(
+      k,
+      'sb-title',
+      <Text>
+        <Text color={pal.accent} bold>
+          {`${t.icon} ${t.name.toUpperCase()}`}
+        </Text>
+        <Text color={pal.dim}>{t.status ? ` · ${t.status}` : ''}</Text>
+      </Text>,
+      right ? <Button key="sb-back" label={`‹ ${right.label}`} variant="secondary" onPress={right.onPress} /> : undefined,
+    )
+  }
   return sbSplit(
     k,
     'sb-title',
@@ -665,6 +779,43 @@ export function sbFooter(k: SbKit, f: SbFooter) {
   const atLimit = p.limit > 0 && p.count >= p.limit
   const dotColour = p.count > p.limit ? pal.bad : atLimit ? pal.warn : pal.accent
   const dots = Array.from({ length: Math.max(p.limit, p.count) }, (_, i) => (i < p.count ? '●' : '○')).join('')
+  if (!k.isTerminal) {
+    const note = atLimit ? 'ask before more' : p.editedSince && p.count > 0 ? 'fix waiting' : ''
+    return sbCard(k, 'sb-footer', [
+      <Box key="ft-sources" flexDirection="row" flexWrap="wrap" gap="md">
+        <Text>
+          <Text color={hs[0]}>{`${hs[1]} `}</Text>
+          <Text color={f.hindsight === 'up' ? pal.text : pal.dim}>{f.hindsight === 'down' ? 'Hindsight down' : f.hindsight === 'off' ? 'Hindsight off' : 'Hindsight'}</Text>
+        </Text>
+        <Text>
+          <Text color={cg[0]}>{`${cg[1]} `}</Text>
+          <Text color={f.codegraph === 'indexed' ? pal.text : pal.dim}>{f.codegraph === 'indexed' ? 'CodeGraph' : 'CodeGraph: not indexed'}</Text>
+        </Text>
+      </Box>,
+      git ? (
+        <Text key="ft-git">
+          <Text color={pal.info}>{'⎇ '}</Text>
+          <Text color={pal.text} bold>
+            {git.branch}
+          </Text>
+          <Text color={git.changed > 0 ? pal.warn : pal.dim}>{git.changed > 0 ? ` · ${git.changed} changed` : ' · clean'}</Text>
+          <Text color={pal.dim}>{`${git.ahead > 0 ? ` ↑${git.ahead}` : ''}${git.behind > 0 ? ` ↓${git.behind}` : ''}`}</Text>
+        </Text>
+      ) : (
+        <Text key="ft-git" color={pal.faint}>
+          ⎇ not a git repo
+        </Text>
+      ),
+      <Box key="ft-passes" flexDirection="row" flexWrap="wrap" gap="xs">
+        <Text color={pal.dim} bold>
+          PASSES
+        </Text>
+        <Text color={dotColour}>{dots || '—'}</Text>
+        <Text color={atLimit ? pal.warn : pal.text}>{`${p.count} of ${p.limit}`}</Text>
+        {note ? <Text color={pal.dim}>{`· ${note}`}</Text> : null}
+      </Box>,
+    ])
+  }
   return sbCard(k, 'sb-footer', [
     <Box key="ft-sources" height={1} overflow="hidden">
       <Text color={hs[0]}>{`${hs[1]} `}</Text>
@@ -700,6 +851,15 @@ export function sbFooter(k: SbKit, f: SbFooter) {
 /** The whole tab: the strip on top, then the tab's own rows, then the Context footer at the bottom when that mod is loaded. */
 export function sbFrame(k: SbKit, strip: SbStrip, a: SbStripActions, body: unknown[]) {
   const { Box } = k.els
+  if (!k.isTerminal) {
+    return (
+      <Box flexDirection="column" gap="sm" width="100%">
+        {sbStrip(k, strip, a)}
+        {body}
+        {strip.footer ? sbFooter(k, strip.footer) : null}
+      </Box>
+    )
+  }
   if (!strip.footer) {
     return (
       <Box flexDirection="column" width="100%">

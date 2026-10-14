@@ -25,6 +25,8 @@ import {
   segments,
   toolLabel,
 } from './bar-logic'
+import { desktopBar, desktopToolbox } from './desktop'
+import type { AppEls } from './desktop'
 import { toolboxRows, toolboxWidth } from './toolbox'
 import { pickInstalls } from './toolbox-logic'
 import type { Install } from './toolbox-logic'
@@ -344,6 +346,29 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    if (e.surface === 'desktop' || e.surface === 'mobile') {
+      const names = e.props.modes.length > 0 ? e.props.modes.join(' & ') : ''
+      const openToolbox = async () => {
+        void loadMods($).catch(() => {})
+        try {
+          await loadChoices($)
+        } catch {}
+        await update($, menu, () => 'tools')
+        await $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
+      }
+      return desktopBar({
+        els: $.ui.resolve(e) as AppEls,
+        pal: paletteFor(await read($, theme), colour),
+        title: await read($, label),
+        figures: await read($, figures),
+        modes: names,
+        chosen: await read($, tools),
+        states: await read($, toolStates),
+        onOff: await read($, modeStates),
+        runTool: name => void runCommand($, name),
+        openToolbox: () => void openToolbox(),
+      })
+    }
     if (e.surface !== 'terminal') return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const pal = paletteFor(await read($, theme), colour)
@@ -518,6 +543,25 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: TOOLBOX }, async ($, e) => {
+    if (e.surface === 'desktop' || e.surface === 'mobile') {
+      const loaded = await read($, models)
+      return desktopToolbox({
+        els: $.ui.resolve(e) as AppEls,
+        pal: paletteFor(await read($, theme), colour),
+        title: await read($, label),
+        figures: await read($, figures),
+        models: loaded.length > 0 ? loaded : modelChoices(undefined),
+        modes: await read($, modeStates),
+        mods: await read($, mods),
+        choices: await read($, choices),
+        pickModel: alias => void pickModel($, alias, true),
+        pickEffort: level => void pickEffort($, level, true),
+        flip: command => void runCommand($, command),
+        toggleMod: mod => void toggleMod($, mod),
+        launch: command => void closeTools($).then(() => runCommand($, command)),
+        choosePills: () => void openPicker($),
+      })
+    }
     if (e.surface !== 'terminal') {
       const { Text } = $.ui.resolve(e)
       return <Text>The toolbox opens from the bar in the terminal.</Text>
@@ -562,9 +606,17 @@ export const register: Register = (on, options) => {
       saveTools($, chosen.includes(name) ? chosen.filter(n => n !== name) : [...chosen, name])
 
     const onOff = await read($, modeStates)
+    const isApp = e.surface === 'desktop' || e.surface === 'mobile'
     const item = (c: BarTool, isIn: boolean) => {
       const mode = onOff[c.name]
       const about = mode ? `  ${mode.label} on/off button, now ${mode.isOn ? 'on' : 'off'}` : c.description ? `  ${c.description}` : ''
+      if (isApp) {
+        return (
+          <Button key={`pick:${c.name}`} variant={isIn ? 'primary' : undefined} onPress={() => void toggle(c.name)}>
+            {`/${c.name}${about.trim() ? ` - ${about.trim()}` : ''}`}
+          </Button>
+        )
+      }
       return (
         <Button key={`pick:${c.name}`} plain onPress={() => void toggle(c.name)}>
           <Text color={isIn ? pal.good : pal.dim}>{isIn ? '● ' : '○ '}</Text>

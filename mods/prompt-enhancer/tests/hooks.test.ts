@@ -104,7 +104,7 @@ const until = async (ok: () => boolean) => {
 }
 
 const start = ($: any) => $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
-const mountRow = ($: any, surface: 'terminal' | 'desktop') =>
+const mountRow = ($: any, surface: 'terminal' | 'desktop' | 'vscode' | 'mobile') =>
   $.ui.mount({ plugin: 'prompt-enhancer', surface, component: 'SessionMode', props: { modes: [] } })
 
 for (const surface of SURFACES) {
@@ -146,6 +146,30 @@ for (const surface of SURFACES) {
     await row.press({ key: 'pe-undo' })
     expect(w.box).toBe('fix the login bug')
     expect(await row.find({ key: 'pe-undo' })).toBeUndefined()
+  })
+}
+
+// The desktop row is native Buttons and plain Text: no pill caps (◖ ◗) and no box-drawing glyphs in any Text.
+test('desktop: no Text draws a pill cap or box-drawing glyph, idle or after a run', { options: { soulBank: 'soul' } }, async ($, on) => {
+  engine(on, baseWorld())
+  await start($)
+  const row = await mountRow($, 'desktop')
+  const glyph = /[◖◗─-╿]/
+  const texts = async (): Promise<string[]> => (await row.findAll({ type: 'Text' })).map((t: { text?: unknown }) => String(t.text ?? ''))
+  expect((await texts()).length).toBeGreaterThan(0)
+  expect((await texts()).some((t: string) => glyph.test(t))).toBe(false)
+  await row.press({ key: 'pe-enhance' })
+  expect(await row.find({ type: 'Text', text: 'Hindsight 2 · CodeGraph 1' })).toBeDefined()
+  expect((await texts()).some((t: string) => glyph.test(t))).toBe(false)
+})
+
+for (const surface of ['vscode', 'mobile'] as const) {
+  test(`${surface}: the row is left to the hooks beneath, with no Enhance button`, async ($, on) => {
+    engine(on, baseWorld())
+    await start($)
+    const row = await mountRow($, surface)
+    expect(await row.find({ type: 'Text', text: 'status row' })).toBeDefined()
+    expect(await row.find({ key: 'pe-enhance' })).toBeUndefined()
   })
 }
 

@@ -1,3 +1,10 @@
+# Self Improve 2.4.0
+
+## New
+- A proper Claude desktop app version of its band and tab: a rounded card with a native Review button, and native buttons for the filters. The terminal looks the same as before.
+
+---
+
 # Self Improve 2.3.0
 
 ## New

@@ -88,3 +88,35 @@ test('the pane follows the sidebar’s strip: opened for its tab, closed when it
   expect(closed).toEqual(['ideas'])
   expect(ran).toEqual([])
 })
+
+test('on the desktop the shelf is native Buttons and an Input with no Raster or box drawing; mobile has no Input', { plugins: [SIDEBAR] }, async ($, on) => {
+  mock.clock(on, { now: 1_800_000_000_000 })
+  mock.store(on)
+  on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: 'F:/repo' }))
+  on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }))
+  on('ui.toast', () => ({ value: undefined }))
+  await $.session.start({ cwd: 'F:/repo', surface: 'terminal', isInteractive: true } as any)
+  await $.command.run({ command: 'idea', args: 'add dark mode', origin: { kind: 'composer' as const } } as any)
+  const props = { title: 'Idea Shelf', isFocused: false, bodyColumns: 56, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} }
+  const box = new RegExp('[' + String.fromCharCode(0x2500) + '-' + String.fromCharCode(0x259f) + String.fromCharCode(0x2800) + '-' + String.fromCharCode(0x28ff) + ']')
+  for (const strip of [false, true]) {
+    if (strip)
+      await $.command.run({
+        command: 'sb-strip',
+        args: JSON.stringify({ isOn: true, active: 'idea-shelf', tabs: [{ id: 'idea-shelf', icon: 'I', name: 'Idea Shelf', badge: 1 }], theme: 'dark', colour: 'Coral' }),
+        origin: { kind: 'composer' as const },
+      } as any)
+    const ui = await $.ui.mount({ plugin: 'idea-shelf', surface: 'desktop', component: 'Pane', requestId: 'ideas', props } as any)
+    const all = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join(String.fromCharCode(10))
+    expect(all).toContain('add dark mode')
+    expect((await ui.findAll({ type: 'Button' })).length, `buttons strip=${strip}`).toBeGreaterThan(0)
+    expect(await ui.findAll({ type: 'Raster' })).toHaveLength(0)
+    if (strip) expect((await ui.findAll({ type: 'Input' })).length, 'input').toBeGreaterThan(0)
+    expect(all).not.toMatch(box)
+    await ui.unmount()
+    const mobile = await $.ui.mount({ plugin: 'idea-shelf', surface: 'mobile', component: 'Pane', requestId: 'ideas', props } as any)
+    expect(await mobile.findAll({ type: 'Input' })).toHaveLength(0)
+    await mobile.unmount()
+  }
+})

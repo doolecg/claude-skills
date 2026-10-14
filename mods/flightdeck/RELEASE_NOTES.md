@@ -1,3 +1,10 @@
+# Flightdeck 1.5.0
+
+## New
+- A proper Claude desktop app version: rounded cards, smooth meters, SVG critters and native Stop and Clear buttons. The terminal looks the same as before.
+
+---
+
 # Flightdeck 1.4.2
 
 ## Changed

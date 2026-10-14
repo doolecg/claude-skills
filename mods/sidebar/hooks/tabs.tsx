@@ -74,6 +74,20 @@ function cleanView(k: SbKit, d: ViewData) {
       const active = t.status === 'active'
       const look = done ? sbGood(k, i + 1) : sbWarm(k, i + 1)
       const pixels = active && !t.hasReported && !isDone ? sbSweep(10, look) : sbMeter(10, done ? 1 : active ? t.percent / 100 : 0, look)
+      if (!k.isTerminal) {
+        return (
+          <Box key={`step:${t.id}`} alignItems="center" gap="sm">
+            <Text color={done ? pal.good : active ? pal.accent : pal.faint}>{done ? '✓' : active ? '▶' : '○'}</Text>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text color={done ? pal.dim : active ? pal.text : pal.faint} bold={active}>
+                {t.name}
+              </Text>
+            </Box>
+            {sbCappedBar(k, `step-bar:${t.id}`, pixels)}
+            <Text color={active ? pal.accent : pal.dim}>{done ? 'done' : active ? (t.hasReported ? `${t.percent}%` : '…') : ''}</Text>
+          </Box>
+        )
+      }
       return (
         <Box key={`step:${t.id}`} height={1} overflow="hidden">
           <Text color={done ? pal.good : active ? pal.accent : pal.faint}>{`${done ? '✓' : active ? '▶' : '○'} `}</Text>
@@ -94,7 +108,7 @@ function cleanView(k: SbKit, d: ViewData) {
           sbSplit(
             k,
             'job-head',
-            <Text wrap="truncate-end">
+            <Text wrap={k.isTerminal ? 'truncate-end' : undefined}>
               <Text color={isDone ? pal.good : pal.warmFrom}>{isDone ? '✓ ' : '✶ '}</Text>
               <Text color={isDone ? pal.good : pal.text} bold>
                 {job.title}
@@ -137,7 +151,7 @@ function configTab(k: SbKit, d: ViewData, id: string) {
   const extra: unknown[] = []
   if (id === 'prompt-enhancer' && d.enhance) {
     extra.push(
-      <Text key="last" wrap="truncate-end">
+      <Text key="last" wrap={k.isTerminal ? 'truncate-end' : undefined}>
         <Text color={k.pal.dim}>Last run </Text>
         <Text color={k.pal.text}>{d.enhance.counts || 'no sources'}</Text>
         <Text color={d.enhance.ok ? k.pal.good : k.pal.bad}>{d.enhance.ok ? ' · ✓ rewritten' : ' · ✗ no rewrite'}</Text>
@@ -157,14 +171,14 @@ function ruleGuard(k: SbKit, d: ViewData) {
     sbSplit(
       k,
       `block:${i}`,
-      <Text wrap="truncate-end">
+      <Text wrap={k.isTerminal ? 'truncate-end' : undefined}>
         <Text color={pal.bad}>{'⊘ '}</Text>
         <Text color={pal.text}>{b.label}</Text>
       </Text>,
       <Text color={pal.dim}>{fmtAgo(b.at, d.now)}</Text>,
     ),
-    <Text key={`block-what:${i}`} color={pal.faint} wrap="truncate-end">
-      {`  ${b.what}`}
+    <Text key={`block-what:${i}`} color={pal.faint} wrap={k.isTerminal ? 'truncate-end' : undefined}>
+      {k.isTerminal ? `  ${b.what}` : b.what}
     </Text>,
   ])
   return [
@@ -186,10 +200,11 @@ function sidebarPage(k: SbKit, d: ViewData) {
     return sbSplit(
       k,
       `order:${id}`,
-      <Text wrap="truncate-end">
+      <Text wrap={k.isTerminal ? 'truncate-end' : undefined}>
         <Text color={isShown ? pal.accent : pal.faint}>{`${entry.icon} `}</Text>
         <Text color={isShown ? pal.text : pal.dim}>{entry.name}</Text>
       </Text>,
+      k.isTerminal ? (
       <Box>
         <Button key={`sb-up:${id}`} plain onPress={() => d.moveTab(id, -1)}>
           <Text color={i === 0 ? pal.faint : pal.accent}>▲</Text>
@@ -200,7 +215,14 @@ function sidebarPage(k: SbKit, d: ViewData) {
         </Button>
         <Text>{'  '}</Text>
         {sbToggle(k, `sb-show:${id}`, isShown, () => d.setHidden(id, isShown))}
-      </Box>,
+      </Box>
+      ) : (
+        <Box gap="xs" alignItems="center">
+          <Button key={`sb-up:${id}`} label="▲" variant="secondary" onPress={() => d.moveTab(id, -1)} />
+          <Button key={`sb-down:${id}`} label="▼" variant="secondary" onPress={() => d.moveTab(id, 1)} />
+          {sbToggle(k, `sb-show:${id}`, isShown, () => d.setHidden(id, isShown))}
+        </Box>
+      ),
     )
   })
   const missing = CATALOG.filter(c => !d.installed.includes(c.id)).map(c => c.name)
@@ -221,7 +243,7 @@ function sidebarPage(k: SbKit, d: ViewData) {
           </Text>,
         ]
       : []),
-    <Box key="reload" marginTop={1}>
+    <Box key="reload" marginTop={k.isTerminal ? 1 : 'sm'}>
       {sbButton(k, 'sb-reopen', 'Reload the list', () => d.openTab(SIDEBAR_TAB), false)}
     </Box>,
   ]

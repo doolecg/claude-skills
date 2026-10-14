@@ -80,10 +80,208 @@ export function scrollThumb(rows: number, total: number, shown: number, offset: 
   return [top, top + size]
 }
 
+/** A rounded meter as an Svg: a track and a fill, `fraction` of the way across. */
+function meterSvg(fraction: number, fill: string, track: string, w = 240, h = 8): string {
+  const f = Math.max(0, Math.min(1, fraction))
+  const bar = f > 0 ? `<rect width="${Math.max(h, Math.round(w * f))}" height="${h}" rx="${h / 2}" fill="${fill}"/>` : ''
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><rect width="${w}" height="${h}" rx="${h / 2}" fill="${track}"/>${bar}</svg>`
+}
+
+/** The pane as the Claude app draws it (desktop, editor and mobile): the same facts and buttons as native boxes, text and Svg meters. */
+function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: RenderElement; layout: PaneLayout } {
+  const { Box, Text, Button } = els
+  const Svg = 'Svg' in els ? els.Svg : undefined
+  const { main, usage, tick, now, strip } = d
+  const k = sbKit(els, surface, sbPalette(strip?.theme ?? d.theme, strip?.colour), d.columns, tick, strip ? d.bodyRows : 0)
+  const pal = strip ? k.pal : d.pal
+  const groups = groupAgents(d.agents)
+  const working = groups.working.length
+  const level = (pct: number) => (pct >= 80 ? pal.bad : pct >= 60 ? pal.warn : pal.good)
+  const meter = (key: string, fraction: number, color: string, alt: string) =>
+    Svg ? <Svg key={key} source={meterSvg(fraction, color, pal.track)} alt={alt} width={240} height={8} /> : null
+
+  const status = working > 0 ? `${working} agent${working === 1 ? '' : 's'} working` : 'no agents working'
+  const header = strip ? (
+    sbTitle(k, { icon: '✈', name: 'Flightdeck', status })
+  ) : (
+    <Box key="header" columnGap={1} flexWrap="wrap">
+      <Text color={pal.accent} bold>
+        Flightdeck
+      </Text>
+      <Text color={pal.dim}>{status}</Text>
+    </Box>
+  )
+
+  const model = modelName(main.model) || 'Main session'
+  const size = windowLabel(usage.window)
+  const pct = usage.ctxPct ?? 0
+  const turnMs = main.turnStartedAt > 0 ? (main.turnEndedAt > 0 ? main.turnEndedAt : now) - main.turnStartedAt : 0
+  const turnText = main.turnStartedAt > 0 ? `${main.isRunning ? 'turn' : 'last turn'} ${fmtDuration(turnMs)}` : 'no turn yet'
+  const mainCard = (
+    <Box key="main" flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1} rowGap={1}>
+      <Box columnGap={1} flexWrap="wrap" justifyContent="space-between">
+        <Box columnGap={1} flexWrap="wrap">
+          <Text color={pal.text} bold>
+            {model}
+          </Text>
+          {size ? <Text color={pal.dim}>{size}</Text> : null}
+          {main.effort ? <Text color={pal.info}>{`effort ${main.effort}`}</Text> : null}
+        </Box>
+        <Text color={main.isRunning ? pal.good : pal.dim}>{main.isRunning ? 'working' : 'idle'}</Text>
+      </Box>
+      {meter('main-ctx', pct / 100, level(pct), `Context ${usage.ctxPct === null ? 'unknown' : `${Math.round(pct)} percent used`}`)}
+      <Box columnGap={1} flexWrap="wrap" justifyContent="space-between">
+        <Text color={pal.text}>{`ctx ${usage.ctxPct === null ? '—' : `${Math.round(pct)}%`}${usage.costUsd !== null ? ` · ${fmtUsd(usage.costUsd)}` : ''}`}</Text>
+        <Text color={pal.dim}>{`${turnText} · ${main.steps} req`}</Text>
+      </Box>
+    </Box>
+  )
+  const limits = usage.limits.slice(0, 2)
+  const limitCards =
+    limits.length > 0 ? (
+      <Box key="limits" columnGap={1} rowGap={1} flexWrap="wrap">
+        {limits.map((l, i) => (
+          <Box key={`lim${i}`} flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1} flexGrow={1}>
+            <Box columnGap={1} justifyContent="space-between">
+              <Text color={pal.dim}>{limitLabel(l.kind)}</Text>
+              <Text color={l.pct >= 80 ? pal.bad : l.pct >= 60 ? pal.warn : pal.text}>{`${Math.round(l.pct)}%`}</Text>
+            </Box>
+            {meter(`lim-m${i}`, l.pct / 100, level(l.pct), `${limitLabel(l.kind)} limit ${Math.round(l.pct)} percent used`)}
+          </Box>
+        ))}
+      </Box>
+    ) : null
+
+  const sum = summaryOf(d.agents, now)
+  const totals = (
+    <Box key="totals" columnGap={1} flexWrap="wrap">
+      <Text color={pal.dim} bold>
+        Agents
+      </Text>
+      <Text color={pal.dim}>{d.agents.length > 0 ? `${sum.cost} · ${sum.tokens} tokens · ${sum.time}` : 'none yet'}</Text>
+    </Box>
+  )
+
+  const heading = (key: string, label: string, n: number, isLive: boolean, action?: { label: string; onPress: () => void }) => (
+    <Box key={key} columnGap={1} alignItems="center" justifyContent="space-between">
+      <Box columnGap={1}>
+        <Text color={isLive ? pal.text : pal.dim} bold>
+          {label}
+        </Text>
+        <Text color={isLive ? pal.accent : pal.dim}>{String(n)}</Text>
+      </Box>
+      {action ? <Button key={`${key}-btn`} label={action.label} onPress={action.onPress} /> : null}
+    </Box>
+  )
+
+  const mark = (a: FdAgent): [string, string] =>
+    a.status === 'running'
+      ? ['✳', pal.accent]
+      : a.status === 'waiting'
+        ? ['‖', pal.warn]
+        : a.status === 'done'
+          ? ['✓', pal.good]
+          : a.status === 'failed'
+            ? ['✗', pal.bad]
+            : ['■', pal.dim]
+  const critter = (a: FdAgent) => {
+    if (!Svg) return null
+    const c = critterOf(a.id)
+    return <Svg key={`critter:${a.id}`} source={svgOf(a.id, a.status === 'running')} alt={`${c.name}, a ${c.tint} critter in a ${c.hat}`} width={36} height={36} />
+  }
+  const runCard = (a: FdAgent) => {
+    const [glyph, glyphColor] = mark(a)
+    const win = windowOf(a.model, main.model, usage.window)
+    const ctx = win && a.ctxTokens > 0 ? Math.min(100, Math.round((a.ctxTokens / win) * 100)) : 0
+    const name = modelName(a.model)
+    const metrics = agentMetrics(a, win, now).split('  ')
+    const time = metrics.pop() ?? ''
+    return (
+      <Box key={`row:${a.id}`} borderStyle="round" borderColor={a.status === 'waiting' ? pal.warn : pal.sep} paddingX={1} columnGap={1} alignItems="center">
+        {critter(a)}
+        <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+          <Box columnGap={1} justifyContent="space-between" alignItems="center">
+            <Box columnGap={1} flexShrink={1}>
+              <Text color={glyphColor}>{glyph}</Text>
+              <Text color={pal.text} bold>
+                {a.description || a.type || 'Subagent'}
+              </Text>
+            </Box>
+            <Box columnGap={1} alignItems="center">
+              <Text color={pal.dim}>{time}</Text>
+              <Button key={`stop:${a.id}`} label="Stop" onPress={() => d.onStop(a.id)} />
+            </Box>
+          </Box>
+          {meter(`agent-m:${a.id}`, ctx / 100, a.status === 'waiting' ? pal.warn : pal.accent, `Context ${ctx} percent used`)}
+          <Box columnGap={1} flexWrap="wrap">
+            <Text color={pal.info}>{critterOf(a.id).name}</Text>
+            <Text color={pal.dim}>{`${name}${a.type ? ` · ${a.type}` : ''}${metrics.length > 0 ? ` · ${metrics.join(' ')}` : ''}`}</Text>
+          </Box>
+        </Box>
+      </Box>
+    )
+  }
+  const doneRow = (a: FdAgent) => {
+    const [glyph, glyphColor] = mark(a)
+    const time = agentMetrics(a, windowOf(a.model, main.model, usage.window), now).split('  ').pop() ?? ''
+    return (
+      <Box key={`done:${a.id}`} columnGap={1} alignItems="center" justifyContent="space-between">
+        <Box columnGap={1} flexShrink={1} flexWrap="wrap">
+          <Text color={glyphColor}>{glyph}</Text>
+          <Text color={pal.text}>{a.description || a.type || 'Subagent'}</Text>
+          <Text color={pal.dim}>{critterOf(a.id).name}</Text>
+        </Box>
+        <Box columnGap={1} alignItems="center">
+          <Text color={pal.dim}>{time}</Text>
+          <Button key={`clear:${a.id}`} label="Clear" onPress={() => d.onClear(a.id)} />
+        </Box>
+      </Box>
+    )
+  }
+
+  const parts: unknown[] = [
+    header,
+    mainCard,
+    limitCards,
+    totals,
+    heading('run-head', 'Running', working, working > 0, working > 0 ? { label: 'Stop all', onPress: d.onStopAll } : undefined),
+    working === 0 ? (
+      <Text key="run-empty" color={pal.dim}>
+        {d.agents.length === 0 ? 'Subagents show here while they work.' : 'None running.'}
+      </Text>
+    ) : (
+      <Box key="run-list" flexDirection="column" rowGap={1}>
+        {groups.working.map(runCard)}
+      </Box>
+    ),
+    heading('done-head', 'Done', groups.finished.length, false, groups.finished.length > 0 ? { label: 'Clear all', onPress: d.onClearAll } : undefined),
+    groups.finished.length === 0 ? (
+      <Text key="done-empty" color={pal.dim}>
+        Nothing finished yet.
+      </Text>
+    ) : (
+      <Box key="done-list" flexDirection="column" rowGap={1}>
+        {groups.finished.map(doneRow)}
+      </Box>
+    ),
+  ]
+  const layout: PaneLayout = { run: [0, 0], done: [0, 0], runMax: 0, doneMax: 0 }
+  if (strip) return { el: sbFrame(k, strip, sbActions(d.ask), parts), layout }
+  return {
+    el: (
+      <Box flexDirection="column" width="100%" rowGap={1}>
+        {parts}
+      </Box>
+    ),
+    layout,
+  }
+}
+
 /** The sidebar: the main session's outlined meters, then a list of running agents and one of finished agents, each scrolling on its own. */
 export function drawPane(els: Record<string, any>, surface: string, d: PaneData): { el: RenderElement; layout: PaneLayout } {
   const { Box, Text, Button } = els
   const isTerminal = surface === 'terminal'
+  if (!isTerminal) return drawApp(els, surface, d)
   const Raster = isTerminal && 'Raster' in els ? els.Raster : undefined
   const Svg = !isTerminal && 'Svg' in els ? els.Svg : undefined
   const { main, usage, tick, now, strip } = d

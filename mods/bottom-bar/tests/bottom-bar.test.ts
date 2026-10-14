@@ -381,7 +381,7 @@ test('terminal: measured figures reach the bar', async ($, on) => {
   expect(await bar.find({ type: 'Text', text: '30%' })).toBeDefined()
 })
 
-test('desktop: the hook defers to the engine and draws no pill', async ($, on) => {
+test('vscode: the hook defers to the engine and draws no pill', async ($, on) => {
   world(on)
   const asked: string[] = []
   // What sits beneath the mod is the engine's own drawing; the mod must pass the call to it.
@@ -389,8 +389,8 @@ test('desktop: the hook defers to the engine and draws no pill', async ($, on) =
     asked.push(e.surface)
     return draw($.ui.resolve(e).Text, {}, 'engine footer')
   })
-  const bar = await mountBar($, 'desktop')
-  expect(asked).toEqual(['desktop'])
+  const bar = await $.ui.mount({ plugin: 'bottom-bar', surface: 'vscode', component: 'SessionMode', props: BAR_PROPS } as any)
+  expect(asked).toEqual(['vscode'])
   expect(await bar.find({ type: 'Text', text: 'engine footer' })).toBeDefined()
   expect(await bar.find({ key: 'pill' })).toBeUndefined()
   expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
@@ -1394,4 +1394,71 @@ test('toolbox: in fullscreen the pill opens a docked pane; the main screen keeps
   await main.press({ key: 'pill' })
   expect(seen.opened.length).toBe(before)
   expect(await main.find({ key: 'tb-choose' })).toBeDefined()
+})
+
+// ------------------------------------------------------------------ the app
+
+const textsOf = (tree: any, out: string[] = []): string[] => {
+  if (typeof tree === 'string') out.push(tree)
+  if (typeof tree?.text === 'string') out.push(tree.text)
+  for (const child of tree?.children ?? []) textsOf(child, out)
+  return out
+}
+const GLYPHS = /[◖◗│─┌┐└┘╭╮╰╯▰▱]/
+
+test('app: the bar is one row of figures, a toolbox Button, no Raster and no glyph art', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const bar = await mountBar($, 'desktop')
+  const all = textsOf(await bar.drawn()).join(' ')
+  expect(all).toContain('Opus')
+  expect(all).toContain('10%')
+  expect(all).toContain('0 agents')
+  expect(all).not.toMatch(GLYPHS)
+  expect(await bar.find({ type: 'Raster' } as any)).toBeUndefined()
+  expect(await bar.find({ type: 'Svg' })).toBeDefined()
+  expect(await bar.find({ key: 'pill' })).toBeDefined()
+  await bar.press({ key: 'pill' })
+  expect(seen.opened).toContain(TOOLBOX)
+})
+
+test('app: the toolbox pane has the pickers and mods as Buttons, and picking a model sets it', async ($, on) => {
+  world(on)
+  registerCommands(on)
+  const engine = seedModel(on)
+  await startSession($)
+  const pane = await $.ui.mount({
+    plugin: 'bottom-bar',
+    surface: 'desktop',
+    component: 'Pane',
+    requestId: TOOLBOX,
+    props: PANE_PROPS,
+  })
+  expect(await pane.find({ key: 'tb-choose' })).toBeDefined()
+  expect(await pane.find({ key: 'tb-effort:low' })).toBeDefined()
+  expect(textsOf(await pane.drawn()).join(' ')).not.toMatch(GLYPHS)
+  expect(await pane.find({ type: 'Raster' } as any)).toBeUndefined()
+  await pane.press({ key: 'tb-model:sonnet' })
+  expect(engine.configSets).toContainEqual({ key: 'model', value: 'sonnet' })
+})
+
+test('app: the picker pane draws with Buttons and no glyph art', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  for (const surface of ['desktop', 'mobile'] as const) {
+    const pane = await $.ui.mount({
+      plugin: 'bottom-bar',
+      surface,
+      component: 'Pane',
+      requestId: PICKER,
+      props: PANE_PROPS,
+    } as any)
+    expect(textsOf(await pane.drawn()).join(' ')).not.toMatch(GLYPHS)
+    expect(await pane.find({ key: 'done' })).toBeDefined()
+  }
+  expect(seen.writes).toEqual([])
 })

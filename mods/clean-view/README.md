@@ -29,6 +29,13 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 - When it's off, every hidden row comes back and the band goes away. Your choice is remembered after a restart.
 - The band only shows while there is a job; nothing sits above the prompt otherwise.
 
+## Style
+
+Set it in `/plugin` (Clean View, Style). Default: Clean.
+
+- **Clean:** the full checklist band above the prompt, with tool calls, diffs and command output hidden.
+- **Steps only:** a smaller checklist, one compact line per step under a short header, and everything else in the transcript (tool calls, code, diffs, command output, reasoning) shows as normal. Claude still plans with `plan_steps` and `report_progress`, and questions still open in the band.
+
 ## What the band shows
 
 - **Working:** drawn like Flightdeck: the job is an outlined bar with its name and running time in the top edge and Step N of M and the percent in the bottom edge, then every step is its own outlined bar, side by side, wrapping onto more rows on a narrow terminal. Done steps get a green check, the current step a ▶, an accent outline and a meter that fills as Claude reports progress (a moving sweep until the first report), upcoming steps are faint with an empty meter. The job's outline turns amber for Needs you, red for Stuck and green for All done; highlights follow the Bottom Bar's Colour setting.
@@ -46,7 +53,7 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 - Haiku names each job in a few words in the background.
 - The checklist is kept in plugin state under `clean-view` (`cleanViewEnabled`, `checklist`, `tick`, and `modes` for the Bottom Bar), typed in `types/index.d.ts`, so other mods can read it.
 
-Works in the terminal and in the desktop app.
+Works in the terminal and in the desktop app. The desktop app gets its own drawing: a rounded card, native buttons for the questions and an Other field, and rounded SVG progress bars, with no box-drawing or pixel meters.
 
 ## Development
 

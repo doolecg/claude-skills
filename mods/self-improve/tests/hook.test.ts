@@ -109,6 +109,29 @@ test('the band says nothing was learned yet, on the terminal and the desktop', a
   }
 })
 
+const BOX = new RegExp('[' + String.fromCharCode(0x2500) + '-' + String.fromCharCode(0x259f) + String.fromCharCode(0x2800) + '-' + String.fromCharCode(0x28ff) + ']')
+const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join(String.fromCharCode(10))
+
+test('on the desktop the band is a native box with a Review button and the pane is native, with no Raster or box drawing', async ($, on) => {
+  host(on)
+  await start($)
+  await $.command.run({ command: 'learn', args: 'status' } as never)
+  const band = await $.ui.mount({ plugin: 'self-improve', surface: 'desktop', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 100 } as never })
+  expect(await band.find({ type: 'Button', key: 'open' })).toBeDefined()
+  expect(await band.findAll({ type: 'Raster' })).toHaveLength(0)
+  expect(await texts(band)).not.toMatch(BOX)
+  await band.unmount()
+  const pane = await $.ui.mount({ plugin: 'self-improve', surface: 'desktop', component: 'Pane', requestId: 'self-improve', props: { title: 'Self Improve', isFocused: false, bodyColumns: 100, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} } } as never)
+  expect(await pane.find({ type: 'Button', key: 'tab-lessons' })).toBeDefined()
+  expect(await pane.find({ type: 'Button', key: 'test' })).toBeDefined()
+  expect(await pane.findAll({ type: 'Raster' })).toHaveLength(0)
+  expect(await texts(pane)).not.toMatch(BOX)
+  await pane.unmount()
+  const mobile = await $.ui.mount({ plugin: 'self-improve', surface: 'mobile', component: 'Pane', requestId: 'self-improve', props: { title: 'Self Improve', isFocused: false, bodyColumns: 40, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} } } as never)
+  expect(await mobile.findAll({ type: 'Input' })).toHaveLength(0)
+  await mobile.unmount()
+})
+
 test('the recall tool answers from soul.md when Hindsight is not set up', async ($, on) => {
   host(on, { [SOUL]: SOUL_TEXT })
   await start($)

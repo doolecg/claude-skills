@@ -1,3 +1,10 @@
+# Sidebar 1.5.0
+
+## New
+- A proper Claude desktop app version: the tabs are a row of native buttons, cards are rounded boxes, and meters are smooth bars instead of text. The terminal looks the same as before.
+
+---
+
 # Sidebar 1.4.0
 
 ## Changed

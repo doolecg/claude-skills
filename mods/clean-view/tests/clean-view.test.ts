@@ -294,7 +294,7 @@ test('pixel meters are dense dot-matrix cells that fade up to a solid head and b
   expect(easeToward(0, 1, 900)).toBe(1)
 })
 
-test('the terminal draws meters as pixel Rasters, the desktop as text, and they build up', async ($, on) => {
+test('the terminal draws meters as pixel Rasters, the desktop as SVG bars, and they build up', async ($, on) => {
   const clock = world(on)
   await startJob($)
   await $.tool.call({ tool: PLAN, steps: ['Read your brand notes', 'Build the pricing section'] } as any)
@@ -305,13 +305,15 @@ test('the terminal draws meters as pixel Rasters, the desktop as text, and they 
   await term.unmount()
   const desk = await $.ui.mount({ plugin: 'clean-view', surface: 'desktop', component: 'AbovePrompt', props: BAND })
   expect(await desk.find({ type: 'Raster' })).toBeUndefined()
-  const warmCells = async (ui: any) =>
-    (await ui.findAll({ type: 'Text', text: /[⠀-⣿]/ })).filter((t: any) => t.props?.color !== undefined && t.props.color.toUpperCase() > '#B').length
-  const before = await warmCells(desk)
+  const fill = async (ui: any) => {
+    const svg = (await ui.findAll({ type: 'Svg' }))[1]
+    return Number(/<rect width="(\d+)" height="8" rx="4" fill="url/.exec(String(svg?.props?.source ?? ''))?.[1] ?? 0)
+  }
+  const before = await fill(desk)
   await desk.unmount()
   await clock.advance(1_000)
   const later = await $.ui.mount({ plugin: 'clean-view', surface: 'desktop', component: 'AbovePrompt', props: BAND })
-  const after = await warmCells(later)
+  const after = await fill(later)
   await later.unmount()
   expect(after).toBeGreaterThan(before)
 })
@@ -548,4 +550,103 @@ test('the accent and the band border follow the Bottom Bar colour', () => {
   expect(paletteFor('dark', 'Sky')).toMatchObject({ accent: '#6FB3E0', border: '#6FB3E0' })
   expect(paletteFor('light', 'Sky').accent).toBe('#2F6FA3')
   expect(paletteFor('dark', 'Nope')).toEqual(paletteFor('dark'))
+})
+
+// ---- Steps only ----------------------------------------------------------------
+
+const TOOL_PROPS = { tool_use_id: 'x', tool: 'Bash', input: { command: 'ls' }, isRunning: false, isErrored: false, isInterrupted: false } as any
+const BOX_DRAWING = /[\u2500-\u257F\u2800-\u28FF]/
+
+test('Steps only leaves tool rows in the transcript and keeps the step tools working', { options: { style: 'Steps only' } }, async ($, on) => {
+  world(on)
+  on('ui.render', { component: 'ToolUse' }, (($: any, e: any) => (globalThis as any).h($.ui.resolve(e).Text, {}, 'Bash ls')) as any)
+  await startJob($)
+  const planned = await $.tool.call({ tool: PLAN, steps: ['Read your brand notes', 'Build the pricing section'] } as any)
+  expect((planned as any).result).toBe('Planned 2 steps. The first one has started.')
+  await $.tool.call({ tool: REPORT, task: 'Read your brand notes', percent: 100 } as any)
+  const denied = await $.tool.call({ tool: 'Bash', command: 'ls' } as any)
+  expect((denied as any).deny).toBeUndefined()
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({
+      plugin: 'clean-view',
+      surface,
+      component: 'ToolUse',
+      props: TOOL_PROPS,
+      requestId: 'x',
+    } as any)
+    expect((await ui.findAll({ type: 'Text' })).length).toBeGreaterThan(0)
+    await ui.unmount()
+  }
+})
+
+test('Steps only draws one compact line per step, with no meters', { options: { style: 'Steps only' } }, async ($, on) => {
+  world(on)
+  await startJob($)
+  await $.tool.call({ tool: PLAN, steps: ['Read your brand notes', 'Build the pricing section', 'Add the contact form'] } as any)
+  await $.tool.call({ tool: REPORT, task: 'Read your brand notes', percent: 100 } as any)
+  await $.tool.call({ tool: REPORT, task: 'Build the pricing section', percent: 60 } as any)
+  for (const surface of SURFACES) {
+    const { ui, all } = await band($, surface)
+    expect(all).toContain('Step 2 of 3')
+    expect(all).not.toMatch(BOX_DRAWING)
+    expect(await ui.find({ type: 'Raster' })).toBeUndefined()
+    expect(await ui.find({ type: 'Svg' })).toBeUndefined()
+    expect(await rowText($, 'p0', surface)).toMatch(/✓.*Read your brand notes.*done/s)
+    expect(await rowText($, 'p1', surface)).toMatch(/▶.*Build the pricing section.*60%/s)
+    expect(await rowText($, 'p2', surface)).toMatch(/○.*Add the contact form/s)
+    await ui.unmount()
+  }
+  const term = await mountBand($, 100)
+  const rows = await term.findAll({ type: 'Box', props: { height: 1 } })
+  expect(rows.length).toBeGreaterThanOrEqual(4)
+  await term.unmount()
+})
+
+test('Clean (the default) still hides tool rows', async ($, on) => {
+  world(on)
+  await $.session.start({ cwd: '.' } as any)
+  const ui = await $.ui.mount({ plugin: 'clean-view', surface: 'terminal', component: 'ToolUse', props: TOOL_PROPS, requestId: 'x' } as any)
+  expect(await ui.findAll({ type: 'Text' })).toHaveLength(0)
+  await ui.unmount()
+})
+
+// ---- the desktop app --------------------------------------------------------------
+
+const desktopTexts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join('\n')
+
+test('the desktop band is native: no Raster, no box-drawing or braille, SVG meters with alt text', async ($, on) => {
+  world(on)
+  await startJob($)
+  await $.tool.call({ tool: PLAN, steps: ['Read your brand notes', 'Build the pricing section'] } as any)
+  await $.tool.call({ tool: REPORT, task: 'Read your brand notes', percent: 60 } as any)
+  const ui = await $.ui.mount({ plugin: 'clean-view', surface: 'desktop', component: 'AbovePrompt', props: BAND })
+  expect(await ui.find({ type: 'Raster' })).toBeUndefined()
+  const bars = await ui.findAll({ type: 'Svg' })
+  expect(bars).toHaveLength(3)
+  expect(bars.every((b: any) => String(b.props?.alt ?? '') !== '')).toBe(true)
+  expect(String(bars[0]!.props?.alt)).toContain('Step 1 of 2')
+  const all = await desktopTexts(ui)
+  expect(all).not.toMatch(BOX_DRAWING)
+  expect(all).toContain('Step 1 of 2')
+  expect(all).toContain('Read your brand notes')
+  await ui.unmount()
+})
+
+test('desktop questions use native buttons and an Other field, and answer like the terminal', async ($, on) => {
+  world(on)
+  await planned($)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS } as any)
+  const ui = await $.ui.mount({ plugin: 'clean-view', surface: 'desktop', component: 'AbovePrompt', props: BAND })
+  expect(await ui.find({ type: 'Raster' })).toBeUndefined()
+  expect(await desktopTexts(ui)).not.toMatch(BOX_DRAWING)
+  expect(await desktopTexts(ui)).toContain('Which colour should the page be?')
+  expect(await ui.find({ type: 'Button', key: 'o0' })).toBeDefined()
+  expect(await ui.find({ key: 'other' })).toBeDefined()
+  expect(await ui.find({ key: 'skip' })).toBeDefined()
+  await ui.press({ key: 'o1' })
+  await ui.press({ key: 'o0' })
+  await ui.press({ key: 'o2' })
+  await ui.press({ key: 'done' })
+  await ui.unmount()
+  expect(sent).toEqual(['Here are my answers:\n- Which colour should the page be? Cool\n- Which sections do you want? Pricing, FAQ'])
 })

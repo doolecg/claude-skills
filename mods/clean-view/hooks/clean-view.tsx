@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, On, RenderChildren, Timer } from 'claude-code'
+import type { EngineInterface, On, PluginOptions, RenderChildren, Timer } from 'claude-code'
 
 import type { CvAsk, CvChecklist } from '../types'
 import {
@@ -46,6 +46,7 @@ import {
   wrapText,
   type TodoItem,
 } from './clean-logic'
+import { drawCompact, drawDesktop, drawDesktopAsk } from './clean-draw'
 import { sbFrameEdge, sbFramedBar, sbGood, sbKit, sbMeter, sbPalette, sbSweep, sbWarm, type SbSeg } from './sidebar-kit'
 
 type Dollar = EngineInterface
@@ -66,6 +67,8 @@ const REPORT = 'mcp__clean-view__report_progress'
 const ALWAYS_ALLOWED = new Set(['ToolSearch', 'TodoWrite', 'TaskCreate', 'TaskUpdate', 'AskUserQuestion', PLAN, REPORT])
 
 let ticker: Timer | undefined
+/** The Style option: `Steps only` keeps the transcript as normal and draws a smaller checklist. */
+let isStepsOnly = false
 let failures = 0
 /** The main turn has ended while background helpers were still running. */
 let isWaitingForHelpers = false
@@ -201,7 +204,8 @@ function createdId(ran: unknown): string | undefined {
   return /#\s*(\d+)/.exec(text)?.[1]
 }
 
-export function registerCleanView(on: On): void {
+export function registerCleanView(on: On, options: PluginOptions = {}): void {
+  isStepsOnly = options.style === 'Steps only'
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
     try {
@@ -262,7 +266,7 @@ export function registerCleanView(on: On): void {
   on('prompt.compose', async ($, e, next) => {
     const out = await next(e)
     if (!(await read($, enabledAtom))) return out
-    return { ...out, sections: [...out.sections, { id: 'clean-view:plan', text: PLAN_RULES, scope: 'session' as const }] }
+    return { ...out, sections: [...out.sections, { id: 'clean-view:plan', text: isStepsOnly ? PLAN_RULES.replace('never your tool calls', 'next to your usual tool calls') : PLAN_RULES, scope: 'session' as const }] }
   })
 
   on('turn.start', async ($, e, next) => {
@@ -408,13 +412,13 @@ export function registerCleanView(on: On): void {
   })
 
   on('ui.render', { component: ['ToolUse', 'ToolResult', 'ToolGroup'] }, async ($, e, next) => {
-    if (!(await read($, enabledAtom))) return next(e)
+    if (isStepsOnly || !(await read($, enabledAtom))) return next(e)
     const { Box } = $.ui.resolve(e)
     return <Box display="none" />
   })
 
   on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => {
-    if (!(await read($, enabledAtom))) return next(e)
+    if (isStepsOnly || !(await read($, enabledAtom))) return next(e)
     return next({ ...e, props: { ...e.props, hint: '' } })
   })
 
@@ -465,6 +469,17 @@ export function registerCleanView(on: On): void {
     const kp = k.pal
 
     // A question takes the whole band in the same outlined look; the steps come back once it is answered.
+    if (ask.isOpen && e.surface === 'desktop') {
+      return drawDesktopAsk(els, kp, ask, {
+        title: ask.questions.length > 1 ? ` · Question ${ask.current + 1} of ${ask.questions.length}` : ' · A question for you',
+        onSkip: () => void closeAsk($, SKIPPED).catch(() => {}),
+        onClose,
+        onTab: i => void update($, askAtom, a => pickQuestion(a, i)).catch(() => {}),
+        onOption: label => void changeAsk($, a => pressOption(a, label)).catch(() => {}),
+        onOther: value => void changeAsk($, a => answerOther(a, value)).catch(() => {}),
+        onDone: () => void changeAsk($, a => confirmPicks(a)).catch(() => {}),
+      })
+    }
     if (ask.isOpen) {
       const Input = 'Input' in els ? els.Input : undefined
       const q = ask.questions[ask.current]!
@@ -623,6 +638,47 @@ export function registerCleanView(on: On): void {
       ...(hasClose ? [{ text: '✕', color: kp.dim, onPress: onClose, key: 'close' }] : []),
     ]
     const hasSteps = sum.total > 0
+    const isDesktop = e.surface === 'desktop'
+
+    if (isStepsOnly) {
+      return drawCompact(els, kp, cl, {
+        header: top,
+        right: topRight,
+        outline,
+        isPaused,
+        summary: !hasSteps ? '' : cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total} · ${sum.percent}%`,
+        width: full,
+        isDesktop,
+      })
+    }
+
+    if (isDesktop) {
+      const warm = { from: kp.warmFrom, to: kp.warmTo }
+      const good = { from: kp.goodFrom, to: kp.goodTo }
+      return drawDesktop(els, kp, cl, {
+        header: top,
+        right: topRight,
+        outline,
+        isPaused,
+        stepsText: cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total}`,
+        percentText: `${sum.percent}%`,
+        isDone: cl.phase === 'done',
+        bar: hasSteps
+          ? { fraction: eased('all', sum.percent / 100), ...(cl.phase === 'done' ? good : warm) }
+          : { fraction: 0, ...warm, isSweep: isWorking },
+        stepBar: i => {
+          const t = cl.tasks[i]!
+          const isDone = t.status === 'done'
+          const isActive = t.status === 'active'
+          return {
+            fraction: eased(t.id, isDone ? 1 : isActive ? t.percent / 100 : 0),
+            ...(isDone ? good : warm),
+            isSweep: isActive && !t.hasReported && isWorking,
+          }
+        },
+      })
+    }
+
     const jobFrame = sbFramedBar(k, 'job', {
       width: full,
       color: outline,

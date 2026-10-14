@@ -1,3 +1,10 @@
+# Bottom Bar 1.6.0
+
+## New
+- The bar now shows in the Claude desktop app too: model, effort, a context meter, 5h, 7d and agents, your pills as buttons, and a Doole's Tools button that opens the toolbox as a panel. The terminal looks the same as before.
+
+---
+
 # Bottom Bar 1.5.0
 
 ## New
