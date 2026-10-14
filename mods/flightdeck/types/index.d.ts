@@ -30,6 +30,8 @@ export type FdCall = {
   path?: string
   /** The command, pattern, query or agent description the call names. */
   text?: string
+  /** What a command is for, in the call's own words (a shell call's `description`). */
+  about?: string
   isDone: boolean
 }
 

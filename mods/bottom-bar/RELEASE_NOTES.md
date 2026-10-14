@@ -1,3 +1,10 @@
+# Bottom Bar 1.8.1
+
+## Fixed
+- In the desktop app, while Task View shows a job, the bar now sits under Task View's checklist instead of one hiding the other.
+
+---
+
 # Bottom Bar 1.8.0
 
 ## Changed

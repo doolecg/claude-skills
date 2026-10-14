@@ -1,3 +1,12 @@
+# Flightdeck 1.6.1
+
+## Changed
+- Every bar is a pixel loader, including context and the 5-hour and 7-day limits, and none is stretched any more.
+- Clearer reading in the desktop app: titled sections with icons (Right now, Recent actions, Repository, Files this session), actions as plain sentences (a command shows what it does, tool names are put into words), "Last edit" on its own line, and each file tagged read or edited.
+- Running agents show "Now:" on its own line, above their bar.
+
+---
+
 # Flightdeck 1.6.0
 
 ## New

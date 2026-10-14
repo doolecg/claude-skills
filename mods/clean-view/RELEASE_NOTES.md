@@ -1,3 +1,13 @@
+# Task View 1.7.1
+
+## Changed
+- When a step or the whole job is done, its bar turns green and stops moving.
+
+## Fixed
+- In the desktop app the Bottom Bar stays under the checklist while a job runs.
+
+---
+
 # Task View 1.7.0
 
 ## Changed

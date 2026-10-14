@@ -95,13 +95,6 @@ export function scrollThumb(rows: number, total: number, shown: number, offset: 
   return [top, top + size]
 }
 
-/** A rounded meter as an Svg: a track and a fill, `fraction` of the way across. */
-function meterSvg(fraction: number, fill: string, track: string, w = 240, h = 8): string {
-  const f = Math.max(0, Math.min(1, fraction))
-  const bar = f > 0 ? `<rect width="${Math.max(h, Math.round(w * f))}" height="${h}" rx="${h / 2}" fill="${fill}"/>` : ''
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><rect width="${w}" height="${h}" rx="${h / 2}" fill="${track}"/>${bar}</svg>`
-}
-
 /** The git line's words: `4 changed`, or `clean`, and `2 ahead of main` when known. */
 const changedText = (git: FdGit): string => (git.changed.length > 0 ? `${git.changed.length} changed` : 'clean')
 const aheadText = (git: FdGit): string => (git.ahead > 0 ? `${git.ahead} ahead of main` : '')
@@ -126,8 +119,27 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
   const groups = groupAgents(d.agents)
   const working = groups.working.length
   const level = (pct: number) => (pct >= 80 ? pal.bad : pct >= 60 ? pal.warn : pal.good)
-  const meter = (key: string, fraction: number, color: string, alt: string) =>
-    Svg ? <Svg key={key} source={meterSvg(fraction, color, pal.track)} alt={alt} width={240} height={8} /> : null
+  // Every bar is Task View's pixel loader, drawn at its real size so its dots are never stretched.
+  const meter = (key: string, fraction: number, color: string, alt: string, width = 300, isSweep = false) =>
+    Svg ? (
+      <Svg key={key} source={barSvg(width, fraction, sbMix(pal.track, color, 0.55), color, pal.track, isSweep, pal.tint, tick)} alt={alt} width={width} height={9} />
+    ) : null
+  // A section's title: an accent icon and the name in small capitals.
+  const section = (key: string, icon: string, label: string) => (
+    <Box key={key} columnGap={1}>
+      <Text color={pal.accent}>{icon}</Text>
+      <Text color={pal.dim} bold>
+        {label.toUpperCase()}
+      </Text>
+    </Box>
+  )
+  // A label on the left and its value on the right.
+  const pair = (key: string, label: string, value: JSX.Element) => (
+    <Box key={key} columnGap={1} justifyContent="space-between">
+      <Text color={pal.dim}>{label}</Text>
+      {value}
+    </Box>
+  )
 
   const fx = paletteFor(strip?.theme ?? d.theme)
   const status = working > 0 ? `${working} agent${working === 1 ? '' : 's'} working` : 'no agents working'
@@ -148,7 +160,7 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
   const turnMs = main.turnStartedAt > 0 ? (main.turnEndedAt > 0 ? main.turnEndedAt : now) - main.turnStartedAt : 0
   const turnText = main.turnStartedAt > 0 ? `${main.isRunning ? 'turn' : 'last turn'} ${fmtDuration(turnMs)}` : 'no turn yet'
   const mainCard = (
-    <Box key="main" flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1} rowGap={1}>
+    <Box key="main" flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1}>
       <Box columnGap={1} flexWrap="wrap" justifyContent="space-between">
         <Box columnGap={1} flexWrap="wrap">
           <Text color={pal.text} bold>
@@ -159,24 +171,35 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
         </Box>
         <Text color={main.isRunning ? pal.good : pal.dim}>{main.isRunning ? 'working' : 'idle'}</Text>
       </Box>
+      {pair(
+        'main-ctx-l',
+        'Context',
+        <Text color={level(pct)} bold>
+          {usage.ctxPct === null ? '—' : `${Math.round(pct)}%`}
+        </Text>,
+      )}
       {meter('main-ctx', pct / 100, level(pct), `Context ${usage.ctxPct === null ? 'unknown' : `${Math.round(pct)} percent used`}`)}
       <Box columnGap={1} flexWrap="wrap" justifyContent="space-between">
-        <Text color={pal.text}>{`ctx ${usage.ctxPct === null ? '—' : `${Math.round(pct)}%`}${usage.costUsd !== null ? ` · ${fmtUsd(usage.costUsd)}` : ''}`}</Text>
-        <Text color={pal.dim}>{`${turnText} · ${main.steps} req`}</Text>
+        <Text color={pal.dim}>{usage.costUsd !== null ? `session cost ${fmtUsd(usage.costUsd)}` : ''}</Text>
+        <Text color={pal.dim}>{`${turnText} · ${main.steps} ${main.steps === 1 ? 'request' : 'requests'}`}</Text>
       </Box>
     </Box>
   )
   const limits = usage.limits.slice(0, 2)
+  const limitName = (kind: string) => (kind === 'five_hour' ? '5-hour limit' : kind === 'seven_day' ? '7-day limit' : `${limitLabel(kind)} limit`)
   const limitCards =
     limits.length > 0 ? (
       <Box key="limits" columnGap={1} rowGap={1} flexWrap="wrap">
         {limits.map((l, i) => (
           <Box key={`lim${i}`} flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1} flexGrow={1}>
-            <Box columnGap={1} justifyContent="space-between">
-              <Text color={pal.dim}>{limitLabel(l.kind)}</Text>
-              <Text color={l.pct >= 80 ? pal.bad : l.pct >= 60 ? pal.warn : pal.text}>{`${Math.round(l.pct)}%`}</Text>
-            </Box>
-            {meter(`lim-m${i}`, l.pct / 100, level(l.pct), `${limitLabel(l.kind)} limit ${Math.round(l.pct)} percent used`)}
+            {pair(
+              `lim-l${i}`,
+              limitName(l.kind),
+              <Text color={level(l.pct)} bold>
+                {`${Math.round(l.pct)}%`}
+              </Text>,
+            )}
+            {meter(`lim-m${i}`, l.pct / 100, level(l.pct), `${limitName(l.kind)} ${Math.round(l.pct)} percent used`, 150)}
           </Box>
         ))}
       </Box>
@@ -199,16 +222,17 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
     </Box>
   )
 
-  // ---- Right now: what Claude is doing, its last few actions, the branch and the files ----
+  // ---- Right now: what Claude is doing, its last few actions, the repository and the files ----
   const rn = d.right
-  const rule = Svg ? <Svg key="rn-rule" source={`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="1" viewBox="0 0 100 1" preserveAspectRatio="none"><rect width="100" height="1" fill="${pal.sep}"/></svg>`} alt="" height={1} /> : null
   const actionRow = (c: FdCall) => {
     const a = actionOf(c)
     const color = a.kind === 'edit' ? fx.edit : a.kind === 'read' ? fx.read : a.kind === 'agent' ? pal.accent : pal.dim
     return (
       <Box key={`act:${c.id}`} columnGap={1} justifyContent="space-between">
         <Box columnGap={1} flexShrink={1}>
-          <Text color={color}>{a.glyph}</Text>
+          <Box width={2} flexShrink={0}>
+            <Text color={color}>{a.glyph}</Text>
+          </Box>
           <Text color={pal.text}>{a.verb}</Text>
           {a.target ? (
             <Text color={a.isCode ? pal.info : pal.text} bold={!a.isCode} wrap="truncate-end">
@@ -222,85 +246,74 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
   }
   const acts = recentActions(d.calls)
   const files = fileRows(d.files, d.git)
-  const hasSub = rn.added !== undefined || rn.step !== undefined
+  const isEditingNow = rn.title.startsWith('Claude is editing')
   const rightNow = (
     <Box key="right-now" flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1} rowGap={1}>
-      <Box columnGap={1}>
-        <Text color={pal.accent}>✶</Text>
-        <Box flexDirection="column" flexShrink={1}>
-          <Text color={pal.dim} bold>
-            RIGHT NOW
+      <Box flexDirection="column">
+        {section('rn-h', '✶', 'Right now')}
+        <Text color={rn.isWaiting ? pal.warn : pal.text} bold wrap="wrap">
+          {rn.title}
+        </Text>
+        {rn.detail ? (
+          <Text color={pal.dim} wrap="wrap">
+            {rn.detail}
           </Text>
-          <Text color={rn.isWaiting ? pal.warn : pal.text} bold wrap="wrap">
-            {rn.title}
-          </Text>
-          {rn.detail ? (
-            <Text color={pal.dim} wrap="wrap">
-              {rn.detail}
-            </Text>
-          ) : null}
-          {hasSub ? (
-            <Box columnGap={1} flexWrap="wrap">
-              {rn.added !== undefined ? <Text color={pal.good}>{`+${rn.added}`}</Text> : null}
-              {rn.removed !== undefined ? <Text color={pal.bad}>{`−${rn.removed}`}</Text> : null}
-              {rn.step ? <Text color={pal.dim}>{`${rn.added !== undefined ? '· ' : ''}${rn.step}`}</Text> : null}
-            </Box>
-          ) : null}
-        </Box>
+        ) : null}
+        {rn.editName ? (
+          <Box columnGap={1} flexWrap="wrap">
+            <Text color={pal.dim}>{isEditingNow ? 'This edit:' : 'Last edit:'}</Text>
+            {isEditingNow ? null : (
+              <Text color={pal.text} bold>
+                {rn.editName}
+              </Text>
+            )}
+            {rn.added !== undefined ? <Text color={pal.good}>{`+${rn.added}`}</Text> : null}
+            {rn.removed !== undefined ? <Text color={pal.bad}>{`−${rn.removed}`}</Text> : null}
+          </Box>
+        ) : null}
+        {rn.step ? <Text color={pal.dim}>{`Task View: ${rn.step}`}</Text> : null}
       </Box>
       <Box flexDirection="column">
-        <Text color={pal.dim} bold>
-          LAST FEW ACTIONS
-        </Text>
+        {section('ra-h', '↻', 'Recent actions')}
         {acts.length > 0 ? acts.map(actionRow) : <Text color={pal.dim}>Nothing yet.</Text>}
       </Box>
-      {rule}
-      <Box flexDirection="column">
-        {d.git ? (
-          <Box key="git" columnGap={1} flexWrap="wrap">
-            <Text color={pal.dim}>⎇</Text>
-            <Text color={pal.text} bold>
-              {d.git.branch}
-            </Text>
-            <Text color={d.git.changed.length > 0 ? fx.dirty : pal.dim}>{changedText(d.git)}</Text>
-            {aheadText(d.git) ? <Text color={pal.dim}>{`· ${aheadText(d.git)}`}</Text> : null}
-          </Box>
-        ) : null}
-        {d.lessons ? (
-          <Box key="lessons" columnGap={1}>
-            <Text color={pal.dim}>◈</Text>
-            <Text color={pal.text} wrap="wrap">
-              {d.lessons}
-            </Text>
-          </Box>
-        ) : null}
-      </Box>
-      <Box columnGap={2} flexWrap="wrap">
-        {(
-          [
-            [fx.read, 'Claude read'],
-            [fx.edit, 'Claude edited'],
-            [fx.dirty, 'Not committed'],
-          ] as const
-        ).map(([color, label]) => (
-          <Box key={`legend-${label}`} columnGap={1}>
-            <Text color={color}>■</Text>
-            <Text color={pal.dim}>{label}</Text>
-          </Box>
-        ))}
-      </Box>
+      {d.git || d.lessons ? (
+        <Box flexDirection="column">
+          {section('repo-h', '⎇', 'Repository')}
+          {d.git
+            ? pair(
+                'git',
+                'Branch',
+                <Box columnGap={1}>
+                  <Text color={pal.text} bold>
+                    {d.git.branch}
+                  </Text>
+                  <Text color={d.git.changed.length > 0 ? fx.dirty : pal.good}>{`· ${changedText(d.git)}`}</Text>
+                  {aheadText(d.git) ? <Text color={pal.dim}>{`· ${aheadText(d.git)}`}</Text> : null}
+                </Box>,
+              )
+            : null}
+          {d.lessons ? pair('lessons', 'Memory', <Text color={pal.text}>{d.lessons}</Text>) : null}
+        </Box>
+      ) : null}
       {files.length > 0 ? (
         <Box flexDirection="column">
+          {section('files-h', '▤', 'Files this session')}
           {files.map(f => (
-            <Box key={`file:${f.path}`} columnGap={1}>
-              <Text color={f.kind === 'edit' ? fx.edit : fx.read}>■</Text>
-              <Text color={pal.text} wrap="truncate-middle">
-                {f.name}
-              </Text>
-              <Text color={pal.dim} wrap="truncate-start">
-                {f.dir}
-              </Text>
-              {f.isUncommitted ? <Text color={fx.dirty}>●</Text> : null}
+            <Box key={`file:${f.path}`} columnGap={1} justifyContent="space-between">
+              <Box columnGap={1} flexShrink={1}>
+                <Text color={f.kind === 'edit' ? fx.edit : fx.read}>{'●'}</Text>
+                <Text color={pal.text} bold wrap="truncate-middle">
+                  {f.name}
+                </Text>
+                <Text color={pal.dim} wrap="truncate-start">
+                  {f.dir}
+                </Text>
+              </Box>
+              <Box columnGap={1} flexShrink={0}>
+                {f.isUncommitted ? <Text color={fx.dirty}>not committed</Text> : null}
+                <Text color={f.kind === 'edit' ? fx.edit : fx.read}>{f.kind === 'edit' ? 'edited' : 'read'}</Text>
+              </Box>
             </Box>
           ))}
         </Box>
@@ -311,10 +324,10 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
   const heading = (key: string, label: string, n: number, isLive: boolean, action?: { label: string; onPress: () => void }) => (
     <Box key={key} columnGap={1} alignItems="center" justifyContent="space-between">
       <Box columnGap={1}>
+        <Text color={pal.accent}>{label === 'Running' ? '▶' : '✓'}</Text>
         <Text color={isLive ? pal.text : pal.dim} bold>
-          {label}
+          {`${label.toUpperCase()} · ${n}`}
         </Text>
-        <Text color={isLive ? pal.accent : pal.dim}>{String(n)}</Text>
       </Box>
       {action ? <Button key={`${key}-btn`} label={action.label} onPress={action.onPress} /> : null}
     </Box>
@@ -345,6 +358,7 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
         key={`agent-m:${a.id}`}
         source={barSvg(300, isRun ? 0 : 1, sbMix(pal.track, to, 0.55), to, pal.track, isRun, pal.tint, tick)}
         alt={isRun ? 'Working' : 'Finished'}
+        width={300}
         height={9}
       />
     )
@@ -371,12 +385,17 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
               {isRun ? <Button key={`stop:${a.id}`} label="Stop" onPress={() => d.onStop(a.id)} /> : <Button key={`clear:${a.id}`} label="Clear" onPress={() => d.onClear(a.id)} />}
             </Box>
           </Box>
-          {pixelBar(a)}
           <Box columnGap={1} flexWrap="wrap">
             <Text color={pal.info}>{critterOf(a.id).name}</Text>
-            <Text color={pal.dim}>{`${name}${a.type ? ` · ${a.type}` : ''}${metrics.length > 0 ? ` · ${metrics.join(' ')}` : ''}`}</Text>
-            {isRun && a.now ? <Text color={pal.accent}>{`now: ${a.now}`}</Text> : null}
+            <Text color={pal.dim}>{`· ${name}${a.type ? ` · ${a.type}` : ''}`}</Text>
           </Box>
+          {isRun && a.now ? (
+            <Text color={pal.accent} wrap="truncate-end">
+              {`Now: ${a.now}`}
+            </Text>
+          ) : null}
+          {pixelBar(a)}
+          {metrics.length > 0 ? <Text color={pal.dim}>{metrics.join(' · ')}</Text> : null}
         </Box>
       </Box>
     )
@@ -499,7 +518,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       ),
     )
   }
-  nowRows.push(line('rn-acts', <Text color={pal.dim} bold>LAST FEW ACTIONS</Text>))
+  nowRows.push(line('rn-acts', <Text color={pal.dim} bold>{'↻ RECENT ACTIONS'}</Text>))
   if (acts.length === 0) nowRows.push(line('rn-none', <Text color={pal.dim}>{'  Nothing yet.'}</Text>))
   for (const c of acts) {
     const a = actionOf(c)

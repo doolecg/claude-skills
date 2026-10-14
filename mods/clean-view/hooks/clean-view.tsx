@@ -47,7 +47,7 @@ import {
   type TodoItem,
 } from './clean-logic'
 import { drawCompact, drawDesktop, drawDesktopAsk } from './clean-draw'
-import { sbFrameEdge, sbFramedBar, sbKit, sbMeter, sbMix, sbPalette, sbSweep, sbWarm, type SbKit, type SbLook, type SbSeg } from './sidebar-kit'
+import { sbFrameEdge, sbFramedBar, sbGood, sbKit, sbMeter, sbMix, sbPalette, sbSweep, sbWarm, type SbKit, type SbLook, type SbSeg } from './sidebar-kit'
 
 /** Task View's meters: pixels in the accent colour (the Colour setting), scattered more than the kit's. */
 const accentLook = (k: SbKit, seed = 0): SbLook => ({
@@ -429,324 +429,350 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
     return next({ ...e, props: { ...e.props, hint: '' } })
   })
 
+  // In the app the Bottom Bar draws in this same band: Task View's checklist goes on top and what lies
+  // beneath stays under it, whichever of the two the engine runs first.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
-    const els = $.ui.resolve(e)
-    const { Box, Text, Button } = els
-    const theme = await read($, themeAtom)
-    const colour = await read($, colourAtom)
-    const pal = paletteFor(theme, colour)
-    const isOn = await read($, enabledAtom)
-    const cl = await read($, checklistAtom)
-    const tick = await read($, tickAtom)
-    const now = await $.clock.now()
-
-    // On and off live in the bottom bar's pill and /simple; the band shows only a job.
-    const ask = await read($, askAtom)
-    if (!isOn || (cl.phase === 'idle' && !ask.isOpen)) return next(e)
-    const cols = e.props.bodyColumns
-    const took = formatElapsed((cl.finishedAt > 0 ? cl.finishedAt : now) - cl.startedAt)
-
-    // Always closable, so a job that is stuck as working can be cleared too.
-    const hasClose = true
-    const onClose = () => void dismissBand($).catch(() => {})
-
-    if (cl.phase === 'done' && cl.isCollapsed && !ask.isOpen) {
-      return (
-        <Box width="100%">
-          <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
-            <Text wrap="truncate-end">
-              <Text color={pal.good} bold>
-                ✓ All done
-              </Text>
-              <Text color={pal.dim}>{` · ${cl.title} · took ${took}`}</Text>
-            </Text>
-          </Box>
-          <Box flexShrink={0} marginLeft={1}>
-            <Button key="close" plain dimColor onPress={onClose}>
-              ✕
-            </Button>
-          </Box>
-        </Box>
-      )
-    }
-
-    // The checklist draws in Flightdeck's look: bars in rounded outlines with their labels set into the edges.
-    const k = sbKit(els, e.surface, sbPalette(theme, colour), cols, tick)
-    const kp = k.pal
-
-    // A question takes the whole band in the same outlined look; the steps come back once it is answered.
-    if (ask.isOpen && e.surface === 'desktop') {
-      return drawDesktopAsk(els, kp, ask, {
-        title: ask.questions.length > 1 ? ` · Question ${ask.current + 1} of ${ask.questions.length}` : ' · A question for you',
-        onSkip: () => void closeAsk($, SKIPPED).catch(() => {}),
-        onClose,
-        onTab: i => void update($, askAtom, a => pickQuestion(a, i)).catch(() => {}),
-        onOption: label => void changeAsk($, a => pressOption(a, label)).catch(() => {}),
-        onOther: value => void changeAsk($, a => answerOther(a, value)).catch(() => {}),
-        onDone: () => void changeAsk($, a => confirmPicks(a)).catch(() => {}),
-      })
-    }
-    if (ask.isOpen) {
-      const Input = 'Input' in els ? els.Input : undefined
-      const q = ask.questions[ask.current]!
-      const ticked = ask.picks[ask.current] ?? []
-      const given = ask.answers[ask.current]
-      const W = Math.max(16, cols)
-      const inner = W - 4
-      const many = ask.questions.length > 1
-      const row = (key: string, body: RenderChildren) => (
-        <Box key={key} width={W} height={1}>
-          <Text color={kp.warn}>{'│ '}</Text>
-          <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
-            {body}
-          </Box>
-          <Text color={kp.warn}>{' │'}</Text>
-        </Box>
-      )
-      const asked = wrapText(q.question, inner - 2).map((line, i) =>
-        row(
-          `qt${i}`,
-          <Text>
-            <Text color={kp.warn} bold>
-              {i === 0 ? '? ' : '  '}
-            </Text>
-            <Text color={kp.text} bold>
-              {line}
-            </Text>
-          </Text>,
-        ),
-      )
-      const options = q.options.flatMap((o, i) => {
-        const isOn = q.multiSelect ? ticked.includes(o.label) : given === o.label
-        const mark = q.multiSelect ? (isOn ? '◼' : '◻') : isOn ? '●' : '○'
-        const notes = o.description !== '' && o.description !== o.label ? wrapText(o.description, inner - 4) : []
-        return [
-          row(
-            `ob${i}`,
-            <Button key={`o${i}`} plain hotkey={String(i + 1)} onPress={() => void changeAsk($, a => pressOption(a, o.label)).catch(() => {})}>
-              <Text color={kp.faint}>{`${i + 1} `}</Text>
-              <Text color={isOn ? kp.good : kp.accent}>{`${mark} `}</Text>
-              <Text color={isOn ? kp.good : kp.text} bold>
-                {o.label}
-              </Text>
-            </Button>,
-          ),
-          ...notes.map((line, j) => row(`od${i}-${j}`, <Text color={kp.dim}>{`    ${line}`}</Text>)),
-        ]
-      })
-      const tabs: SbSeg[] = ask.questions.flatMap((t, i) => {
-            const isNow = i === ask.current
-            const isDone = ask.answers[i] !== null
-            return [
-              ...(i > 0 ? [{ text: '  ', color: kp.warn }] : []),
-              {
-                text: `${isDone ? '✓' : isNow ? '▶' : '○'} ${t.header}`,
-                color: isDone ? kp.good : isNow ? kp.text : kp.dim,
-                bold: isNow,
-                key: `q${i}`,
-                onPress: () => void update($, askAtom, a => pickQuestion(a, i)).catch(() => {}),
-              },
-            ]
-          })
-      return (
-        <Box flexDirection="column" width={W} flexShrink={0} backgroundColor={kp.panel}>
-          {sbFrameEdge(
-            k,
-            'ask-top',
-            W,
-            ['╭', '╮'],
-            [
-              { text: '‖ Needs you', color: kp.warn, bold: true },
-              { text: many ? ` · Question ${ask.current + 1} of ${ask.questions.length}` : ' · A question for you', color: kp.dim },
-            ],
-            [
-              { text: 'Skip', color: kp.dim, key: 'skip', onPress: () => void closeAsk($, SKIPPED).catch(() => {}) },
-              { text: ' ', color: kp.warn },
-              { text: '✕', color: kp.dim, key: 'close', onPress: onClose },
-            ],
-            kp.warn,
-          )}
-          {asked}
-          {row('gap', <Text> </Text>)}
-          {options}
-          {Input
-            ? row(
-                'other-row',
-                <Input
-                  key="other"
-                  placeholder={OTHER_HINT}
-                  submitLabel="answer"
-                  onSubmit={(value: string) => void changeAsk($, a => answerOther(a, value)).catch(() => {})}
-                />,
-              )
-            : null}
-          {q.multiSelect
-            ? row(
-                'done-row',
-                <Button key="done" plain hotkey="d" onPress={() => void changeAsk($, a => confirmPicks(a)).catch(() => {})}>
-                  <Text color={ticked.length > 0 ? kp.good : kp.faint} bold>
-                    d: Done
-                  </Text>
-                </Button>,
-              )
-            : null}
-          {sbFrameEdge(k, 'ask-bot', W, ['╰', '╯'], tabs, [], kp.warn)}
-        </Box>
-      )
-    }
-
-    const animate = isAnimated(cl)
-    if (shown.size > 200) shown.clear()
-    const eased = (id: string, target: number): number => {
-      const key = `${cl.startedAt}:${id}`
-      const was = shown.get(key)
-      if (!was) shown.set(key, { from: animate ? 0 : target, to: target, at: now })
-      else if (was.to !== target) shown.set(key, { from: easeToward(was.from, was.to, now - was.at), to: target, at: now })
-      const it = shown.get(key)!
-      return animate ? easeToward(it.from, it.to, now - it.at) : target
-    }
-
-    const full = Math.max(16, cols)
-    const sum = overall(cl)
-    const isWorking = cl.phase === 'working'
-    const isPaused = cl.phase === 'needs-you'
-
-    const outline =
-      isPaused ? kp.warn : cl.phase === 'done' ? kp.good : cl.phase === 'stuck' ? kp.bad : cl.phase === 'stopped' ? kp.faint : kp.dim
-    const top: SbSeg[] = isPaused
-        ? [
-            { text: '‖ Needs you', color: kp.warn, bold: true },
-            { text: ` · ${cl.needsYouReason}`, color: kp.text },
-          ]
-        : cl.phase === 'stuck'
-          ? [
-              { text: '⚠ Stuck: ', color: kp.bad, bold: true },
-              { text: cl.stuckReason, color: kp.text },
-            ]
-          : cl.phase === 'stopped'
-            ? [
-                { text: '■ Stopped', color: kp.dim, bold: true },
-                { text: ` · ${cl.title} · you pressed Esc`, color: kp.dim },
-              ]
-            : cl.phase === 'done'
-              ? [
-                  { text: '✓ All done', color: kp.good, bold: true },
-                  { text: ` · ${cl.title}`, color: kp.good },
-                ]
-              : [
-                  { text: '✶ ', color: kp.warmFrom },
-                  { text: cl.title, color: kp.text, bold: true },
-                  ...(cl.helpers > 0 ? [{ text: ` · Waiting for ${cl.helpers} ${cl.helpers === 1 ? 'helper' : 'helpers'}`, color: kp.dim }] : []),
-                ]
-    const timeText = cl.phase === 'done' ? `took ${took}` : cl.phase === 'stopped' ? '' : took
-    const topRight: SbSeg[] = [
-      ...(timeText ? [{ text: hasClose ? `${timeText} ` : timeText, color: kp.dim }] : []),
-      ...(hasClose ? [{ text: '✕', color: kp.dim, onPress: onClose, key: 'close' }] : []),
-    ]
-    const hasSteps = sum.total > 0
-    const isDesktop = e.surface === 'desktop'
-
-    if (isStepsOnly) {
-      return drawCompact(els, kp, cl, {
-        header: top,
-        right: topRight,
-        outline,
-        isPaused,
-        summary: !hasSteps ? '' : cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total} · ${sum.percent}%`,
-        width: full,
-        isDesktop,
-      })
-    }
-
-    if (isDesktop) {
-      const warm = { from: sbMix(kp.track, kp.accent, 0.55), to: kp.accent, tint: kp.tint, tick }
-      const good = warm
-      return drawDesktop(els, kp, cl, {
-        header: top,
-        right: topRight,
-        outline,
-        isPaused,
-        stepsText: cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total}`,
-        percentText: `${sum.percent}%`,
-        isDone: cl.phase === 'done',
-        bar: hasSteps
-          ? { fraction: eased('all', sum.percent / 100), ...(cl.phase === 'done' ? good : warm) }
-          : { fraction: 0, ...warm, isSweep: isWorking },
-        stepBar: i => {
-          const t = cl.tasks[i]!
-          const isDone = t.status === 'done'
-          const isActive = t.status === 'active'
-          return {
-            fraction: eased(t.id, isDone ? 1 : isActive ? t.percent / 100 : 0),
-            ...(isDone ? good : warm),
-            isSweep: isActive && !t.hasReported && isWorking,
-          }
-        },
-      })
-    }
-
-    const jobFrame = sbFramedBar(k, 'job', {
-      width: full,
-      color: outline,
-      bar: cells =>
-        hasSteps
-          ? sbMeter(cells, eased('all', sum.percent / 100), accentLook(k))
-          : isWorking
-            ? sbSweep(cells, accentLook(k))
-            : sbMeter(cells, 0, accentLook(k)),
-      top,
-      topRight,
-      bottom: hasSteps
-        ? [{ text: cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total}`, color: kp.dim }]
-        : [],
-      bottomRight: hasSteps ? [{ text: `${sum.percent}%`, color: cl.phase === 'done' ? kp.good : kp.accent, bold: true }] : [],
+    if (e.surface !== 'desktop' || e.props.hasSurvey) return drawBand($, e, next)
+    let passed = false
+    const mine = await drawBand($, e, async x => {
+      passed = true
+      return next(x)
     })
-
-    // One outlined bar per step, side by side in rows like Flightdeck's usage limits.
-    // Each bar is wide enough for the longest step name, its marker, its label and the outline.
-    const n = cl.tasks.length
-    const longest = Math.max(0, ...cl.tasks.map(t => [...t.name].length))
-    const stepMin = Math.min(full, Math.max(STEP_MIN, longest + 28))
-    const lines = Math.ceil(n / Math.max(1, Math.min(n, Math.floor((full + 1) / (stepMin + 1)))))
-    const across = Math.max(1, Math.ceil(n / Math.max(1, lines)))
-    const each = Math.floor((full - (across - 1)) / across)
-    const stepFrame = (i: number, width: number) => {
-      const t = cl.tasks[i]!
-      const isDone = t.status === 'done'
-      const isActive = t.status === 'active'
-      const marker = isDone ? '✓' : isActive ? (isPaused ? '‖' : '▶') : '○'
-      const look = accentLook(k, i + 1)
-      const label = rowLabel(cl.tasks, i)
-      return sbFramedBar(k, t.id, {
-        width,
-        color: isActive ? (isPaused ? kp.warn : kp.accent) : isDone ? kp.dim : kp.sep,
-        bar: cells =>
-          isActive && !t.hasReported && isWorking
-            ? sbSweep(cells, look)
-            : sbMeter(cells, eased(t.id, isDone ? 1 : isActive ? t.percent / 100 : 0), look),
-        top: [
-          { text: `${marker} `, color: isDone ? kp.good : isActive ? (isPaused ? kp.warn : kp.accent) : kp.faint },
-          { text: t.name, color: isDone ? kp.dim : isActive ? kp.text : kp.faint, bold: isActive },
-        ],
-        topRight: label ? [{ text: label, color: isActive ? kp.accent : kp.dim, bold: isActive && t.hasReported }] : [],
-      })
-    }
-    const stepRows = Array.from({ length: lines }, (_, r) => {
-      const first = r * across
-      const count = Math.min(across, n - first)
-      return (
-        <Box key={`steps${r}`} columnGap={1}>
-          {Array.from({ length: count }, (_, j) => stepFrame(first + j, j === across - 1 ? full - (across - 1) * (each + 1) : each))}
-        </Box>
-      )
-    })
-
+    if (passed) return mine
+    let below: unknown = null
+    try {
+      below = await next(e)
+    } catch {}
+    if (!below) return mine
+    const { Box } = $.ui.resolve(e)
     return (
-      <Box key="checklist" flexDirection="column" width={full} flexShrink={0}>
-        {jobFrame}
-        {stepRows}
+      <Box flexDirection="column" width="100%" rowGap={1}>
+        {mine}
+        {below as JSX.Element}
       </Box>
     )
   })
+}
+
+/** Task View's band above the prompt: the checklist, its question, or what lies beneath when there is no job. */
+async function drawBand($: Dollar, e: any, next: (e: any) => Promise<any>): Promise<any> {
+  if (e.props.hasSurvey) return next(e)
+  const els = $.ui.resolve(e)
+  const { Box, Text, Button } = els
+  const theme = await read($, themeAtom)
+  const colour = await read($, colourAtom)
+  const pal = paletteFor(theme, colour)
+  const isOn = await read($, enabledAtom)
+  const cl = await read($, checklistAtom)
+  const tick = await read($, tickAtom)
+  const now = await $.clock.now()
+
+  // On and off live in the bottom bar's pill and /simple; the band shows only a job.
+  const ask = await read($, askAtom)
+  if (!isOn || (cl.phase === 'idle' && !ask.isOpen)) return next(e)
+  const cols = e.props.bodyColumns
+  const took = formatElapsed((cl.finishedAt > 0 ? cl.finishedAt : now) - cl.startedAt)
+
+  // Always closable, so a job that is stuck as working can be cleared too.
+  const hasClose = true
+  const onClose = () => void dismissBand($).catch(() => {})
+
+  if (cl.phase === 'done' && cl.isCollapsed && !ask.isOpen) {
+    return (
+      <Box width="100%">
+        <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
+          <Text wrap="truncate-end">
+            <Text color={pal.good} bold>
+              ✓ All done
+            </Text>
+            <Text color={pal.dim}>{` · ${cl.title} · took ${took}`}</Text>
+          </Text>
+        </Box>
+        <Box flexShrink={0} marginLeft={1}>
+          <Button key="close" plain dimColor onPress={onClose}>
+            ✕
+          </Button>
+        </Box>
+      </Box>
+    )
+  }
+
+  // The checklist draws in Flightdeck's look: bars in rounded outlines with their labels set into the edges.
+  const k = sbKit(els, e.surface, sbPalette(theme, colour), cols, tick)
+  const kp = k.pal
+
+  // A question takes the whole band in the same outlined look; the steps come back once it is answered.
+  if (ask.isOpen && e.surface === 'desktop') {
+    return drawDesktopAsk(els, kp, ask, {
+      title: ask.questions.length > 1 ? ` · Question ${ask.current + 1} of ${ask.questions.length}` : ' · A question for you',
+      onSkip: () => void closeAsk($, SKIPPED).catch(() => {}),
+      onClose,
+      onTab: i => void update($, askAtom, a => pickQuestion(a, i)).catch(() => {}),
+      onOption: label => void changeAsk($, a => pressOption(a, label)).catch(() => {}),
+      onOther: value => void changeAsk($, a => answerOther(a, value)).catch(() => {}),
+      onDone: () => void changeAsk($, a => confirmPicks(a)).catch(() => {}),
+    })
+  }
+  if (ask.isOpen) {
+    const Input = 'Input' in els ? els.Input : undefined
+    const q = ask.questions[ask.current]!
+    const ticked = ask.picks[ask.current] ?? []
+    const given = ask.answers[ask.current]
+    const W = Math.max(16, cols)
+    const inner = W - 4
+    const many = ask.questions.length > 1
+    const row = (key: string, body: RenderChildren) => (
+      <Box key={key} width={W} height={1}>
+        <Text color={kp.warn}>{'│ '}</Text>
+        <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
+          {body}
+        </Box>
+        <Text color={kp.warn}>{' │'}</Text>
+      </Box>
+    )
+    const asked = wrapText(q.question, inner - 2).map((line, i) =>
+      row(
+        `qt${i}`,
+        <Text>
+          <Text color={kp.warn} bold>
+            {i === 0 ? '? ' : '  '}
+          </Text>
+          <Text color={kp.text} bold>
+            {line}
+          </Text>
+        </Text>,
+      ),
+    )
+    const options = q.options.flatMap((o, i) => {
+      const isOn = q.multiSelect ? ticked.includes(o.label) : given === o.label
+      const mark = q.multiSelect ? (isOn ? '◼' : '◻') : isOn ? '●' : '○'
+      const notes = o.description !== '' && o.description !== o.label ? wrapText(o.description, inner - 4) : []
+      return [
+        row(
+          `ob${i}`,
+          <Button key={`o${i}`} plain hotkey={String(i + 1)} onPress={() => void changeAsk($, a => pressOption(a, o.label)).catch(() => {})}>
+            <Text color={kp.faint}>{`${i + 1} `}</Text>
+            <Text color={isOn ? kp.good : kp.accent}>{`${mark} `}</Text>
+            <Text color={isOn ? kp.good : kp.text} bold>
+              {o.label}
+            </Text>
+          </Button>,
+        ),
+        ...notes.map((line, j) => row(`od${i}-${j}`, <Text color={kp.dim}>{`    ${line}`}</Text>)),
+      ]
+    })
+    const tabs: SbSeg[] = ask.questions.flatMap((t, i) => {
+          const isNow = i === ask.current
+          const isDone = ask.answers[i] !== null
+          return [
+            ...(i > 0 ? [{ text: '  ', color: kp.warn }] : []),
+            {
+              text: `${isDone ? '✓' : isNow ? '▶' : '○'} ${t.header}`,
+              color: isDone ? kp.good : isNow ? kp.text : kp.dim,
+              bold: isNow,
+              key: `q${i}`,
+              onPress: () => void update($, askAtom, a => pickQuestion(a, i)).catch(() => {}),
+            },
+          ]
+        })
+    return (
+      <Box flexDirection="column" width={W} flexShrink={0} backgroundColor={kp.panel}>
+        {sbFrameEdge(
+          k,
+          'ask-top',
+          W,
+          ['╭', '╮'],
+          [
+            { text: '‖ Needs you', color: kp.warn, bold: true },
+            { text: many ? ` · Question ${ask.current + 1} of ${ask.questions.length}` : ' · A question for you', color: kp.dim },
+          ],
+          [
+            { text: 'Skip', color: kp.dim, key: 'skip', onPress: () => void closeAsk($, SKIPPED).catch(() => {}) },
+            { text: ' ', color: kp.warn },
+            { text: '✕', color: kp.dim, key: 'close', onPress: onClose },
+          ],
+          kp.warn,
+        )}
+        {asked}
+        {row('gap', <Text> </Text>)}
+        {options}
+        {Input
+          ? row(
+              'other-row',
+              <Input
+                key="other"
+                placeholder={OTHER_HINT}
+                submitLabel="answer"
+                onSubmit={(value: string) => void changeAsk($, a => answerOther(a, value)).catch(() => {})}
+              />,
+            )
+          : null}
+        {q.multiSelect
+          ? row(
+              'done-row',
+              <Button key="done" plain hotkey="d" onPress={() => void changeAsk($, a => confirmPicks(a)).catch(() => {})}>
+                <Text color={ticked.length > 0 ? kp.good : kp.faint} bold>
+                  d: Done
+                </Text>
+              </Button>,
+            )
+          : null}
+        {sbFrameEdge(k, 'ask-bot', W, ['╰', '╯'], tabs, [], kp.warn)}
+      </Box>
+    )
+  }
+
+  const animate = isAnimated(cl)
+  if (shown.size > 200) shown.clear()
+  const eased = (id: string, target: number): number => {
+    const key = `${cl.startedAt}:${id}`
+    const was = shown.get(key)
+    if (!was) shown.set(key, { from: animate ? 0 : target, to: target, at: now })
+    else if (was.to !== target) shown.set(key, { from: easeToward(was.from, was.to, now - was.at), to: target, at: now })
+    const it = shown.get(key)!
+    return animate ? easeToward(it.from, it.to, now - it.at) : target
+  }
+
+  const full = Math.max(16, cols)
+  const sum = overall(cl)
+  const isWorking = cl.phase === 'working'
+  const isPaused = cl.phase === 'needs-you'
+
+  const outline =
+    isPaused ? kp.warn : cl.phase === 'done' ? kp.good : cl.phase === 'stuck' ? kp.bad : cl.phase === 'stopped' ? kp.faint : kp.dim
+  const top: SbSeg[] = isPaused
+      ? [
+          { text: '‖ Needs you', color: kp.warn, bold: true },
+          { text: ` · ${cl.needsYouReason}`, color: kp.text },
+        ]
+      : cl.phase === 'stuck'
+        ? [
+            { text: '⚠ Stuck: ', color: kp.bad, bold: true },
+            { text: cl.stuckReason, color: kp.text },
+          ]
+        : cl.phase === 'stopped'
+          ? [
+              { text: '■ Stopped', color: kp.dim, bold: true },
+              { text: ` · ${cl.title} · you pressed Esc`, color: kp.dim },
+            ]
+          : cl.phase === 'done'
+            ? [
+                { text: '✓ All done', color: kp.good, bold: true },
+                { text: ` · ${cl.title}`, color: kp.good },
+              ]
+            : [
+                { text: '✶ ', color: kp.warmFrom },
+                { text: cl.title, color: kp.text, bold: true },
+                ...(cl.helpers > 0 ? [{ text: ` · Waiting for ${cl.helpers} ${cl.helpers === 1 ? 'helper' : 'helpers'}`, color: kp.dim }] : []),
+              ]
+  const timeText = cl.phase === 'done' ? `took ${took}` : cl.phase === 'stopped' ? '' : took
+  const topRight: SbSeg[] = [
+    ...(timeText ? [{ text: hasClose ? `${timeText} ` : timeText, color: kp.dim }] : []),
+    ...(hasClose ? [{ text: '✕', color: kp.dim, onPress: onClose, key: 'close' }] : []),
+  ]
+  const hasSteps = sum.total > 0
+  const isDesktop = e.surface === 'desktop'
+
+  if (isStepsOnly) {
+    return drawCompact(els, kp, cl, {
+      header: top,
+      right: topRight,
+      outline,
+      isPaused,
+      summary: !hasSteps ? '' : cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total} · ${sum.percent}%`,
+      width: full,
+      isDesktop,
+    })
+  }
+
+  if (isDesktop) {
+    const warm = { from: sbMix(kp.track, kp.accent, 0.55), to: kp.accent, tint: kp.tint, tick }
+    // Finished: green and still, so a done step or job stops flickering.
+    const good = { from: sbMix(kp.track, kp.good, 0.55), to: kp.good, tint: kp.tint, tick: 0 }
+    return drawDesktop(els, kp, cl, {
+      header: top,
+      right: topRight,
+      outline,
+      isPaused,
+      stepsText: cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total}`,
+      percentText: `${sum.percent}%`,
+      isDone: cl.phase === 'done',
+      bar: hasSteps
+        ? { fraction: eased('all', sum.percent / 100), ...(cl.phase === 'done' ? good : warm) }
+        : { fraction: 0, ...warm, isSweep: isWorking },
+      stepBar: i => {
+        const t = cl.tasks[i]!
+        const isDone = t.status === 'done'
+        const isActive = t.status === 'active'
+        return {
+          fraction: eased(t.id, isDone ? 1 : isActive ? t.percent / 100 : 0),
+          ...(isDone ? good : warm),
+          isSweep: isActive && !t.hasReported && isWorking,
+        }
+      },
+    })
+  }
+
+  const jobFrame = sbFramedBar(k, 'job', {
+    width: full,
+    color: outline,
+    bar: cells =>
+      hasSteps
+        ? sbMeter(cells, eased('all', sum.percent / 100), cl.phase === 'done' ? sbGood(k) : accentLook(k))
+        : isWorking
+          ? sbSweep(cells, accentLook(k))
+          : sbMeter(cells, 0, accentLook(k)),
+    top,
+    topRight,
+    bottom: hasSteps
+      ? [{ text: cl.phase === 'done' ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total}`, color: kp.dim }]
+      : [],
+    bottomRight: hasSteps ? [{ text: `${sum.percent}%`, color: cl.phase === 'done' ? kp.good : kp.accent, bold: true }] : [],
+  })
+
+  // One outlined bar per step, side by side in rows like Flightdeck's usage limits.
+  // Each bar is wide enough for the longest step name, its marker, its label and the outline.
+  const n = cl.tasks.length
+  const longest = Math.max(0, ...cl.tasks.map(t => [...t.name].length))
+  const stepMin = Math.min(full, Math.max(STEP_MIN, longest + 28))
+  const lines = Math.ceil(n / Math.max(1, Math.min(n, Math.floor((full + 1) / (stepMin + 1)))))
+  const across = Math.max(1, Math.ceil(n / Math.max(1, lines)))
+  const each = Math.floor((full - (across - 1)) / across)
+  const stepFrame = (i: number, width: number) => {
+    const t = cl.tasks[i]!
+    const isDone = t.status === 'done'
+    const isActive = t.status === 'active'
+    const marker = isDone ? '✓' : isActive ? (isPaused ? '‖' : '▶') : '○'
+    const look = isDone ? sbGood(k, i + 1) : accentLook(k, i + 1)
+    const label = rowLabel(cl.tasks, i)
+    return sbFramedBar(k, t.id, {
+      width,
+      color: isActive ? (isPaused ? kp.warn : kp.accent) : isDone ? kp.dim : kp.sep,
+      bar: cells =>
+        isActive && !t.hasReported && isWorking
+          ? sbSweep(cells, look)
+          : sbMeter(cells, eased(t.id, isDone ? 1 : isActive ? t.percent / 100 : 0), look),
+      top: [
+        { text: `${marker} `, color: isDone ? kp.good : isActive ? (isPaused ? kp.warn : kp.accent) : kp.faint },
+        { text: t.name, color: isDone ? kp.dim : isActive ? kp.text : kp.faint, bold: isActive },
+      ],
+      topRight: label ? [{ text: label, color: isActive ? kp.accent : kp.dim, bold: isActive && t.hasReported }] : [],
+    })
+  }
+  const stepRows = Array.from({ length: lines }, (_, r) => {
+    const first = r * across
+    const count = Math.min(across, n - first)
+    return (
+      <Box key={`steps${r}`} columnGap={1}>
+        {Array.from({ length: count }, (_, j) => stepFrame(first + j, j === across - 1 ? full - (across - 1) * (each + 1) : each))}
+      </Box>
+    )
+  })
+
+  return (
+    <Box key="checklist" flexDirection="column" width={full} flexShrink={0}>
+      {jobFrame}
+      {stepRows}
+    </Box>
+  )
 }

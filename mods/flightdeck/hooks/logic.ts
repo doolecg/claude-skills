@@ -414,7 +414,10 @@ const pathKey = (p: string): string => norm(p).toLowerCase()
 export function callOf(id: string, tool: string, input: Record<string, unknown>, at: number): FdCall {
   const call: FdCall = { id, tool, at, isDone: false }
   if (READ_TOOLS.has(tool) || EDIT_TOOLS.has(tool)) call.path = str(input.file_path) ?? str(input.notebook_path)
-  else if (SHELL_TOOLS.has(tool)) call.text = str(input.command)
+  else if (SHELL_TOOLS.has(tool)) {
+    call.text = str(input.command)
+    call.about = str(input.description)
+  }
   else if (SEARCH_TOOLS.has(tool)) call.text = str(input.pattern) ?? str(input.query) ?? str(input.path)
   else if (AGENT_TOOLS.has(tool)) call.text = str(input.description) ?? str(input.subagent_type)
   else if (tool === 'WebFetch') call.text = str(input.url)
@@ -461,8 +464,33 @@ export function touchFile(files: readonly FdFile[], path: string, kind: 'read' |
 /** Adds a call, or replaces the one with its id, keeping the newest few. */
 export const addCall = (calls: readonly FdCall[], call: FdCall): FdCall[] => [...calls.filter(c => c.id !== call.id), call].slice(-12)
 
-/** `mcp__server__tool` as `server tool`. */
-const toolWords = (tool: string): string => (tool.startsWith('mcp__') ? tool.split('__').slice(1).join(' ') : tool)
+/** Tools whose calls read better as a whole phrase than as "Used <tool>". */
+const TOOL_PHRASES: Record<string, string> = {
+  TodoWrite: 'Updated the to-do list',
+  TaskCreate: 'Updated the to-do list',
+  TaskUpdate: 'Updated the to-do list',
+  Skill: 'Loaded a skill',
+  ToolSearch: 'Loaded more tools',
+  AskUserQuestion: 'Asked you a question',
+  ExitPlanMode: 'Showed you the plan',
+  plan_steps: 'Planned the steps',
+  report_progress: 'Reported progress',
+  update_plan: 'Updated the task list',
+  wrap_up: 'Wrapped up the turn',
+  start_session: 'Proposed a new session',
+  SendUserFile: 'Sent you a file',
+}
+
+/** A tool's last name part (`mcp__server__start_session` → `start_session`). */
+const toolLeaf = (tool: string): string => (tool.startsWith('mcp__') ? tool.split('__').pop() ?? tool : tool)
+
+/** A tool name in words: `mcp__server__start_session` → `start session`, `NotebookEdit` → `notebook edit`. */
+const toolWords = (tool: string): string =>
+  toolLeaf(tool)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .toLowerCase()
 
 /** A call in plain words for a list of actions: the verb, what it names, and whether the name is code. */
 export type Action = { kind: 'read' | 'edit' | 'command' | 'search' | 'agent' | 'other'; glyph: string; verb: string; target: string; isCode: boolean }
@@ -471,11 +499,17 @@ export function actionOf(c: FdCall): Action {
   const name = c.path ? baseName(c.path) : ''
   if (READ_TOOLS.has(c.tool)) return { kind: 'read', glyph: '◉', verb: 'Read', target: name, isCode: false }
   if (EDIT_TOOLS.has(c.tool)) return { kind: 'edit', glyph: '✎', verb: c.tool === 'Write' ? 'Wrote' : 'Edited', target: name, isCode: false }
-  if (SHELL_TOOLS.has(c.tool)) return { kind: 'command', glyph: '>_', verb: 'Ran', target: c.text ? oneLine(c.text, 60) : 'a command', isCode: !!c.text }
+  if (SHELL_TOOLS.has(c.tool)) {
+    // What the command is for reads better than the command itself; the command is the fallback.
+    if (c.about) return { kind: 'command', glyph: '>_', verb: 'Ran:', target: oneLine(c.about, 60), isCode: false }
+    return { kind: 'command', glyph: '>_', verb: 'Ran', target: c.text ? oneLine(c.text, 60) : 'a command', isCode: !!c.text }
+  }
   if (c.tool === 'WebSearch') return { kind: 'search', glyph: '⌕', verb: 'Searched the web for', target: c.text ? oneLine(c.text, 50) : '', isCode: !!c.text }
   if (c.tool === 'WebFetch') return { kind: 'search', glyph: '⌕', verb: 'Fetched', target: c.text ? oneLine(c.text, 50) : 'a page', isCode: false }
   if (SEARCH_TOOLS.has(c.tool)) return { kind: 'search', glyph: '⌕', verb: 'Searched for', target: c.text ? oneLine(c.text, 50) : 'files', isCode: !!c.text }
   if (AGENT_TOOLS.has(c.tool)) return { kind: 'agent', glyph: '◆', verb: 'Started agent', target: c.text ? oneLine(c.text, 50) : '', isCode: false }
+  const phrase = TOOL_PHRASES[toolLeaf(c.tool)]
+  if (phrase) return { kind: 'other', glyph: '·', verb: phrase, target: '', isCode: false }
   return { kind: 'other', glyph: '·', verb: 'Used', target: toolWords(c.tool), isCode: false }
 }
 
@@ -505,17 +539,26 @@ export function agentNow(c: FdCall): string {
     case 'edit':
       return `editing ${a.target || 'a file'}`
     case 'command':
-      return c.text ? `running ${oneLine(c.text, 40)}` : 'running a command'
+      return c.about ? oneLine(c.about.charAt(0).toLowerCase() + c.about.slice(1), 40) : c.text ? `running ${oneLine(c.text, 40)}` : 'running a command'
     case 'search':
       return c.text ? `searching for ${oneLine(c.text, 40)}` : 'searching'
     case 'agent':
       return c.text ? `starting agent ${oneLine(c.text, 30)}` : 'starting an agent'
     default:
-      return `using ${a.target}`
+      return a.target ? `using ${a.target}` : a.verb.charAt(0).toLowerCase() + a.verb.slice(1)
   }
 }
 
-export type Headline = { title: string; detail?: string; isWaiting: boolean; added?: number; removed?: number; step?: string }
+export type Headline = {
+  title: string
+  detail?: string
+  isWaiting: boolean
+  /** The last edit's file name and size, for its own "Last edit" line. */
+  editName?: string
+  added?: number
+  removed?: number
+  step?: string
+}
 
 /** "step 2 of 4: Make the bars longer" from Task View's `checklist` state; undefined with no job under way. */
 export function stepText(value: unknown): string | undefined {
@@ -530,7 +573,7 @@ export function stepText(value: unknown): string | undefined {
 
 /** What Claude is doing this moment, for the Right now card. */
 export function headline(calls: readonly FdCall[], pending: FdPending | null, main: FdMain, lastEdit: FdEdit | null, step?: string): Headline {
-  const base = { isWaiting: false, step, ...(lastEdit ? { added: lastEdit.added, removed: lastEdit.removed } : {}) }
+  const base = { isWaiting: false, step, ...(lastEdit ? { editName: baseName(lastEdit.path), added: lastEdit.added, removed: lastEdit.removed } : {}) }
   if (pending) return { ...base, title: 'Waiting for you', detail: pending.text, isWaiting: true }
   const call = main.isRunning ? recentActions(calls, 1).find(c => c.at >= main.turnStartedAt) : undefined
   if (call) {
@@ -538,10 +581,10 @@ export function headline(calls: readonly FdCall[], pending: FdPending | null, ma
     const where = call.path ? `${baseName(call.path)} in ${dirName(call.path)}` : ''
     if (a.kind === 'read') return { ...base, title: where ? `Claude is reading ${where}` : 'Claude is reading' }
     if (a.kind === 'edit') return { ...base, title: where ? `Claude is editing ${where}` : 'Claude is editing' }
-    if (a.kind === 'command') return { ...base, title: 'Claude is running a command', detail: call.text ? oneLine(call.text) : undefined }
+    if (a.kind === 'command') return { ...base, title: 'Claude is running a command', detail: call.about ? oneLine(call.about) : call.text ? oneLine(call.text) : undefined }
     if (a.kind === 'search') return { ...base, title: call.text ? `Claude is searching for ${oneLine(call.text, 50)}` : 'Claude is searching' }
     if (a.kind === 'agent') return { ...base, title: 'Claude is starting an agent', detail: call.text ? oneLine(call.text) : undefined }
-    return { ...base, title: 'Claude is working', detail: a.target }
+    return { ...base, title: 'Claude is working', detail: a.target || a.verb }
   }
   return { ...base, title: main.isRunning ? 'Claude is thinking' : 'Claude is idle' }
 }

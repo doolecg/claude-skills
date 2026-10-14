@@ -1523,3 +1523,16 @@ test('app: the picker pane draws with Buttons and no glyph art', async ($, on) =
   }
   expect(seen.writes).toEqual([])
 })
+
+test("app: another mod's band in the same place (Task View) stays on top, the bar under it", async ($, on) => {
+  world(on)
+  registerCommands(on)
+  seedModel(on)
+  on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => (globalThis as any).h($.ui.resolve(e).Text, {}, 'TASK VIEW BAND'))
+  await startSession($)
+  const ui = await $.ui.mount({ plugin: 'bottom-bar', surface: 'desktop', component: 'AbovePrompt', props: ABOVE_PROPS })
+  const all = textsOf(await ui.drawn()).join(' ')
+  expect(all).toContain('TASK VIEW BAND')
+  expect(all.indexOf('TASK VIEW BAND')).toBeLessThan(all.indexOf('context'))
+  expect(await ui.find({ key: 'pill' })).toBeDefined()
+})

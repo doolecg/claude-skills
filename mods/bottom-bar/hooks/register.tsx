@@ -360,8 +360,9 @@ export const register: Register = (on, options) => {
       await $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
     }
     const pal = paletteFor(await read($, theme), colour)
-    return desktopBar({
-      els: $.ui.resolve(e) as AppEls,
+    const els = $.ui.resolve(e) as AppEls
+    const bar = desktopBar({
+      els,
       pal,
       title: await read($, label),
       figures: await read($, figures),
@@ -369,6 +370,19 @@ export const register: Register = (on, options) => {
       runCommand: command => void runCommand($, command),
       openToolbox: () => void openToolbox(),
     })
+    // Another mod's band in the same place (Task View's checklist) stays on top, the bar under it.
+    let above: unknown = null
+    try {
+      above = await next(e)
+    } catch {}
+    if (!above) return bar
+    const { Box } = els
+    return (
+      <Box flexDirection="column" width="100%" rowGap={1}>
+        {above as JSX.Element}
+        {bar}
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
