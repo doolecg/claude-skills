@@ -47,7 +47,14 @@ import {
   type TodoItem,
 } from './clean-logic'
 import { drawCompact, drawDesktop, drawDesktopAsk } from './clean-draw'
-import { sbFrameEdge, sbFramedBar, sbGood, sbKit, sbMeter, sbPalette, sbSweep, sbWarm, type SbSeg } from './sidebar-kit'
+import { sbFrameEdge, sbFramedBar, sbKit, sbMeter, sbMix, sbPalette, sbSweep, sbWarm, type SbKit, type SbLook, type SbSeg } from './sidebar-kit'
+
+/** Task View's meters: pixels in the accent colour (the Colour setting), scattered more than the kit's. */
+const accentLook = (k: SbKit, seed = 0): SbLook => ({
+  ...sbWarm(k, seed),
+  stops: [sbMix(k.pal.track, k.pal.accent, 0.55), k.pal.accent],
+  jitter: 0.8,
+})
 
 type Dollar = EngineInterface
 
@@ -156,8 +163,8 @@ async function changeAsk($: Dollar, fn: (a: CvAsk) => CvAsk): Promise<void> {
 
 const whileLive = (fn: (cl: CvChecklist) => CvChecklist) => (cl: CvChecklist) => (isLive(cl) ? fn(cl) : cl)
 
-/** Tells the bottom bar (and any mod that reads it) whether Clean View is on. */
-const publishMode = ($: Dollar, isOn: boolean) => update($, modesAtom, () => ({ simple: { label: 'Clean View', isOn } }))
+/** Tells the bottom bar (and any mod that reads it) whether Task View is on. */
+const publishMode = ($: Dollar, isOn: boolean) => update($, modesAtom, () => ({ simple: { label: 'Task View', isOn } }))
 
 async function setEnabled($: Dollar, isOn: boolean): Promise<void> {
   await update($, enabledAtom, () => isOn)
@@ -165,7 +172,7 @@ async function setEnabled($: Dollar, isOn: boolean): Promise<void> {
   try {
     await $.store.set('cleanViewEnabled', isOn)
   } catch {}
-  $.ui.toast(isOn ? 'Clean View is on: just the plan, no technical rows' : 'Clean View is off: every row is back')
+  $.ui.toast(isOn ? 'Task View is on: just the plan, no technical rows' : 'Task View is off: every row is back')
 }
 
 async function readTheme($: Dollar): Promise<void> {
@@ -217,7 +224,7 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
     await $.tool.register({
       name: 'plan_steps',
       description:
-        'Clean View: lay out every step of the job up front, 2 to 8 short plain-English step names in order, each under 40 characters and starting with a verb (no file names, paths, commands or code). The first step starts right away. Call this first for every request.',
+        'Task View: lay out every step of the job up front, 2 to 8 short plain-English step names in order, each under 40 characters and starting with a verb (no file names, paths, commands or code). The first step starts right away. Call this first for every request.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -230,7 +237,7 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
     await $.tool.register({
       name: 'report_progress',
       description:
-        'Clean View: report progress on the current step, by its name from plan_steps, with a percent from 0 to 100. Report 100 the moment a step is finished; the next step then starts by itself.',
+        'Task View: report progress on the current step, by its name from plan_steps, with a percent from 0 to 100. Report 100 the moment a step is finished; the next step then starts by itself.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -243,7 +250,7 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
     })
     await $.command.register({
       name: 'simple',
-      description: 'Turn Clean View on or off (no argument flips it)',
+      description: 'Turn Task View on or off (no argument flips it)',
       argumentHint: '[on|off]',
     })
     syncTicker($, await read($, checklistAtom))
@@ -254,7 +261,7 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
     const arg = e.args.trim().toLowerCase()
     const target = arg === 'on' ? true : arg === 'off' ? false : !(await read($, enabledAtom))
     await setEnabled($, target)
-    return { text: target ? 'Clean View is on.' : 'Clean View is off.' }
+    return { text: target ? 'Task View is on.' : 'Task View is off.' }
   })
 
   on('command.run', async ($, e, next) => {
@@ -653,8 +660,8 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
     }
 
     if (isDesktop) {
-      const warm = { from: kp.warmFrom, to: kp.warmTo }
-      const good = { from: kp.goodFrom, to: kp.goodTo }
+      const warm = { from: sbMix(kp.track, kp.accent, 0.55), to: kp.accent, tint: kp.tint }
+      const good = warm
       return drawDesktop(els, kp, cl, {
         header: top,
         right: topRight,
@@ -684,10 +691,10 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
       color: outline,
       bar: cells =>
         hasSteps
-          ? sbMeter(cells, eased('all', sum.percent / 100), cl.phase === 'done' ? sbGood(k) : sbWarm(k))
+          ? sbMeter(cells, eased('all', sum.percent / 100), accentLook(k))
           : isWorking
-            ? sbSweep(cells, sbWarm(k))
-            : sbMeter(cells, 0, sbWarm(k)),
+            ? sbSweep(cells, accentLook(k))
+            : sbMeter(cells, 0, accentLook(k)),
       top,
       topRight,
       bottom: hasSteps
@@ -709,7 +716,7 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
       const isDone = t.status === 'done'
       const isActive = t.status === 'active'
       const marker = isDone ? '✓' : isActive ? (isPaused ? '‖' : '▶') : '○'
-      const look = isDone ? sbGood(k, i + 1) : sbWarm(k, i + 1)
+      const look = accentLook(k, i + 1)
       const label = rowLabel(cl.tasks, i)
       return sbFramedBar(k, t.id, {
         width,

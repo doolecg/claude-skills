@@ -167,7 +167,7 @@ test('/simple off hides the band, and /simple flips it back', async ($, on) => {
   await startJob($)
   await $.tool.call({ tool: PLAN, steps: ['Read your brand notes', 'Build the pricing section'] } as any)
   const off = await $.command.run({ command: 'simple', args: 'off' } as any)
-  expect((off as any).text).toBe('Clean View is off.')
+  expect((off as any).text).toBe('Task View is off.')
   for (const surface of SURFACES) {
     const { ui, all } = await band($, surface)
     expect(all).toBe('')
@@ -266,8 +266,8 @@ test('the on/off mode is published for the bottom bar', async ($, on) => {
   }) as any)
   await $.session.start({ cwd: '.' } as any)
   await $.command.run({ command: 'simple', args: 'off' } as any)
-  expect(seen[0]).toEqual({ simple: { label: 'Clean View', isOn: true } })
-  expect(seen[seen.length - 1]).toEqual({ simple: { label: 'Clean View', isOn: false } })
+  expect(seen[0]).toEqual({ simple: { label: 'Task View', isOn: true } })
+  expect(seen[seen.length - 1]).toEqual({ simple: { label: 'Task View', isOn: false } })
 })
 
 test('pixel meters are dense dot-matrix cells that fade up to a solid head and build up over time', () => {
@@ -307,7 +307,7 @@ test('the terminal draws meters as pixel Rasters, the desktop as SVG bars, and t
   expect(await desk.find({ type: 'Raster' })).toBeUndefined()
   const fill = async (ui: any) => {
     const svg = (await ui.findAll({ type: 'Svg' }))[1]
-    return Number(/<rect width="(\d+)" height="8" rx="4" fill="url/.exec(String(svg?.props?.source ?? ''))?.[1] ?? 0)
+    return Number(/<desc>(\d+) of \d+ lit<\/desc>/.exec(String(svg?.props?.source ?? ''))?.[1] ?? 0)
   }
   const before = await fill(desk)
   await desk.unmount()

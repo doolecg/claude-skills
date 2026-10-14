@@ -1,3 +1,11 @@
+# Bottom Bar 1.8.0
+
+## Changed
+- Other mods' buttons, like Enhance Prompt, come first on the left of the bar, with the name in a filled chip.
+- In the desktop app, Enhance Prompt is a filled button. While Claude is idle the app hides the bar above the prompt, so Prompt Enhancer's own button shows under the prompt instead.
+
+---
+
 # Bottom Bar 1.7.0
 
 ## New

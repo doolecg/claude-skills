@@ -109,20 +109,20 @@ test('with no publishers the bar draws as before, with its marker and no extra s
   expect(await bar.find({ key: 'seg:pub-mod:main' })).toBeUndefined()
 })
 
-test('a published segment shows after agents, and pressing it and its action runs the commands', { plugins: [PUB_MOD] }, async ($, on) => {
+test('a published segment shows first, as a filled chip, and pressing it and its action runs the commands', { plugins: [PUB_MOD] }, async ($, on) => {
   world(on)
   await startSession($)
   const bar = await mountBar($, { columns: 200, rows: 40 })
   const seg = await bar.find({ key: 'seg:pub-mod:main' })
-  expect(seg?.text).toBe('Enhance Prompt')
+  expect(seg?.text).toBe(' ✦ Enhance Prompt ')
 
   // The publisher's own command republishes under the bar's call; the bar picks it up when the call returns.
   await bar.press({ key: 'seg:pub-mod:main' })
-  expect((await bar.find({ key: 'seg:pub-mod:main' }))?.text).toBe('Enhance Prompt · Hindsight 6 · CodeGraph 3')
+  expect((await bar.find({ key: 'seg:pub-mod:main' }))?.text).toBe(' ✦ Enhance Prompt  · Hindsight 6 · CodeGraph 3')
   expect((await bar.find({ key: 'seg:pub-mod:main:0' }))?.text).toBe('Undo')
 
   await bar.press({ key: 'seg:pub-mod:main:0' })
-  expect((await bar.find({ key: 'seg:pub-mod:main' }))?.text).toBe('Enhance Prompt')
+  expect((await bar.find({ key: 'seg:pub-mod:main' }))?.text).toBe(' ✦ Enhance Prompt ')
   expect(await bar.find({ key: 'seg:pub-mod:main:0' })).toBeUndefined()
 })
 

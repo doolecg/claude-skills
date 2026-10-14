@@ -58,7 +58,7 @@ export function desktopBar(a: DesktopBarArgs): JSX.Element {
           const detail = rest.length > 0 ? rest[rest.length - 1]! : undefined
           return (
             <Box key={`${seg.key}:row`} flexDirection="row" alignItems="center" gap={1}>
-              <Button key={seg.key} label={name?.text ?? ''} variant="secondary" onPress={() => a.runCommand(seg.command!)} />
+              <Button key={seg.key} label={name?.text ?? ''} variant="primary" onPress={() => a.runCommand(seg.command!)} />
               {detail ? <Text color={name?.color === pal.text ? pal.dim : name?.color}>{detail.text}</Text> : null}
               {(seg.actions ?? []).map(act => (
                 <Button key={act.key} label={act.label} variant="secondary" onPress={() => a.runCommand(act.command)} />

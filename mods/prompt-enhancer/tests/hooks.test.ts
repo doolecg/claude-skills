@@ -32,7 +32,7 @@ function baseWorld(over: Partial<World> = {}): World {
     exists: new Set([`${ROOT}/.codegraph`]),
     hindsight: 'answers',
     codegraph: 'installed',
-    reply: { isAnswered: true, text: 'Fix the login bug.\n\nStart with: login (function) src/auth.ts:12\nLoad these skills: debugging\nAsk me first about: nothing\nDone when: login works' },
+    reply: { isAnswered: true, text: 'Fix the login bug.\n\nFiles to change: login (function) src/auth.ts:12\n\nSkills to load: debugging\n\nAsk me first about: nothing\n\nDone when: login works' },
     ...over,
   }
 }
@@ -108,12 +108,14 @@ const mountRow = ($: any, surface: 'terminal' | 'desktop' | 'vscode' | 'mobile')
   $.ui.mount({ plugin: 'prompt-enhancer', surface, component: 'SessionMode', props: { modes: [] } })
 
 for (const surface of SURFACES) {
-  test(`${surface}: the button sits after the row beneath it`, async ($, on) => {
+  test(`${surface}: the button sits on the left, before the row beneath it`, async ($, on) => {
     engine(on, baseWorld())
     await start($)
     const row = await mountRow($, surface)
     expect(await row.find({ type: 'Text', text: 'status row' })).toBeDefined()
     expect(await row.find({ key: 'pe-enhance', text: 'Enhance Prompt' })).toBeDefined()
+    const drawn = JSON.stringify(await row.drawn())
+    expect(drawn.indexOf('pe-enhance')).toBeLessThan(drawn.indexOf('status row'))
     expect(await row.find({ key: 'pe-undo' })).toBeUndefined()
   })
 
@@ -129,7 +131,7 @@ for (const surface of SURFACES) {
     const ask = seen.prompts[0]
     expect(ask.model).toBe('haiku')
     expect(ask.effort).toBeUndefined()
-    expect(ask.system.includes('Load these skills:')).toBe(true)
+    expect(ask.system.includes('Skills to load:')).toBe(true)
     expect(ask.prompt.includes('"""\nfix the login bug\n"""')).toBe(true)
     expect(ask.prompt.includes('login (function) src/auth.ts:12')).toBe(true)
     expect(ask.prompt.includes('- login uses JWT cookies')).toBe(true)
@@ -159,7 +161,7 @@ test('desktop: no Text draws a pill cap or box-drawing glyph, idle or after a ru
   expect((await texts()).length).toBeGreaterThan(0)
   expect((await texts()).some((t: string) => glyph.test(t))).toBe(false)
   await row.press({ key: 'pe-enhance' })
-  expect(await row.find({ type: 'Text', text: 'Hindsight 2 · CodeGraph 1' })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: '3 recalls' })).toBeDefined()
   expect((await texts()).some((t: string) => glyph.test(t))).toBe(false)
 })
 
@@ -304,22 +306,22 @@ test('neither Hindsight nor CodeGraph: the rewrite still lands with the session 
 
 // ---------------------------------------------------------------- counts, the published segment, a host bar
 
-test('after a run the own row shows what each source gave', { options: { soulBank: 'soul' } }, async ($, on) => {
+test('after a run the own row shows how many recalls it found', { options: { soulBank: 'soul' } }, async ($, on) => {
   engine(on, baseWorld())
   await start($)
   const row = await mountRow($, 'terminal')
   await row.press({ key: 'pe-enhance' })
-  expect(await row.find({ type: 'Text', text: 'Hindsight 2 · CodeGraph 1' })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: '3 recalls' })).toBeDefined()
 })
 
-test('the counts name a source that was off or not indexed', async ($, on) => {
+test('with Hindsight off and no index the row shows 0 recalls', async ($, on) => {
   const w = baseWorld({ exists: new Set() })
   delete w.files[`${HOME}/.hindsight/coding-agent.json`]
   engine(on, w)
   await start($)
   const row = await mountRow($, 'terminal')
   await row.press({ key: 'pe-enhance' })
-  expect(await row.find({ type: 'Text', text: 'Hindsight off · CodeGraph not indexed' })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: '0 recalls' })).toBeDefined()
 })
 
 test('the segment is published at start, while working and after a run', { options: { soulBank: 'soul' } }, async ($, on) => {
@@ -329,10 +331,10 @@ test('the segment is published at start, while working and after a run', { optio
   await start($)
   expect(published.at(-1)).toEqual({ label: 'Enhance Prompt', detail: '', command: 'enhance-prompt', state: 'idle', actions: [] })
   await (await mountRow($, 'terminal')).press({ key: 'pe-enhance' })
-  expect(published.some(s => s.state === 'working' && s.detail === 'gathering…')).toBe(true)
+  expect(published.some(s => s.state === 'working' && s.label === 'Enhancing!')).toBe(true)
   expect(published.at(-1)).toEqual({
     label: 'Enhance Prompt',
-    detail: 'Hindsight 2 · CodeGraph 1',
+    detail: '3 recalls',
     command: 'enhance-prompt',
     state: 'done',
     actions: [{ label: 'Undo', command: 'enhance-prompt undo' }],

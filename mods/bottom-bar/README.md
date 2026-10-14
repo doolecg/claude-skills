@@ -3,9 +3,9 @@
 A Claude Code mod that puts one compact, rounded bar at the bottom of the terminal and the desktop app, with a Doole's Tools button locked to its right end.
 
 ```
-╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ ◆ Opus 5.5 · 1M │ effort xhigh │ ctx ▰▱▱▱▱▱▱▱▱▱ 5% · 50K/1M │ 5h 7% │ ◇ 0 agents │ Enhance Prompt   ◖ ✻ Doole's Tools ▲ ◗ │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ✦ Enhance Prompt │ ◆ Opus 5.5 · 1M │ effort xhigh │ ctx ▰▱▱▱▱▱▱▱▱▱ 5% · 50K/1M │ 5h 7% │ ◇ 0 agents   ◖ ✻ Doole's Tools ▲ ◗ │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Install
@@ -21,10 +21,10 @@ The bar replaces a `statusLine` script. If you have one in `~/.claude/settings.j
 ## What the bar shows
 
 - The model and its context size, the effort level, a 10-cell context meter with the tokens used (`5% · 50K/1M`), your 5-hour and 7-day usage and how many agents are running.
-- The only buttons are other mods' segments (like Prompt Enhancer's Enhance Prompt) and Doole's Tools.
+- The only buttons are other mods' segments (like Prompt Enhancer's Enhance Prompt), first on the left, and Doole's Tools on the right.
 - Click the model name or the effort level to open a small picker above it and switch. It floats over the prompt; while Claude is working it sits above the bar instead, so the spinner can't draw over it. Both are saved, the same as `/model` and `/effort`.
 - On a narrow terminal the items on the right drop off first. The Doole's Tools pill always stays.
-- In the desktop app the bar sits just above the prompt (the app's footer below it only has room for two items): Enhance Prompt first, then the context meter with tokens used, 5h and 7d usage and agents, and Doole's Tools at the right end. The model and effort stay in the app's own footer.
+- In the desktop app the bar sits just above the prompt (the app's footer below it only has room for two items): Enhance Prompt first, then the context meter with tokens used, 5h and 7d usage and agents, and Doole's Tools at the right end. The model and effort stay in the app's own footer. The app shows that band only while Claude is working; the rest of the time a mod with its own fallback button (Prompt Enhancer) draws it in the footer.
 
 ## Doole's Tools
 
@@ -69,10 +69,10 @@ Declare it in the mod's `types/index.d.ts` (`modes: Record<string, { label: stri
 
 ## Segments from other mods
 
-Another mod can put its own segment in the bar, right after the agents segment, with the same `│` divider. Clicking the segment runs a command. Prompt Enhancer uses this for its Enhance Prompt button.
+Another mod can put its own segment in the bar, first on the left, its name in a filled chip, with the same `│` divider after it. Clicking the segment runs a command. Prompt Enhancer uses this for its Enhance Prompt button.
 
 ```
-◆ Opus 5.5 · 1M │ effort high │ ctx ▰▱▱▱▱▱▱▱▱▱ 13% │ 5h 53% │ ◆ 1 agent │ Enhance Prompt · Hindsight 6 · CodeGraph 3 · Undo
+✦ Enhance Prompt · 9 recalls · Undo │ ◆ Opus 5.5 · 1M │ effort high │ ctx ▰▱▱▱▱▱▱▱▱▱ 13% │ 5h 53% │ ◆ 1 agent
 ```
 
 To add one, keep a `segments` value in your mod's plugin state, keyed by an id you choose. Write it at session start and whenever it changes:
@@ -80,7 +80,7 @@ To add one, keep a `segments` value in your mod's plugin state, keyed by an id y
 ```ts
 await $.state.set({ plugin: 'my-mod', key: 'segments' }, {
   main: {
-    label: 'My Mod',               // the segment's name, bold (40 characters at most)
+    label: 'My Mod',               // the segment's name, in a filled chip (40 characters at most)
     detail: '3 found',             // optional, dim, after a "·" (60 at most)
     command: 'my-command',         // run on click: a command name, then any arguments, no slash
     state: 'done',                 // optional: idle, working (amber), done or error (red)
@@ -96,7 +96,7 @@ Declare it in your mod's `types/index.d.ts` (`segments: Record<string, { label: 
 - Writing the value again replaces all of your mod's segments. Write `{}` to remove them.
 - On a narrow terminal, segments from other mods give way first: they are cut off from the right, before the bar's own segments. The Doole's Tools pill always stays.
 - The bar draws each segment as a button keyed `seg:<your mod>:<id>`, and each action as `seg:<your mod>:<id>:<n>`, counting from 0.
-- The bar's row carries the key `bottom-bar-segments`. A mod that draws its own fallback button in that row can look for it and stay out of the way.
+- The bar's row carries the key `bottom-bar-segments`. A mod that draws its own fallback button in that row can look for it and stay out of the way. In the desktop app the footer carries it only while Claude works, when the bar above the prompt shows.
 - A command the bar runs writes its state under the bar's own call, where the bar cannot see it. The bar picks up those writes when the command returns. To show progress while the command runs (say, "working"), handle the click yourself: hook `ui.press` on your segment's key and answer `{ element }` without calling `next`. Your writes then reach the bar as they happen.
 
 In the desktop app each segment is a button at the start of the bar, with its detail after it and its actions as smaller buttons.

@@ -97,27 +97,71 @@ export function drawCompact(
 
 // ---- the Claude desktop app: native boxes, buttons and SVG meters --------------------
 
-/** A rounded progress bar as SVG: `fraction` of it filled, or a moving sweep when there is no percent yet. */
-export function barSvg(width: number, fraction: number, from: string, to: string, track: string, isSweep = false): string {
-  const h = 8
-  const r = h / 2
+// A steady pseudo-random 0..1 per pixel, so a bar looks the same each time it is drawn.
+function grain(i: number, seed: number): number {
+  let h = (i * 374761393 + seed * 668265263) | 0
+  h = Math.imul(h ^ (h >>> 13), 1274126177)
+  h ^= h >>> 16
+  return (h >>> 0) / 4294967295
+}
+
+/**
+ * A pixel progress bar as SVG: a dark rounded track of small dots, `fraction` of them lit in `to`'s
+ * colour. The lit dots scatter and fade in from the tail, the front two columns are bright and glow,
+ * some dots twinkle, and the empty track keeps a faint scatter. With no percent yet, a lit patch
+ * runs along the track instead.
+ */
+export function barSvg(width: number, fraction: number, from: string, to: string, track: string, isSweep = false, tint = '#FFFFFF'): string {
+  const h = 9
+  const pitch = 3
+  const cols = Math.max(1, Math.floor(width / pitch))
+  const rows = 3
   const lit = Math.max(0, Math.min(1, fraction))
-  const fill = lit <= 0 ? 0 : Math.max(h, Math.round(width * lit))
-  const w3 = Math.round(width * 0.3)
-  const body = isSweep
-    ? `<rect x="-${w3}" width="${w3}" height="${h}" rx="${r}" fill="url(#g)"><animate attributeName="x" from="-${w3}" to="${width}" dur="1.6s" repeatCount="indefinite"/></rect>`
-    : fill > 0
-      ? `<rect width="${fill}" height="${h}" rx="${r}" fill="url(#g)"/>`
-      : ''
+  const front = Math.round(cols * lit)
+  const dots: string[] = []
+  const dot = (c: number, r: number, color: string, opacity: number, extra = '') =>
+    dots.push(`<rect x="${c * pitch + 0.5}" y="${r * pitch + 0.5}" width="2" height="2" rx="0.4" fill="${color}" opacity="${opacity.toFixed(2)}"${extra}/>`)
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      const n = grain(c * rows + r, 7)
+      const isLit = !isSweep && c < front
+      if (isLit) {
+        const b = front <= 1 ? 1 : c / (front - 1)
+        const isHead = lit < 1 && c >= front - 2
+        if (isHead) {
+          dot(c, r, tint, 0.95, ' filter="url(#glow)"')
+          continue
+        }
+        if (n < 0.35 * (1 - b)) continue
+        const o = 0.18 + 0.7 * b * b * (0.45 + 0.55 * grain(c * rows + r, 13))
+        const color = n > 0.8 ? from : to
+        const twinkle = grain(c * rows + r, 19) > 0.82
+          ? `><animate attributeName="opacity" values="${o.toFixed(2)};${Math.min(1, o + 0.45).toFixed(2)};${o.toFixed(2)}" dur="${(1.6 + n * 2).toFixed(1)}s" begin="${(n * 2).toFixed(1)}s" repeatCount="indefinite"/></rect`
+          : ''
+        if (twinkle) dots.push(`<rect x="${c * pitch + 0.5}" y="${r * pitch + 0.5}" width="2" height="2" rx="0.4" fill="${color}" opacity="${o.toFixed(2)}"${twinkle}>`)
+        else dot(c, r, color, o)
+      } else if (n > 0.8) {
+        dot(c, r, tint, 0.06 + 0.08 * grain(c * rows + r, 23))
+      }
+    }
+  }
+  const sweep = isSweep
+    ? (() => {
+        const w = Math.max(pitch * 4, Math.round(width * 0.3))
+        return `<g><rect width="${w}" height="${h}" fill="url(#lit)"/><animateTransform attributeName="transform" type="translate" from="-${w} 0" to="${width} 0" dur="1.6s" repeatCount="indefinite"/></g>`
+      })()
+    : ''
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${h}" viewBox="0 0 ${width} ${h}">` +
-    `<defs><linearGradient id="g"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient>` +
-    `<clipPath id="c"><rect width="${width}" height="${h}" rx="${r}"/></clipPath></defs>` +
-    `<rect width="${width}" height="${h}" rx="${r}" fill="${track}"/><g clip-path="url(#c)">${body}</g></svg>`
+    `<desc>${isSweep ? 0 : front} of ${cols} lit</desc>` +
+    `<defs><filter id="glow" x="-2" y="-2" width="5" height="5"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
+    `<pattern id="lit" width="${pitch}" height="${pitch}" patternUnits="userSpaceOnUse"><rect x="0.5" y="0.5" width="2" height="2" rx="0.4" fill="${to}"/></pattern>` +
+    `<clipPath id="c"><rect width="${width}" height="${h}" rx="${h / 2}"/></clipPath></defs>` +
+    `<rect width="${width}" height="${h}" rx="${h / 2}" fill="${track}"/><g clip-path="url(#c)">${dots.join('')}${sweep}</g></svg>`
   )
 }
 
-export type DesktopBar = { fraction: number; from: string; to: string; isSweep?: boolean }
+export type DesktopBar = { fraction: number; from: string; to: string; tint?: string; isSweep?: boolean }
 
 /** The full checklist drawn for the desktop app. */
 export function drawDesktop(
@@ -138,7 +182,7 @@ export function drawDesktop(
 ) {
   const { Box, Text, Svg } = els
   const meter = (key: string, b: DesktopBar, width: number, label: string) => (
-    <Svg key={key} source={barSvg(width, b.fraction, b.from, b.to, pal.track, b.isSweep)} alt={label} width={width} height={8} isInteractive={b.isSweep} />
+    <Svg key={key} source={barSvg(width, b.fraction, b.from, b.to, pal.track, b.isSweep, b.tint)} alt={label} width={width} height={9} isInteractive={b.isSweep} />
   )
   const steps = cl.tasks.map((t, i) => {
     const isDone = t.status === 'done'

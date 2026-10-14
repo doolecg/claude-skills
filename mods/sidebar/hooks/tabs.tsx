@@ -39,7 +39,7 @@ export type ViewData = {
 /** The dim line that points a mod's options to Claude Code's plugin menu. */
 const optionsHint = (k: SbKit, id: string) => (
   <k.els.Text key={`options:${id}`} color={k.pal.dim} wrap="wrap">
-    {`Options: /plugin › Installed › ${entryOf(id)?.name ?? id} › Configure`}
+    {`Options: /plugin › Installed › ${optionsName(id)} › Configure`}
   </k.els.Text>
 )
 
@@ -54,13 +54,19 @@ function aboutCard(k: SbKit, id: string, extra: unknown[] = []) {
   ])
 }
 
-/** Clean View's tab: the job on screen now, mirrored. */
+// /plugin lists a mod by its id; a mod renamed since (clean-view is Task View) is found there by the id.
+const optionsName = (id: string): string => {
+  const name = entryOf(id)?.name ?? id
+  return name.toLowerCase().replace(/\s+/g, '-') === id ? name : id
+}
+
+/** Task View's tab: the job on screen now, mirrored. */
 function cleanView(k: SbKit, d: ViewData) {
   const { Box, Text } = k.els
   const { pal } = k
   const job = d.job
   const state = !job ? 'no job running' : job.phase === 'done' ? 'all done' : job.phase === 'working' ? 'job running' : job.phase.replace('-', ' ')
-  const parts: unknown[] = [sbTitle(k, { icon: '✶', name: 'Clean View', status: state })]
+  const parts: unknown[] = [sbTitle(k, { icon: '✶', name: 'Task View', status: state })]
   if (job) {
     const sum = progressOf(job)
     const isDone = job.phase === 'done'

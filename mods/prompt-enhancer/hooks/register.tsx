@@ -13,7 +13,7 @@ import {
   buildPrompt,
   configDir,
   conversationLines,
-  countsText,
+  recallsText,
   describeContext,
   folderList,
   gatherContext,
@@ -88,10 +88,10 @@ function recaller($: $, cfg: HindsightConfig, bank: string): Recall {
     const r = await $.http.fetch(`${cfg.url}/v1/default/banks/${encodeURIComponent(bank)}/memories/recall`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(cfg.token ? { Authorization: `Bearer ${cfg.token}` } : {}) },
-      body: JSON.stringify({ query: q, budget: 'low', max_tokens: 1500, types: ['observation'] }),
+      body: JSON.stringify({ query: q, budget: 'low', max_tokens: 1500 }),
     })
     if (!r.ok) return { items: [], error: r.status === 404 ? `no bank ${bank}` : `answered ${r.status}` }
-    return { items: parseRecall(r.text, 5), error: '' }
+    return { items: parseRecall(r.text), error: '' }
   }
 }
 
@@ -347,7 +347,7 @@ export async function enhance($: $, opts: Options, typed?: string): Promise<void
     ])
     const context = await gatherContext(original, deps)
     if (run !== current) return
-    await update($, lastRun, () => ({ counts: countsText(context), ok: true }))
+    await update($, lastRun, () => ({ counts: recallsText(context), ok: true }))
     const picked = mergeSkills(original, ...skills.lists)
 
     const model = resolveModel(opts.model, await $.session.model().catch(() => ''))
@@ -514,7 +514,7 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   // The button's own row, used only where no status bar hosts the published segment: it sits at the
-  // right end of the row under the prompt, after whatever draws that row.
+  // left of the row under the prompt, before whatever draws that row.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const below = await next(e)
     if (e.surface !== 'terminal' && e.surface !== 'desktop') return below
@@ -528,9 +528,7 @@ export const register: Register = (on, options) => {
     const controls =
       now !== 'idle'
         ? [
-            <Text key="pe-phase" dimColor>
-              {now === 'context' ? 'Enhance Prompt · gathering…' : 'Enhance Prompt · enhancing…'}
-            </Text>,
+            <Button key="pe-enhance" label="Enhancing!" variant="primary" onPress={() => void cancel($)} />,
             <Button key="pe-cancel" label="Cancel" onPress={() => void cancel($)} />,
           ]
         : [
@@ -554,11 +552,11 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="row" width="100%" alignItems="center">
+        <Box flexShrink={0} marginRight={1} columnGap={1} alignItems="center">
+          {controls}
+        </Box>
         <Box flexGrow={1} flexShrink={1}>
           {below}
-        </Box>
-        <Box flexShrink={0} marginLeft={1} columnGap={1} alignItems="center">
-          {controls}
         </Box>
       </Box>
     )

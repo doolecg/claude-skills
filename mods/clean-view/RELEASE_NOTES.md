@@ -1,3 +1,12 @@
+# Task View 1.7.0
+
+## Changed
+- Clean View is now called Task View. The plugin id is still `clean-view`, so your install, settings and `/simple` carry on as before.
+- The progress bars are pixel bars in your accent colour (the Colour setting shared with Bottom Bar), in the terminal and the desktop app. The pixels are more random, fade in from the tail, and the ones at the front are bright and glow.
+- In the desktop app the bars are small dots on a dark rounded track instead of smooth gradient bars.
+
+---
+
 # Clean View 1.6.1
 
 ## Fixed

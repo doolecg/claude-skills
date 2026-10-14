@@ -23,7 +23,7 @@ My Claude Code mods as a plugin marketplace: the sidebar, the bottom bar and the
 | `sidebar` | One sidebar with a tab for each mod |
 | `flightdeck` | The main session and every subagent working now, each with its own pixel critter; idea from [scasella/claude-flightdeck](https://github.com/scasella/claude-flightdeck) (MIT) |
 | `bottom-bar` | The bar at the bottom of the terminal and the Doole's Tools pill |
-| `clean-view` | A plain-English checklist above the prompt, with the technical rows hidden |
+| `clean-view` | Task View: a plain-English checklist above the prompt, with the technical rows hidden |
 | `self-improve` | Learns from finished sessions, keeps soul.md and a Soul Bank in step, drafts and tunes skills for your approval |
 | `prompt-enhancer` | An Enhance Prompt button that rewrites the prompt in the box with context from Hindsight, CodeGraph, the session, soul.md and your skills |
 | `idea-shelf` | Park ideas with `/idea` while Claude works |

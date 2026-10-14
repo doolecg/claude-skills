@@ -255,8 +255,8 @@ export function padTo(text: string, width: number): string {
 }
 
 export const PLAN_RULES = [
-  '# Clean View',
-  'Clean View is on: the person sees a plain checklist of your steps above the prompt, never your tool calls.',
+  '# Task View',
+  'Task View is on: the person sees a plain checklist of your steps above the prompt, never your tool calls.',
   '- Write every step name in plain English a non-technical person understands. Keep it under 40 characters and start it with a verb, like "Build the pricing section".',
   '- Never put file paths, file names, commands, code or tool names in a step name.',
   '- For every request, even a quick question, call plan_steps (mcp__clean-view__plan_steps) first with 2 to 8 step names in order; load it with ToolSearch if it is deferred. Then call report_progress (mcp__clean-view__report_progress) as real progress happens, and with percent 100 the moment a step finishes.',
@@ -264,7 +264,7 @@ export const PLAN_RULES = [
 ].join('\n')
 
 export const PLAN_FIRST =
-  'Clean View: call plan_steps first (mcp__clean-view__plan_steps; load it with ToolSearch if it is deferred) with 2 to 8 short plain-English step names, then carry on.'
+  'Task View: call plan_steps first (mcp__clean-view__plan_steps; load it with ToolSearch if it is deferred) with 2 to 8 short plain-English step names, then carry on.'
 
 // ---- colour ----------------------------------------------------------------
 

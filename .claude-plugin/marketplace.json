@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "dooles-tools",
-  "description": "doolecg's Claude Code mods: Sidebar, Flightdeck, Bottom Bar, Clean View, Self Improve, Prompt Enhancer, Idea Shelf, Context and Rule Guard. The skills are in doolecg/Dooles_Skills.",
+  "description": "doolecg's Claude Code mods: Sidebar, Flightdeck, Bottom Bar, Task View, Self Improve, Prompt Enhancer, Idea Shelf, Context and Rule Guard. The skills are in doolecg/Dooles_Skills.",
   "owner": {
     "name": "doolecg",
     "email": "doolecg@gmail.com"

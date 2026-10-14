@@ -49,7 +49,7 @@ async function syncStrip($: Dollar, patch: { isOn?: boolean; active?: string } =
   if ((await read($, modesAtom)).sidebar?.isOn !== isOn) await update($, modesAtom, () => ({ sidebar: { label: 'Sidebar', isOn } }))
 }
 
-/** The 250ms frame clock runs while the sidebar's own pane shows a moving Clean View job. */
+/** The 250ms frame clock runs while the sidebar's own pane shows a moving Task View job. */
 async function syncTicker($: Dollar): Promise<void> {
   const strip = await read($, stripAtom)
   const job = await read($, jobAtom)
@@ -252,7 +252,7 @@ export const register: Register = on => {
     return ran
   }).catch(($, e, next) => next(e))
 
-  // Other mods' tab badges, Clean View's job and Prompt Enhancer's last run, followed live.
+  // Other mods' tab badges, Task View's job and Prompt Enhancer's last run, followed live.
   on('state.set', { key: 'sidebarBadge' } as never, async ($, e, next) => {
     const ran = await next(e)
     const w = writeOf(e)

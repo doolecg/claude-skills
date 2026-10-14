@@ -321,7 +321,7 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   // A mod's published segments: `{ [id]: { label, detail?, command, state?, actions? } }` in its own
-  // `segments` state, drawn after the agents segment and followed live.
+  // `segments` state, drawn first on the left of the bar and followed live.
   on('state.set', { key: 'segments' } as never, async ($, e, next) => {
     const ran = await next(e)
     const write = e as unknown as StateWrite
@@ -372,8 +372,11 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
-    // The app keeps its own footer labels; the key tells a mod with a fallback button that the bar hosts it.
+    // The app keeps its own footer labels. It shows the band above the prompt only while Claude works, so
+    // only then does the key tell a mod with a fallback button (Enhance Prompt) that the bar hosts it;
+    // the rest of the time that mod draws its own button here.
     if (e.surface === 'desktop') {
+      if (!(await read($, isWorking))) return next(e)
       const { Box: AppBox } = $.ui.resolve(e)
       return <AppBox key="bottom-bar-segments">{await next(e)}</AppBox>
     }
@@ -396,19 +399,24 @@ export const register: Register = (on, options) => {
 
     // One row that clips: a segment with no room wraps onto the hidden second row.
     const segs = segments(f, pal)
-    // Other mods' published segments follow the agents segment in a box of their own that gives way
-    // first: it shrinks and clips from the right before the bar's own segments give way, and the
-    // pills never do.
+    // Other mods' published segments come first, on the left, in a box of their own that gives way
+    // first: it shrinks and clips before the bar's own segments give way, and the pills never do.
     const extra = publishedSegments(await read($, published), pal)
+    // Each one's name is a filled chip, coloured by how its run is going; its detail and actions follow.
     const shared = extra.map(seg => (
       <Box flexShrink={0}>
-        <Text color={pal.sep}>{SEPARATOR}</Text>
         <Button key={seg.key} plain onPress={() => void runTool(seg.command!)}>
-          {seg.parts.map(p => (
-            <Text color={p.color} bold={p.bold}>
-              {p.text}
-            </Text>
-          ))}
+          {seg.parts.map((p, i) =>
+            i === 0 ? (
+              <Text backgroundColor={p.color === pal.text ? pal.accent : p.color} color={pal.ink} bold>
+                {` ✦ ${p.text} `}
+              </Text>
+            ) : (
+              <Text color={p.color} bold={p.bold}>
+                {p.text}
+              </Text>
+            ),
+          )}
         </Button>
         {(seg.actions ?? []).map(a => [
           <Text color={pal.dim}>{' · '}</Text>,
@@ -416,8 +424,17 @@ export const register: Register = (on, options) => {
             <Text color={pal.accent}>{a.label}</Text>
           </Button>,
         ])}
+        <Text color={pal.sep}>{SEPARATOR}</Text>
       </Box>
     ))
+    const sharedWidth = extra.reduce(
+      (n, seg) =>
+        n +
+        seg.parts.reduce((m, p, i) => m + [...p.text].length + (i === 0 ? 4 : 0), 0) +
+        (seg.actions ?? []).reduce((m, a) => m + 3 + [...a.label].length, 0) +
+        SEPARATOR.length,
+      0,
+    )
     const row = segs.map((seg, i) => (
       <Box flexShrink={0}>
         {i > 0 ? <Text color={pal.sep}>{SEPARATOR}</Text> : null}
@@ -498,7 +515,7 @@ export const register: Register = (on, options) => {
     // a placed box to the site, so there it sits in the flow and pushes the bar down.
     const atRight = shown === 'tools'
     const floats = !atRight && docks && !(await read($, isWorking))
-    const offset = atRight ? 0 : segmentOffset(segs, shown)
+    const offset = atRight ? 0 : sharedWidth + segmentOffset(segs, shown)
     const box = (
       <Box
         position={floats ? 'absolute' : 'relative'}
@@ -522,12 +539,13 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column" width="100%">
         {options.length > 0 && !floats && box}
         <Box borderStyle="round" borderColor={pal.border} paddingX={1}>
+          <Box key="bottom-bar-published" flexShrink={100} height={1} overflow="hidden">
+            {shared}
+          </Box>
           <Box key="bottom-bar-segments" flexShrink={1} flexWrap="wrap" height={1} overflow="hidden">
             {row}
           </Box>
-          <Box key="bottom-bar-published" flexGrow={1} flexShrink={100} height={1} overflow="hidden">
-            {shared}
-          </Box>
+          <Box flexGrow={1} />
           <Box flexShrink={0} marginLeft={1} columnGap={1}>
             {modes ? <Text color={pal.dim}>{modes}</Text> : null}
             {pill('pill', `${title} ${shown === 'tools' ? '▼' : '▲'}`, () => void openTools(), '✻')}

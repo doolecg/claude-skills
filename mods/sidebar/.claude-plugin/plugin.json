@@ -1,7 +1,7 @@
 {
   "name": "sidebar",
-  "version": "1.5.1",
-  "description": "One sidebar with a tab for each of your mods (Flightdeck, Self Improve, Clean View, Idea Shelf and the rest), in the Bottom Bar's colours.",
+  "version": "1.5.2",
+  "description": "One sidebar with a tab for each of your mods (Flightdeck, Self Improve, Task View, Idea Shelf and the rest), in the Bottom Bar's colours.",
   "author": { "name": "doolecg" },
   "license": "MIT",
   "types": "./types/index.d.ts"

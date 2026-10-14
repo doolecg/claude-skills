@@ -1,6 +1,6 @@
 {
   "name": "clean-view",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "A calm, plain-English checklist above the prompt while Claude works, with the tool calls, diffs and command output hidden.",
   "author": {
     "name": "doolecg"

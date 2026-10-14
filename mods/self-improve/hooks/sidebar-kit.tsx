@@ -126,7 +126,8 @@ export type SbMeterInfo = { from: number; to: number; stops: readonly string[]; 
 export type SbPixels = SbPixel[] & { meter?: SbMeterInfo }
 const withMeter = (pixels: SbPixel[], meter: SbMeterInfo): SbPixels => Object.assign(pixels, { meter })
 export type SbRun = { text: string; color: string }
-export type SbLook = { stops: readonly string[]; track: string; tint: string; tick: number; seed?: number }
+/** `jitter` (0..1, default 0) scatters the lit dots and their brightness more, for a busier, more random look. */
+export type SbLook = { stops: readonly string[]; track: string; tint: string; tick: number; seed?: number; jitter?: number }
 
 // Clean View's meter, made denser: every one of a braille cell's four dot rows is lit (2 dots across, 4 down).
 const DENSE_BITS = [
@@ -155,6 +156,7 @@ function band(width: number, from: number, to: number, look: SbLook): SbPixel[] 
     return Array.from({ length: width }, (_, i) => ({ ch: DENSE_FULL, color: sbAlong(look.stops, width <= 1 ? 0 : i / (width - 1)) }))
   }
   const seed = look.seed ?? 0
+  const jit = Math.max(0, Math.min(1, look.jitter ?? 0))
   const t = Math.floor(look.tick / 2)
   const start = Math.max(0, from)
   const span = Math.max(1e-6, Math.min(1, to) - start)
@@ -171,19 +173,20 @@ function band(width: number, from: number, to: number, look: SbLook): SbPixel[] 
     if (isLit) {
       // 0 at the tail, 1 just behind the head.
       const b = Math.max(0, Math.min(1, (mid - start) / span))
-      const fill = 0.35 + 0.62 * b
+      const fill = 0.35 + 0.62 * b - jit * 0.35 * sbNoise(i, t, seed + 11)
       for (let dx = 0; dx < 2; dx++) {
         for (let dy = 0; dy < 4; dy++) {
           if (sbNoise(i * 8 + dx * 4 + dy, t, seed + 3) < fill) bits |= DENSE_BITS[dx]![dy]!
         }
       }
       const base = sbAlong(look.stops, width <= 1 ? 0 : i / (width - 1))
-      const shade = sbMix(look.track, base, 0.35 + 0.65 * b)
-      out.push({ ch: String.fromCharCode(0x2800 + bits), color: sbMix(shade, look.tint, b * b * 0.35 + sbNoise(i, t, seed) * 0.08) })
+      const shade = sbMix(look.track, base, 0.35 + 0.65 * b - jit * 0.3 * sbNoise(i, t, seed + 13))
+      const sparkle = jit > 0 && sbNoise(i, t, seed + 17) > 1 - jit * 0.12 ? 0.45 : 0
+      out.push({ ch: String.fromCharCode(0x2800 + bits), color: sbMix(shade, look.tint, b * b * 0.35 + sbNoise(i, t, seed) * (0.08 + jit * 0.22) + sparkle) })
     } else {
       for (let dx = 0; dx < 2; dx++) {
         for (let dy = 0; dy < 4; dy++) {
-          if (sbNoise(i * 8 + dx * 4 + dy, Math.floor(t / 2), seed + 5) < 0.14) bits |= DENSE_BITS[dx]![dy]!
+          if (sbNoise(i * 8 + dx * 4 + dy, Math.floor(t / 2), seed + 5) < 0.14 + jit * 0.1) bits |= DENSE_BITS[dx]![dy]!
         }
       }
       out.push({ ch: String.fromCharCode(0x2800 + bits), color: sbMix(look.track, look.tint, 0.1 + sbNoise(i, t, seed + 7) * 0.14) })

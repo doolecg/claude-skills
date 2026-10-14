@@ -15,10 +15,10 @@ export type SbBlock = { at: number; rule: string; label: string; what: string }
 /** What every mod's tab pane reads to draw the strip: the tabs, the open one, whether the sidebar is up, and the Context footer. */
 export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; footer?: SbFooter | null }
 
-/** A step of Clean View's checklist, as the Clean View tab mirrors it. */
+/** A step of Task View's checklist, as the Task View tab mirrors it. */
 export type SbStep = { id: string; name: string; status: string; percent: number; hasReported: boolean }
 
-/** Clean View's current job, as its `checklist` state holds it (the fields the tab draws). */
+/** Task View's current job, as its `checklist` state holds it (the fields the tab draws). */
 export type SbJob = { title: string; phase: string; tasks: SbStep[]; startedAt: number; finishedAt: number }
 
 /** An on/off mode another mod publishes in its `modes` state, keyed by the command that flips it. */
@@ -26,7 +26,7 @@ export type SbMode = { label: string; isOn: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
-    /** Read only: the job Clean View shows, Prompt Enhancer's last run, Context's footer and Rule Guard's stops. */
+    /** Read only: the job Task View shows, Prompt Enhancer's last run, Context's footer and Rule Guard's stops. */
     'clean-view': { checklist: unknown }
     'prompt-enhancer': { lastRun: { counts: string; ok: boolean } | null }
     context: { footer: unknown }

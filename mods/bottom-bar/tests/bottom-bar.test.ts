@@ -1444,7 +1444,14 @@ test('app: the bar sits above the prompt with no model or effort, and the footer
   registerCommands(on)
   seedModel(on)
   on('ui.render', { component: 'SessionMode' }, ($: any, e: any) => (globalThis as any).h($.ui.resolve(e).Text, {}, 'Opus 5.5 High'))
+  on('turn.start', (_$: any, e: any) => ({ turnId: e.turnId }))
   await startSession($)
+  // Idle, the app hides the band above the prompt, so the footer is left as it is and a mod's own
+  // button can show there; while Claude works the bar hosts it, and the footer says so.
+  const idle = await mountBar($, 'desktop')
+  expect(textsOf(await idle.drawn()).join(' ')).toBe('Opus 5.5 High')
+  expect(await idle.find({ key: 'bottom-bar-segments' })).toBeUndefined()
+  await $.turn.start({ text: 'go', turnId: 't1' } as any)
   const footer = await mountBar($, 'desktop')
   expect(textsOf(await footer.drawn()).join(' ')).toBe('Opus 5.5 High')
   expect(await footer.find({ key: 'bottom-bar-segments' })).toBeDefined()

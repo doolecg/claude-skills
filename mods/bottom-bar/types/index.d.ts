@@ -25,7 +25,7 @@ export type BarSegmentAction = { label: string; command: string }
 
 /**
  * A segment another mod publishes in its own `segments` state, keyed by an id of its choosing,
- * as the bar keeps it: drawn after the agents segment and pressed to run `command`.
+ * as the bar keeps it: drawn first on the left of the bar and pressed to run `command`.
  */
 export type BarSegment = {
   plugin: string

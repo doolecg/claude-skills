@@ -77,7 +77,7 @@ describe('logic', () => {
     expect(installedFrom({})).toEqual([])
   })
 
-  test('Clean View’s checklist is cut down to a job, or null with none', () => {
+  test('Task View’s checklist is cut down to a job, or null with none', () => {
     expect(jobOf(null)).toBeNull()
     expect(jobOf({ phase: 'idle' })).toBeNull()
     expect(jobOf({})).toBeNull()
@@ -272,7 +272,7 @@ describe('wiring', () => {
     expect(w.opened.at(-1)).toMatchObject({ id: 'sidebar', title: 'Sidebar', columns: 56 })
     const { ui, all } = await texts($)
     expect(all).toContain("DOOLE'S SIDEBAR")
-    expect(all).toContain('CLEAN VIEW')
+    expect(all).toContain('TASK VIEW')
     expect(all).toContain('No job running')
     await ui.unmount()
   })
@@ -285,7 +285,7 @@ describe('wiring', () => {
     const { ui, all } = await texts($)
     expect(all).toContain('TABS')
     expect(all).toContain('Flightdeck')
-    expect(all).toContain('Clean View')
+    expect(all).toContain('Task View')
     expect(all).toContain('Not installed'.toUpperCase())
     await ui.unmount()
   })
@@ -374,7 +374,7 @@ describe('wiring', () => {
     expect(w.panes).toContain('sidebar')
     expect(w.panes).not.toContain('flightdeck')
     const { ui, all } = await texts($)
-    expect(all).toContain('CLEAN VIEW')
+    expect(all).toContain('TASK VIEW')
     await ui.unmount()
 
     await press($, 'tab flightdeck')
@@ -497,7 +497,7 @@ describe('context footer', () => {
     expect(all).toContain(' · 3 changed')
     expect(all).toContain('Hindsight')
     expect(all).toContain(' 2 of 3')
-    expect(all.indexOf('main')).toBeGreaterThan(all.indexOf('CLEAN VIEW'))
+    expect(all.indexOf('main')).toBeGreaterThan(all.indexOf('TASK VIEW'))
     await ui.unmount()
     await $.command.run({ ...command('none'), command: 'ctx-publish' })
     ;({ ui, all } = await texts($))

@@ -12,7 +12,7 @@ import {
   capLines,
   configDir,
   conversationLines,
-  countsText,
+  recallsText,
   describeContext,
   folderList,
   gatherContext,
@@ -40,7 +40,7 @@ import type { GatherDeps } from '../hooks/enhance'
 
 describe('prompt', () => {
   test('the instructions ask for the rewrite shape', () => {
-    for (const part of ['Load these skills:', 'Ask me first about:', 'Done when:', 'Start with:', 'Keep in mind:', 'Context:']) {
+    for (const part of ['Skills to load:', 'Ask me first about:', 'Done when:', 'Files to change:', 'Keep in mind:', 'Context:']) {
       expect(SYSTEM_PROMPT.includes(part)).toBe(true)
     }
     expect(SYSTEM_PROMPT.includes('untrusted reference data')).toBe(true)
@@ -76,6 +76,27 @@ describe('prompt', () => {
   test('a fenced reply is unwrapped, an empty one is empty, a long one is capped', () => {
     expect(parseReply('```\nDo it.\n\nDone when: ok\n```')).toBe('Do it.\n\nDone when: ok')
     expect(parseReply('   ')).toBe('')
+  })
+
+  test('an answer-like opening line is taken off, so the prompt starts with the task', () => {
+    expect(parseReply("Here's the rewritten prompt:\n\nAdd a figure.\n\nDone when: it shows")).toBe('Add a figure.\n\nDone when: it shows')
+    expect(parseReply('Sure! Here is a clearer version:\n```\nFix the bug.\n```')).toBe('Fix the bug.')
+    expect(parseReply('Rewritten prompt:\nFix the bug.')).toBe('Fix the bug.')
+    expect(parseReply('Here we go')).toBe('Here we go')
+    expect(parseReply('Add the here-and-now view.\n\nDone when: it shows')).toBe('Add the here-and-now view.\n\nDone when: it shows')
+  })
+
+  test('each section gets its own line with a blank line before it, and the skills line is "Skills to load:"', () => {
+    expect(parseReply('Fix it.\nFiles to change: a.ts\nContext: on main\n\n\nLoad these skills: x\nAsk me first about: nothing\nDone when: y passes')).toBe(
+      'Fix it.\n\nFiles to change: a.ts\n\nContext: on main\n\nSkills to load: x\n\nAsk me first about: nothing\n\nDone when: y passes',
+    )
+    expect(parseReply('Fix it.\n\nDone when: y')).toBe('Fix it.\n\nDone when: y')
+    expect(parseReply('Fix the context: menu.\nDone when: it opens')).toBe('Fix the context: menu.\n\nDone when: it opens')
+  })
+
+  test('the system prompt says to write a request, never an answer', () => {
+    expect(SYSTEM_PROMPT).toContain('never an answer')
+    expect(SYSTEM_PROMPT).toContain('Files to change:')
     expect(parseReply('a'.repeat(7000)).length).toBe(LIMITS.output)
   })
 
@@ -312,51 +333,46 @@ describe('gathering', () => {
 
 test('the template lists the optional lines after the task and before the skills', () => {
   const at = (t: string) => SYSTEM_PROMPT.indexOf(t)
-  expect(at('Start with:') < at('Context:')).toBe(true)
+  expect(at('Files to change:') < at('Context:')).toBe(true)
   expect(at('Context:') < at('Keep in mind:')).toBe(true)
-  expect(at('Keep in mind:') < at('Load these skills:')).toBe(true)
-  expect(at('Load these skills:') < at('Ask me first about:')).toBe(true)
+  expect(at('Keep in mind:') < at('Skills to load:')).toBe(true)
+  expect(at('Skills to load:') < at('Ask me first about:')).toBe(true)
   expect(at('Ask me first about:') < at('Done when:')).toBe(true)
   expect(SYSTEM_PROMPT.includes('Keep the lines in exactly this order')).toBe(true)
 })
 
-describe('counts', () => {
-  test('a used source shows its count, a real 0 included', () => {
-    expect(countsText({ hindsight: { status: 'used', count: 6 }, codegraph: { status: 'used', count: 3 } })).toBe('Hindsight 6 · CodeGraph 3')
-    expect(countsText({ hindsight: { status: 'used', count: 0 }, codegraph: { status: 'used', count: 0 } })).toBe('Hindsight 0 · CodeGraph 0')
-  })
-
-  test('a source that was off or skipped says why, never 0', () => {
-    expect(countsText({ hindsight: { status: 'off', count: 0 }, codegraph: { status: 'not-indexed', count: 0 } })).toBe('Hindsight off · CodeGraph not indexed')
-    expect(countsText({ hindsight: { status: 'timeout', count: 0 }, codegraph: { status: 'off', count: 0 } })).toBe('Hindsight timed out · CodeGraph off')
-    expect(countsText({ hindsight: { status: 'unavailable', count: 0 }, codegraph: { status: 'timeout', count: 0 } })).toBe('Hindsight unavailable · CodeGraph timed out')
+describe('recalls', () => {
+  test('the button counts Hindsight and CodeGraph together', () => {
+    expect(recallsText({ hindsight: { status: 'used', count: 6 }, codegraph: { status: 'used', count: 3 } })).toBe('9 recalls')
+    expect(recallsText({ hindsight: { status: 'used', count: 1 }, codegraph: { status: 'off', count: 0 } })).toBe('1 recall')
+    expect(recallsText({ hindsight: { status: 'off', count: 0 }, codegraph: { status: 'not-indexed', count: 0 } })).toBe('0 recalls')
   })
 
   test('gathering sets what each source did', async () => {
     const used = await gatherContext('q', deps({ symbols: async () => ['a', 'b', 'c'] }))
-    expect(countsText(used)).toBe('Hindsight 2 · CodeGraph 3')
+    expect(recallsText(used)).toBe('5 recalls')
     const none = await gatherContext('q', deps({ hindsight: null, symbols: async () => null }))
-    expect(countsText(none)).toBe('Hindsight off · CodeGraph not indexed')
+    expect([none.hindsight.status, none.codegraph.status]).toEqual(['off', 'not-indexed'])
     const never = () => new Promise<never>(() => {})
     const slow = await gatherContext('q', deps({ hindsight: { project: never, soul: never }, symbols: async () => 'missing', after: quick }))
-    expect(countsText(slow)).toBe('Hindsight timed out · CodeGraph off')
+    expect([slow.hindsight.status, slow.codegraph.status]).toEqual(['timeout', 'off'])
     const broken = await gatherContext('q', deps({ hindsight: { project: async () => Promise.reject(new Error('x')), soul: async () => ({ items: [], error: 'answered 500' }) }, symbols: async () => Promise.reject(new Error('x')) }))
-    expect(countsText(broken)).toBe('Hindsight unavailable · CodeGraph unavailable')
+    expect([broken.hindsight.status, broken.codegraph.status]).toEqual(['unavailable', 'unavailable'])
     const half = await gatherContext('q', deps({ hindsight: { project: never, soul: async () => ({ items: ['s'], error: '' }) }, after: quick }))
-    expect(countsText(half)).toBe('Hindsight 1 · CodeGraph 1')
+    expect(recallsText(half)).toBe('2 recalls')
   })
 })
 
 describe('segment', () => {
   test('while working it says so and offers Cancel', () => {
     expect(segmentFor('context', null, false, false)).toEqual({
-      label: 'Enhance Prompt',
-      detail: 'gathering…',
+      label: 'Enhancing!',
+      detail: '',
       command: 'enhance-prompt cancel',
       state: 'working',
       actions: [{ label: 'Cancel', command: 'enhance-prompt cancel' }],
     })
-    expect(segmentFor('rewrite', null, true, false).detail).toBe('enhancing…')
+    expect(segmentFor('rewrite', null, true, false).label).toBe('Enhancing!')
   })
 
   test('before any run it is the plain button', () => {
@@ -364,8 +380,8 @@ describe('segment', () => {
   })
 
   test('after a run it shows the counts, with Undo or Use rewrite', () => {
-    const done = segmentFor('idle', { counts: 'Hindsight 6 · CodeGraph 3', ok: true }, true, false)
-    expect(done.detail).toBe('Hindsight 6 · CodeGraph 3')
+    const done = segmentFor('idle', { counts: '9 recalls', ok: true }, true, false)
+    expect(done.detail).toBe('9 recalls')
     expect(done.state).toBe('done')
     expect(done.actions).toEqual([{ label: 'Undo', command: 'enhance-prompt undo' }])
     const waiting = segmentFor('idle', { counts: 'x', ok: true }, true, true)

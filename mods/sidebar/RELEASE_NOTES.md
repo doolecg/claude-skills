@@ -1,3 +1,10 @@
+# Sidebar 1.5.2
+
+## Changed
+- The Clean View tab is now the Task View tab, to match the mod's new name.
+
+---
+
 # Sidebar 1.5.1
 
 ## Fixed

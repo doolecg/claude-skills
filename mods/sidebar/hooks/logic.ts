@@ -19,7 +19,7 @@ export type CatalogEntry = {
 export const CATALOG: readonly CatalogEntry[] = [
   { id: 'flightdeck', icon: '✈', name: 'Flightdeck', label: 'Flightdeck', about: 'The main session and every subagent working now.', pane: { command: 'flightdeck' } },
   { id: 'self-improve', icon: '✺', name: 'Self Improve', label: 'Improve', about: 'Learns from finished sessions and keeps soul.md.', pane: { command: 'learn' } },
-  { id: 'clean-view', icon: '✶', name: 'Clean View', label: 'Steps', about: 'A plain checklist above the prompt while Claude works.' },
+  { id: 'clean-view', icon: '✶', name: 'Task View', label: 'Steps', about: 'A plain checklist above the prompt while Claude works.' },
   { id: 'idea-shelf', icon: '◇', name: 'Idea Shelf', label: 'Ideas', about: 'Park ideas while Claude works and send them later.', pane: { command: 'ideas' } },
   { id: 'prompt-enhancer', icon: '✎', name: 'Prompt Enhancer', label: 'Enhance', about: 'Rewrites the prompt box into a clearer prompt.' },
   { id: 'bottom-bar', icon: '▭', name: 'Bottom Bar', label: 'Bar', about: 'The rounded bar under the prompt and its toolbox.' },
@@ -98,7 +98,7 @@ export function installedFrom(list: unknown): string[] {
   return [...out]
 }
 
-/** Clean View's `checklist`, cut down to what the tab draws; null with no job. */
+/** Task View's `checklist`, cut down to what the tab draws; null with no job. */
 export function jobOf(value: unknown): SbJob | null {
   const v = value as Partial<SbJob> & { tasks?: unknown }
   if (!v || typeof v !== 'object' || typeof v.phase !== 'string' || v.phase === 'idle') return null
