@@ -1,3 +1,11 @@
+# Self Improve 2.2.2
+
+## Fixed
+- Lessons for one project no longer wait forever when Hindsight cannot save to another project's bank. Each bank is tried on its own, and the run notes name the bank that failed.
+- Learning from a long session (a transcript over 4 MB) no longer fails with "still running after 20000ms" on Windows. The end of the transcript is now read in about a second instead of over a minute.
+
+---
+
 # Self Improve 2.2.1
 
 ## Changed

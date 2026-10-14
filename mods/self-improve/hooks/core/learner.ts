@@ -63,13 +63,25 @@ const skip = (run: Run, store: string, reason: string): void => {
   if (!run.skipped.some(k => k.store === store && k.reason === reason)) run.skipped.push({ store, reason })
 }
 
+export const tailScript = (path: string): string =>
+  [
+    `$f = [IO.File]::Open('${path.replace(/'/g, "''")}', 'Open', 'Read', 'ReadWrite')`,
+    '$len = $f.Length; $n = [int][Math]::Min($len, 3MB); [void]$f.Seek(-$n, \'End\')',
+    '$b = New-Object byte[] $n; $r = 0',
+    'while ($r -lt $n) { $k = $f.Read($b, $r, $n - $r); if ($k -le 0) { break }; $r += $k }',
+    '$f.Close(); $s = 0',
+    'if ($len -gt $n) { $s = [Array]::IndexOf($b, [byte]10) + 1 }',
+    '$o = [Console]::OpenStandardOutput(); $o.Write($b, $s, $r - $s); $o.Flush()',
+  ].join('; ')
+
 async function readEvents(io: Io, job: Job): Promise<Ev[]> {
   const path = job.transcriptPath || transcriptPathFor(io.config, job.folder, job.sessionId, io.isWindows)
   const text = await io.read(path).catch(() => null)
   if (text !== null) return parseJsonl(text)
-  // Over the 4 MiB read limit, or unreadable: the tail is enough.
+  // Over the 4 MiB read limit, or unreadable: the tail is enough. On Windows the last 3 MiB are read with a seek, from
+  // the first whole line; Get-Content -Tail scans the whole file and took over 100 s on an 8 MiB transcript.
   const argv = io.isWindows
-    ? ['powershell', '-NoProfile', '-Command', `Get-Content -LiteralPath '${path.replace(/'/g, "''")}' -Tail 600 -Encoding UTF8`]
+    ? ['powershell', '-NoProfile', '-Command', tailScript(path)]
     : ['tail', '-n', '600', path]
   const r = await io.run(argv, { timeoutMs: 20_000 })
   if (r.code !== 0) throw new Error(`could not read the transcript at ${path}`)
@@ -316,16 +328,22 @@ export async function applyLesson(c: Pick<Ctx, 'io' | 'hs' | 'state' | 'now'> & 
   return wrote
 }
 
-// Lessons that waited for Hindsight (it was off or down) are sent now.
+// Lessons that waited for Hindsight (it was off or down) are sent now. A bank that fails is skipped for this run, so
+// it does not hold up the others; a server that does not answer at all stops the retry.
 async function retryHindsight(c: Ctx): Promise<number> {
   if (!c.hs.on) return 0
   let n = 0
+  const failed = new Set<string>()
   for (const l of c.state.lessons) {
     if (l.status !== 'active' || l.scope !== 'project' || !l.hindsightPending) continue
-    const r = await c.hs.client.retain(projectBank(l.folder || l.project), hindsightText(l), lessonTags(l), 'Self Improve lesson')
+    const bank = projectBank(l.folder || l.project)
+    if (failed.has(bank)) continue
+    const r = await c.hs.client.retain(bank, hindsightText(l), lessonTags(l), 'Self Improve lesson')
     if (!r.ok) {
-      skip(c.run, 'hindsight', r.error)
-      break
+      skip(c.run, 'hindsight', `${bank}: ${r.error}`)
+      if (r.error.startsWith('no answer')) break
+      failed.add(bank)
+      continue
     }
     l.hindsightPending = false
     if (!l.stores.includes('hindsight')) l.stores.push('hindsight')

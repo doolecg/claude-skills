@@ -219,6 +219,23 @@ describe('without Hindsight, without CodeGraph, with neither', () => {
     expect(io.banks.get('coding-agent::shop')?.[0]?.text).toContain('Cart totals are computed in cents')
   })
 
+  test('a bank that answers 500 does not hold up waiting lessons for other banks', async () => {
+    const io = setup()
+    const st = await loadState(io)
+    const base = { kind: 'convention', supersedes: [], scope: 'project', section: '', files: [], symbols: [], skill: null, sessions: ['old'], status: 'active', stores: [], hindsightPending: true, reviewReason: '', hits: 1, createdAt: 0, updatedAt: 0 } as const
+    st.lessons.push({ ...base, id: 1, folder: '', project: 'broken', text: 'Goes to a bank the server cannot make' }, { ...base, id: 2, folder: '', project: 'shop', text: 'Goes to a bank that works' })
+    await saveState(io, st)
+    io.banks = new Map()
+    hindsightConfig(io)
+    const fetch = io.fetch
+    io.fetch = async (url, init) => (url.includes('coding-agent%3A%3Abroken') ? { ok: false, status: 500, text: '{"detail":"no space left on device"}' } : fetch(url, init))
+    const run = await learn(io, job({ transcriptPath: '/t/none.jsonl' }), settings({ mode: 'controlled' }))
+    expect(run!.skipped).toContainEqual({ store: 'hindsight', reason: 'coding-agent::broken: answered 500' })
+    const after = await loadState(io)
+    expect(after.lessons.map(l => l.hindsightPending)).toEqual([true, false])
+    expect(io.banks.get('coding-agent::shop')?.[0]?.text).toContain('Goes to a bank that works')
+  })
+
   test('Hindsight set up but down: named in the run, nothing lost', async () => {
     const io = setup()
     hindsightConfig(io)
