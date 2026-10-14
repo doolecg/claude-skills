@@ -1,8 +1,20 @@
 /** One tab in the strip. `id` is the mod's plugin name. */
 export type SbTab = { id: string; icon: string; name: string; label?: string; badge: number }
 
-/** What every mod's tab pane reads to draw the strip: the tabs, the open one, whether the sidebar is up, and whether it shows that mod's settings page rather than its tab. */
-export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; isSettings?: boolean }
+/** The Context mod's `footer`, drawn at the bottom of every tab. */
+export type SbFooter = {
+  context: { percent: number | null; tokens: number | null; window: number | null }
+  hindsight: 'up' | 'down' | 'off' | 'checking'
+  codegraph: 'indexed' | 'none'
+  git: { branch: string; changed: number; ahead: number; behind: number } | null
+  passes: { count: number; limit: number; editedSince: boolean; extra: string[] }
+}
+
+/** A tool call Rule Guard stopped. */
+export type SbBlock = { at: number; rule: string; label: string; what: string }
+
+/** What every mod's tab pane reads to draw the strip: the tabs, the open one, whether the sidebar is up, whether it shows that mod's settings page rather than its tab, and the Context footer. */
+export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; isSettings?: boolean; footer?: SbFooter | null }
 
 /** A step of Clean View's checklist, as the Clean View tab mirrors it. */
 export type SbStep = { id: string; name: string; status: string; percent: number; hasReported: boolean }
@@ -15,9 +27,11 @@ export type SbMode = { label: string; isOn: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
-    /** Read only: the job Clean View shows, and Prompt Enhancer's last run. */
+    /** Read only: the job Clean View shows, Prompt Enhancer's last run, Context's footer and Rule Guard's stops. */
     'clean-view': { checklist: unknown }
     'prompt-enhancer': { lastRun: { counts: string; ok: boolean } | null }
+    context: { footer: unknown }
+    'rule-guard': { blocks: unknown }
     sidebar: {
       strip: SbStrip
       /** What the sidebar's own pane shows: a mod's id, `sidebar` for its own settings, or `settings:<id>`. */
@@ -47,6 +61,8 @@ declare module 'claude-code' {
       order: string[]
       /** The mods installed and enabled here, by plugin name. */
       installed: string[]
+      /** Rule Guard's stops this session, newest first. */
+      blocks: SbBlock[]
     }
   }
 }

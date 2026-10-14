@@ -1,0 +1,46 @@
+{
+  "name": "rule-guard",
+  "version": "1.0.0",
+  "description": "Rule Guard: stops tool calls that break your standing rules (no AI credit in commits, plain version tags, ask before push or release, no killing by name, no skipped git hooks, stop at the pass limit) and tells Claude what to do instead.",
+  "author": { "name": "doolecg" },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "noAttribution": {
+      "type": "boolean",
+      "title": "No AI credit in commits",
+      "description": "Stop a commit, pull request or release that credits Claude or AI (Co-Authored-By, Generated with, and the like).",
+      "default": true
+    },
+    "plainTags": {
+      "type": "boolean",
+      "title": "Plain version tags",
+      "description": "Stop version tags that start with v, such as v1.2.3. Plain tags like 1.2.3 pass.",
+      "default": true
+    },
+    "askBeforePublish": {
+      "type": "boolean",
+      "title": "Ask before push or release",
+      "description": "Stop a push, new tag, release, publish or merge unless your latest message asks for it (push, publish, release, tag, ship, deploy or merge).",
+      "default": true
+    },
+    "noKillByName": {
+      "type": "boolean",
+      "title": "No killing by name",
+      "description": "Stop commands that end processes by name (Stop-Process -Name, taskkill /IM, pkill, killall). Processes should be stopped by their ID.",
+      "default": true
+    },
+    "noSkipHooks": {
+      "type": "boolean",
+      "title": "Never skip git hooks",
+      "description": "Stop git commands that skip hooks or signing (--no-verify, --no-gpg-sign, commit.gpgsign=false).",
+      "default": true
+    },
+    "passCap": {
+      "type": "boolean",
+      "title": "Stop at the pass limit",
+      "description": "Stop a new test or build run once the Context mod says the pass limit is reached and files changed since the last pass.",
+      "default": true
+    }
+  }
+}

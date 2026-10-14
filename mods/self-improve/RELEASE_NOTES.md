@@ -1,3 +1,10 @@
+# Self Improve 2.2.3
+
+## Changed
+- With the Context mod installed, the Sidebar tab has a footer at the bottom: context used, Hindsight and CodeGraph, the git branch and changes, and test passes.
+
+---
+
 # Self Improve 2.2.2
 
 ## Fixed

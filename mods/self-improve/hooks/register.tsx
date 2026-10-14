@@ -17,7 +17,7 @@ import { loadState, saveState, type Run } from './core/state'
 import { clean } from './core/text'
 import { messageEvents, type MessageRow } from './core/transcript'
 import { drawPane, type Els, type PaneActions } from './pane'
-import { isSidebarTab, sbAsker, sbPaneMove, sbPalette, SIDEBAR_COLUMNS, type SbStrip } from './sidebar-kit'
+import { isSidebarTab, sbAsker, sbPaneMove, sbPalette, sbRows, SIDEBAR_COLUMNS, type SbStrip } from './sidebar-kit'
 
 const PLUGIN = 'self-improve'
 const PANE = 'self-improve'
@@ -419,7 +419,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const io = await engineIo($)
     const strip = await readStrip($)
-    const sb = isSidebarTab(strip, PLUGIN) && strip ? { strip, pal: sbPalette(strip.theme, strip.colour), columns: e.props.bodyColumns, surface: e.surface, ask: sbAsker(args => askSidebar($, args), PLUGIN, () => closePane($)) } : undefined
+    const sb = isSidebarTab(strip, PLUGIN) && strip ? { strip, pal: sbPalette(strip.theme, strip.colour), columns: e.props.bodyColumns, rows: sbRows(e.props), surface: e.surface, ask: sbAsker(args => askSidebar($, args), PLUGIN, () => closePane($)) } : undefined
     const state = await loadState(io)
     const soulText = await readSoul(io)
     const ui = await read($, uiAtom)

@@ -1,5 +1,5 @@
-import type { SbJob, SbMode, SbTab } from '../types'
-import { CATALOG, SETTINGS_PREFIX, SIDEBAR_TAB, entryOf, fmtElapsed, progressOf } from './logic'
+import type { SbBlock, SbJob, SbMode, SbTab } from '../types'
+import { CATALOG, SETTINGS_PREFIX, SIDEBAR_TAB, entryOf, fmtAgo, fmtElapsed, progressOf } from './logic'
 import {
   sbButton,
   sbCappedBar,
@@ -26,7 +26,11 @@ export type ViewData = {
   modes: Record<string, Record<string, SbMode>>
   job: SbJob | null
   enhance: { counts: string; ok: boolean } | null
-  /** Every installed catalog mod in the person's order, hidden ones included. */
+  /** Rule Guard's stops this session, newest first. */
+  blocks: SbBlock[]
+  /** The installed catalog mods, footer ones included. */
+  installed: string[]
+  /** Every installed catalog mod with a tab, in the person's order, hidden ones included. */
   all: string[]
   hidden: string[]
   tabs: SbTab[]
@@ -34,6 +38,7 @@ export type ViewData = {
   setOption: (s: SbSetting, value: string | number | boolean) => void
   flipMode: (command: string) => void
   openTab: (id: string) => void
+  openSettings: (id: string) => void
   setHidden: (id: string, isHidden: boolean) => void
   moveTab: (id: string, by: -1 | 1) => void
 }
@@ -76,11 +81,12 @@ function aboutCard(k: SbKit, id: string, extra: unknown[] = []) {
   ])
 }
 
-/** A settings page the ⚙ of a mod's own tab opens. */
+/** A settings page the ⚙ of a mod's own tab opens. A footer mod has no tab, so its Back goes to the first tab. */
 function settingsPage(k: SbKit, d: ViewData, id: string) {
   const entry = entryOf(id)
+  const back = entry?.footer ? (d.tabs[0]?.id ?? SIDEBAR_TAB) : id
   return [
-    sbTitle(k, { icon: entry?.icon ?? '◆', name: entry?.name ?? id, status: 'settings' }, { label: 'Back', onPress: () => d.openTab(id) }),
+    sbTitle(k, { icon: entry?.icon ?? '◆', name: entry?.name ?? id, status: 'settings' }, { label: 'Back', onPress: () => d.openTab(back) }),
     aboutCard(k, id),
     ...settingsBody(k, d, id),
   ]
@@ -177,7 +183,37 @@ function configTab(k: SbKit, d: ViewData, id: string) {
       </Text>,
     )
   }
+  if (id === 'rule-guard') return ruleGuard(k, d)
   return [sbTitle(k, { icon: entry.icon, name: entry.name, status: 'settings only' }), aboutCard(k, id, extra), ...settingsBody(k, d, id)]
+}
+
+/** Rule Guard's tab: the calls it stopped this session, then its rules as switches. */
+function ruleGuard(k: SbKit, d: ViewData) {
+  const { Text } = k.els
+  const { pal } = k
+  const n = d.blocks.length
+  const rows = d.blocks.slice(0, 5).flatMap((b, i) => [
+    sbSplit(
+      k,
+      `block:${i}`,
+      <Text wrap="truncate-end">
+        <Text color={pal.bad}>{'⊘ '}</Text>
+        <Text color={pal.text}>{b.label}</Text>
+      </Text>,
+      <Text color={pal.dim}>{fmtAgo(b.at, d.now)}</Text>,
+    ),
+    <Text key={`block-what:${i}`} color={pal.faint} wrap="truncate-end">
+      {`  ${b.what}`}
+    </Text>,
+  ])
+  return [
+    sbTitle(k, { icon: '⊘', name: 'Rule Guard', status: n === 0 ? 'nothing stopped' : `${n} stopped` }),
+    aboutCard(k, 'rule-guard'),
+    sbSection(k, 'blocks', 'Stopped this session'),
+    ...(rows.length > 0 ? rows : [<Text key="no-blocks" color={pal.dim}>Nothing stopped yet.</Text>]),
+    sbSection(k, 's-opt:rule-guard', 'Rules'),
+    ...optionRows(k, d, 'rule-guard'),
+  ]
 }
 
 /** The sidebar's own settings (the ⋯): which tabs show and their order. */
@@ -207,7 +243,8 @@ function sidebarPage(k: SbKit, d: ViewData) {
       </Box>,
     )
   })
-  const missing = CATALOG.filter(c => !d.all.includes(c.id)).map(c => c.name)
+  const missing = CATALOG.filter(c => !d.installed.includes(c.id)).map(c => c.name)
+  const footers = CATALOG.filter(c => c.footer && d.installed.includes(c.id))
   return [
     sbTitle(k, { icon: '◆', name: 'Sidebar', status: 'settings' }, d.tabs[0] ? { label: 'Back', onPress: () => d.openTab(d.tabs[0]!.id) } : undefined),
     sbCard(k, 'about-sidebar', [
@@ -217,6 +254,23 @@ function sidebarPage(k: SbKit, d: ViewData) {
     ]),
     sbSection(k, 'tabs', 'Tabs'),
     ...(rows.length > 0 ? rows : [<Text key="none" color={pal.dim}>No mods with a tab are installed.</Text>]),
+    ...(footers.length > 0
+      ? [
+          sbSection(k, 'footer', 'Footer'),
+          ...footers.map(c =>
+            sbSplit(
+              k,
+              `footer:${c.id}`,
+              <Text wrap="truncate-end">
+                <Text color={pal.accent}>{`${c.icon} `}</Text>
+                <Text color={pal.text}>{c.name}</Text>
+                <Text color={pal.dim}>{' · at the bottom of every tab'}</Text>
+              </Text>,
+              sbButton(k, `sb-footer-set:${c.id}`, '⚙ Settings', () => d.openSettings(c.id)),
+            ),
+          ),
+        ]
+      : []),
     ...(missing.length > 0
       ? [
           sbSection(k, 'missing', 'Not installed'),

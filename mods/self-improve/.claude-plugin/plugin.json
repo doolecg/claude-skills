@@ -1,6 +1,6 @@
 {
   "name": "self-improve",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Self Improve: learns from a session when you mark it done, keeps soul.md (facts about you and how Claude should respond) in step with Hindsight, and tunes skills over time with your approval.",
   "author": { "name": "doolecg" },
   "license": "MIT",

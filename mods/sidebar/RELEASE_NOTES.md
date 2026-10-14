@@ -1,3 +1,15 @@
+# Sidebar 1.3.0
+
+## New
+- With the Context mod installed, every tab has a footer at the bottom: how much context is used, whether Hindsight answers and the repo has a CodeGraph index, the git branch with its changed files, and the test passes against your limit. Its ⚙ opens Context's settings.
+- A Rule Guard tab (⊘ Rules): the tool calls it stopped this session, and each of its rules as a switch.
+- The ⋯ page has a Footer section with Context's settings.
+
+## Changed
+- With every mod installed the tab strip takes three rows.
+
+---
+
 # Sidebar 1.2.0
 
 ## Changed

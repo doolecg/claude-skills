@@ -2,7 +2,7 @@
 // Every mod that draws a sidebar tab keeps a copy of this file as hooks/sidebar-kit.tsx.
 // Edit it in mods/sidebar/hooks and run `python mods/sidebar/copy-kit.py` so the copies stay the same.
 
-export const KIT_VERSION = 2
+export const KIT_VERSION = 3
 
 /** The pane id every sidebar tab is drawn under its own plugin, and the width they all open at. */
 export const SIDEBAR_COLUMNS = 56
@@ -243,8 +243,17 @@ export function sbRasterCells(pixels: readonly SbPixel[], background?: string): 
 /** One tab in the strip. `id` is the mod's plugin name; `label` the one word the strip shows (`name` without one). */
 export type SbTab = { id: string; icon: string; name: string; label?: string; badge: number }
 
-/** The Sidebar's `strip` state: which tabs show, which one is open, and whether the sidebar is up. */
-export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; isSettings?: boolean }
+/** The Context mod's `footer` state: what the footer at the bottom of every tab shows. */
+export type SbFooter = {
+  context: { percent: number | null; tokens: number | null; window: number | null }
+  hindsight: 'up' | 'down' | 'off' | 'checking'
+  codegraph: 'indexed' | 'none'
+  git: { branch: string; changed: number; ahead: number; behind: number } | null
+  passes: { count: number; limit: number; editedSince: boolean; extra: string[] }
+}
+
+/** The Sidebar's `strip` state: which tabs show, which one is open, whether the sidebar is up, and the Context footer when that mod is loaded. */
+export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; isSettings?: boolean; footer?: SbFooter | null }
 
 export const EMPTY_STRIP: SbStrip = { isOn: false, active: '', tabs: [], theme: 'dark', colour: 'Coral' }
 
@@ -273,17 +282,24 @@ export type SbKit = {
   pal: SbPalette
   /** Cells across the pane's body. */
   columns: number
+  /** Rows the pane's body has when docked beside the transcript, so the footer sits at the bottom; 0 otherwise. */
+  rows: number
   tick: number
   isTerminal: boolean
 }
 
-export const sbKit = (els: Els, surface: string, pal: SbPalette, columns: number, tick: number): SbKit => ({
+export const sbKit = (els: Els, surface: string, pal: SbPalette, columns: number, tick: number, rows = 0): SbKit => ({
   els,
   pal,
   columns,
+  rows,
   tick,
   isTerminal: surface === 'terminal',
 })
+
+/** The rows to pass `sbKit` from a Pane's props: the body's room when docked, 0 inline (an inline pane fits its tree). */
+export const sbRows = (props: { placement?: string; scroll?: { bodyRows?: number } }): number =>
+  props.placement === 'dock' ? Math.max(0, Math.floor(props.scroll?.bodyRows ?? 0)) : 0
 
 /** A meter as one Raster of braille pixels on `bg` in the terminal, coloured text elsewhere. */
 export function sbBar(k: SbKit, key: string, pixels: SbPixel[], bg?: string) {
@@ -407,6 +423,8 @@ export type SbStripActions = {
   onMenu: () => void
   /** The ✕: closes the sidebar. */
   onClose: () => void
+  /** A mod's settings page, by its id (the footer's ⚙ opens Context's). */
+  onSettings?: (id: string) => void
 }
 
 /** What a tab shows in the strip: its icon and one word. */
@@ -685,13 +703,100 @@ export function sbSettingRow(k: SbKit, s: SbSetting, onSet: (value: string | num
   )
 }
 
-/** The whole tab: the strip on top, then the tab's own rows. */
+// ---- the Context footer -------------------------------------------------------------
+
+/** The rows the footer takes (its border and four rows), for a tab that fills the pane's height itself. */
+export const sbFooterRows = (strip?: SbStrip | null): number => (strip?.footer ? 6 : 0)
+
+/** 84000 → `84K`, 1200000 → `1.2M`. */
+export const sbTokens = (n: number): string => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}K`)
+
+/** The footer's four rows: context used, the memory and code index, the repo, and the test passes. */
+export function sbFooter(k: SbKit, f: SbFooter, a: SbStripActions) {
+  const { Box, Text, Button } = k.els
+  const { pal } = k
+  const pct = f.context.percent
+  const meterWidth = Math.max(6, Math.min(16, k.columns - 34))
+  const used =
+    f.context.tokens !== null && f.context.window
+      ? `${sbTokens(f.context.tokens)} of ${sbTokens(f.context.window)}`
+      : f.context.tokens !== null
+        ? sbTokens(f.context.tokens)
+        : ''
+  const hs: [string, string] = f.hindsight === 'up' ? [pal.good, '●'] : f.hindsight === 'down' ? [pal.bad, '●'] : f.hindsight === 'checking' ? [pal.dim, '◌'] : [pal.faint, '○']
+  const cg: [string, string] = f.codegraph === 'indexed' ? [pal.good, '●'] : [pal.faint, '○']
+  const git = f.git
+  const p = f.passes
+  const atLimit = p.limit > 0 && p.count >= p.limit
+  const dotColour = p.count > p.limit ? pal.bad : atLimit ? pal.warn : pal.accent
+  const dots = Array.from({ length: Math.max(p.limit, p.count) }, (_, i) => (i < p.count ? '●' : '○')).join('')
+  return sbCard(k, 'sb-footer', [
+    sbSplit(
+      k,
+      'ft-ctx',
+      <Box>
+        <Text color={pal.dim} bold>
+          {'CONTEXT '}
+        </Text>
+        {pct === null ? <Text color={pal.faint}>—</Text> : sbCappedBar(k, 'ft-ctx-bar', sbMeter(meterWidth, pct / 100, sbLevel(k, pct, 11)))}
+        <Text color={pct === null ? pal.faint : pct >= 80 ? pal.bad : pct >= 60 ? pal.warn : pal.text}>{pct === null ? '' : ` ${Math.round(pct)}%`}</Text>
+        <Text color={pal.dim}>{used ? ` · ${used}` : ''}</Text>
+      </Box>,
+      a.onSettings ? (
+        <Button key="ft-settings" plain onPress={() => a.onSettings?.('context')}>
+          <Text color={pal.dim}>⚙</Text>
+        </Button>
+      ) : undefined,
+    ),
+    <Box key="ft-sources" height={1} overflow="hidden">
+      <Text color={hs[0]}>{`${hs[1]} `}</Text>
+      <Text color={f.hindsight === 'up' ? pal.text : pal.dim}>{f.hindsight === 'down' ? 'Hindsight down' : f.hindsight === 'off' ? 'Hindsight off' : 'Hindsight'}</Text>
+      <Text color={cg[0]}>{`   ${cg[1]} `}</Text>
+      <Text color={f.codegraph === 'indexed' ? pal.text : pal.dim}>{f.codegraph === 'indexed' ? 'CodeGraph' : 'CodeGraph: not indexed'}</Text>
+    </Box>,
+    <Box key="ft-git" height={1} overflow="hidden">
+      {git ? (
+        <Text wrap="truncate-end">
+          <Text color={pal.info}>{'⎇ '}</Text>
+          <Text color={pal.text} bold>
+            {git.branch}
+          </Text>
+          <Text color={git.changed > 0 ? pal.warn : pal.dim}>{git.changed > 0 ? ` · ${git.changed} changed` : ' · clean'}</Text>
+          <Text color={pal.dim}>{`${git.ahead > 0 ? ` ↑${git.ahead}` : ''}${git.behind > 0 ? ` ↓${git.behind}` : ''}`}</Text>
+        </Text>
+      ) : (
+        <Text color={pal.faint}>⎇ not a git repo</Text>
+      )}
+    </Box>,
+    <Box key="ft-passes" height={1} overflow="hidden">
+      <Text color={pal.dim} bold>
+        {'PASSES '}
+      </Text>
+      <Text color={dotColour}>{dots || '—'}</Text>
+      <Text color={atLimit ? pal.warn : pal.text}>{` ${p.count} of ${p.limit}`}</Text>
+      <Text color={pal.dim}>{atLimit ? ' · ask before more' : p.editedSince && p.count > 0 ? ' · fix waiting' : ''}</Text>
+    </Box>,
+  ])
+}
+
+/** The whole tab: the strip on top, then the tab's own rows, then the Context footer at the bottom when that mod is loaded. */
 export function sbFrame(k: SbKit, strip: SbStrip, a: SbStripActions, body: unknown[]) {
   const { Box } = k.els
+  if (!strip.footer) {
+    return (
+      <Box flexDirection="column" width="100%">
+        {sbStrip(k, strip, a)}
+        {body}
+      </Box>
+    )
+  }
   return (
-    <Box flexDirection="column" width="100%">
+    <Box flexDirection="column" width="100%" minHeight={k.rows > 0 ? k.rows : undefined}>
       {sbStrip(k, strip, a)}
-      {body}
+      <Box flexDirection="column" flexGrow={1} width="100%">
+        {body}
+      </Box>
+      {sbFooter(k, strip.footer, a)}
     </Box>
   )
 }
@@ -701,6 +806,7 @@ export const sbActions = (ask: (args: string) => void): SbStripActions => ({
   onTab: id => ask(`tab ${id}`),
   onMenu: () => ask('tab sidebar'),
   onClose: () => ask('close'),
+  onSettings: id => ask(`settings ${id}`),
 })
 
 /**

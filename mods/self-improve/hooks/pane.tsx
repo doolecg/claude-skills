@@ -45,7 +45,7 @@ export type PaneData = {
   hindsight: HindsightState | null
   actions: PaneActions
   /** Set when the pane is drawn as the Sidebar's Self Improve tab. */
-  sb?: { strip: SbStrip; pal: SbPalette; columns: number; surface: string; ask: (args: string) => void }
+  sb?: { strip: SbStrip; pal: SbPalette; columns: number; rows: number; surface: string; ask: (args: string) => void }
 }
 
 // The surface's element table; Input and Select are drawn only where the surface has them (not on mobile).
@@ -95,7 +95,7 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
   const pendingDrafts = state.drafts.filter(x => x.status === 'pending').length
   const flagged = Object.entries(state.skills).filter(([, c]) => c.flagged)
 
-  const k = d.sb ? sbKit(els, d.sb.surface, d.sb.pal, d.sb.columns, 0) : null
+  const k = d.sb ? sbKit(els, d.sb.surface, d.sb.pal, d.sb.columns, 0, d.sb.rows) : null
 
   // Buttons and item cards take the sidebar's look when the pane is a tab there.
   const btn = (key: string, label: string, onPress: () => void, primary = false) =>

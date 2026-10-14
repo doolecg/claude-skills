@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { CATALOG, fmtElapsed, installedFrom, jobOf, modesOf, move, parseArg, pickTab, progressOf, tabsFor } from '../hooks/logic'
+import { CATALOG, blocksOf, fmtAgo, fmtElapsed, footerOf, installedFrom, jobOf, modesOf, move, parseArg, pickTab, progressOf, tabsFor } from '../hooks/logic'
 import { DENSE_FULL, sbAsker, sbBadge, sbMeter, sbPaneMove, sbTabRows } from '../hooks/sidebar-kit'
 
 const SESSION = { cwd: 'F:/proj', surface: 'terminal', isInteractive: true } as any
@@ -146,7 +146,7 @@ describe('kit strip rows', () => {
   test('the tabs fill the width in as few rows as fit, full rows reaching both edges', () => {
     const tabs = tabsFor(CATALOG.map(c => c.id), [], [], {})
     const rows = sbTabRows(tabs, 52)
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(3)
     expect(rows.flatMap(r => r.tabs).map(t => t.id)).toEqual(tabs.map(t => t.id))
     const cells = (r: (typeof rows)[number]) => r.tabs.reduce((n, t, i) => n + r.gaps[i]! + [...`${t.icon} ${t.label}`].length + 2, 0)
     expect(cells(rows[0]!)).toBe(52)
@@ -455,5 +455,100 @@ describe('wiring', () => {
     expect(w.ran).toEqual([])
     // The sidebar is off now, so a bare /sidebar opens it rather than closing it.
     expect((await $.command.run(command(''))).text).toBe('Sidebar opened.')
+  })
+})
+
+// ---------------------------------------------------------------- Context footer and Rule Guard
+
+const FOOTER = {
+  context: { percent: 42, tokens: 84000, window: 200000 },
+  hindsight: 'up',
+  codegraph: 'indexed',
+  git: { branch: 'main', changed: 3, ahead: 1, behind: 0 },
+  passes: { count: 2, limit: 3, editedSince: true, extra: [] },
+}
+
+// Stand-ins for the Context and Rule Guard mods: each publishes its state when told to.
+const CONTEXT = {
+  name: 'context',
+  register: ((on: any) => {
+    on('command.run', { command: 'ctx-publish' }, async ($: any, e: any) => {
+      // Hooks run in a world of their own, so the footer is spelled out here (it is FOOTER above).
+      const footer = {
+        context: { percent: 42, tokens: 84000, window: 200000 },
+        hindsight: 'up',
+        codegraph: 'indexed',
+        git: { branch: 'main', changed: 3, ahead: 1, behind: 0 },
+        passes: { count: 2, limit: 3, editedSince: true, extra: [] },
+      }
+      await $.state.set({ plugin: 'context', key: 'footer' }, e.args === 'none' ? null : footer)
+      return {}
+    })
+  }) as any,
+}
+const RULE_GUARD = {
+  name: 'rule-guard',
+  register: ((on: any) => {
+    on('command.run', { command: 'rg-publish' }, async ($: any) => {
+      await $.state.set({ plugin: 'rule-guard', key: 'blocks' }, [{ at: 1_800_000_000_000 - 120_000, rule: 'plainTags', label: 'Plain version tags', what: 'git tag v1.2.0' }])
+      return {}
+    })
+  }) as any,
+}
+
+describe('context footer', () => {
+  test('a well formed footer is kept, anything else drops it', () => {
+    expect(footerOf(FOOTER)).toMatchObject({ hindsight: 'up', git: { branch: 'main', changed: 3 }, passes: { count: 2, limit: 3 } })
+    expect(footerOf(null)).toBeNull()
+    expect(footerOf({ context: {} })).toBeNull()
+    expect(footerOf({ ...FOOTER, hindsight: 'odd', git: { changed: 2 } })).toMatchObject({ hindsight: 'off', git: null })
+  })
+
+  test('the footer is not a tab of its own', () => {
+    expect(tabsFor(ALL, [], [], {}).map(t => t.id)).not.toContain('context')
+    expect(tabsFor(ALL, [], [], {}).map(t => t.id)).toContain('rule-guard')
+  })
+
+  test('Rule Guard stops read newest first, with their age', () => {
+    expect(blocksOf([{ at: 5, label: 'X', what: 'git push' }, { nope: 1 }])).toEqual([{ at: 5, rule: '', label: 'X', what: 'git push' }])
+    expect(blocksOf('x')).toEqual([])
+    expect(fmtAgo(0, 30_000)).toBe('just now')
+    expect(fmtAgo(0, 4 * 60_000)).toBe('4m ago')
+    expect(fmtAgo(0, 2 * 3_600_000)).toBe('2h ago')
+  })
+
+  test('Context publishing its footer draws it at the bottom of the tab, and it goes when Context stops', { plugins: [CONTEXT] }, async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('tab clean-view'))
+    await $.command.run({ ...command(''), command: 'ctx-publish' })
+    let { ui, all } = await texts($)
+    expect(all).toContain('CONTEXT')
+    expect(all).toContain('main')
+    expect(all).toContain(' · 3 changed')
+    expect(all).toContain('Hindsight')
+    expect(all).toContain(' 2 of 3')
+    expect(all.indexOf('CONTEXT ')).toBeGreaterThan(all.indexOf('CLEAN VIEW'))
+    await ui.unmount()
+    await $.command.run({ ...command('none'), command: 'ctx-publish' })
+    ;({ ui, all } = await texts($))
+    expect(all).not.toContain('PASSES')
+    await ui.unmount()
+  })
+
+  test('Rule Guard has a tab with what it stopped and its rules', { plugins: [RULE_GUARD] }, async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run({ ...command(''), command: 'rg-publish' })
+    await $.command.run(command('tab rule-guard'))
+    const { ui, all } = await texts($)
+    expect(all).toContain('RULE GUARD')
+    expect(all).toContain('Plain version tags')
+    expect(all).toContain('git tag v1.2.0')
+    expect(all).toContain('2m ago')
+    expect(all).toContain('RULES')
+    await ui.unmount()
   })
 })

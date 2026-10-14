@@ -1,3 +1,10 @@
+# Flightdeck 1.4.1
+
+## Changed
+- With the Context mod installed, the Sidebar tab has a footer at the bottom: context used, Hindsight and CodeGraph, the git branch and changes, and test passes. The agent lists make room for it.
+
+---
+
 # Flightdeck 1.4.0
 
 ## Changed

@@ -14,6 +14,7 @@ import {
   type Palette,
 } from './logic'
 import {
+  sbFooterRows,
   sbFrame,
   sbFramedBar,
   sbKit,
@@ -86,7 +87,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
   const Raster = isTerminal && 'Raster' in els ? els.Raster : undefined
   const Svg = !isTerminal && 'Svg' in els ? els.Svg : undefined
   const { main, usage, tick, now, strip } = d
-  const k = sbKit(els, surface, sbPalette(strip?.theme ?? d.theme, strip?.colour), d.columns, tick)
+  const k = sbKit(els, surface, sbPalette(strip?.theme ?? d.theme, strip?.colour), d.columns, tick, strip ? d.bodyRows : 0)
   const pal = strip ? k.pal : d.pal
   const full = Math.max(16, d.columns)
   const groups = groupAgents(d.agents)
@@ -206,7 +207,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
   row += 1
   const runNeed = Math.max(1, working * RUN_ROWS)
   const doneNeed = Math.max(1, groups.finished.length)
-  const avail = Math.max(0, d.bodyRows - row - 1)
+  const avail = Math.max(0, d.bodyRows - row - 1 - sbFooterRows(strip))
   const rows = splitRows(avail, runNeed, doneNeed)
   const runShown = Math.max(1, Math.floor(rows.run / RUN_ROWS))
   const runMax = Math.max(0, working - runShown)

@@ -3,7 +3,7 @@ import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
 import type { Editing } from '../types'
 import { ageOf, cleanIdea, ideaKey, isIdea, newId, parseEdit, shelfPrefix } from './shelf'
-import { SIDEBAR_COLUMNS, isSidebarTab, sbActions, sbAsker, sbButton, sbCard, sbFrame, sbKit, sbPaneMove, sbPalette, sbSplit, sbTitle } from './sidebar-kit'
+import { SIDEBAR_COLUMNS, isSidebarTab, sbActions, sbAsker, sbButton, sbCard, sbFrame, sbKit, sbPaneMove, sbPalette, sbRows, sbSplit, sbTitle } from './sidebar-kit'
 import type { SbStrip } from './sidebar-kit'
 
 type Row = { id: string; text: string; at: number }
@@ -224,7 +224,7 @@ export const register: Register = on => {
     }
 
     if (strip !== undefined && isSidebarTab(strip, 'idea-shelf')) {
-      const k = sbKit(els, e.surface, sbPalette(strip.theme, strip.colour), e.props.bodyColumns, 0)
+      const k = sbKit(els, e.surface, sbPalette(strip.theme, strip.colour), e.props.bodyColumns, 0, sbRows(e.props))
       const ask = sbAsker(args => askSidebar($, args), 'idea-shelf', () => closePane($))
       const body: unknown[] = [
         sbTitle(

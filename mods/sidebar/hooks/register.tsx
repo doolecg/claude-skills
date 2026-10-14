@@ -2,8 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, StateWrite, Timer } from 'claude-code'
 
 import type { SbJob, SbMode } from '../types'
-import { CATALOG, SETTINGS_PREFIX, SIDEBAR_TAB, entryOf, installedFrom, jobOf, modesOf, move, orderedIds, parseArg, pickTab, tabsFor } from './logic'
-import { EMPTY_STRIP, SIDEBAR_COLUMNS, sbActions, sbFrame, sbKit, sbPalette, type SbSetting } from './sidebar-kit'
+import { CATALOG, SETTINGS_PREFIX, SIDEBAR_TAB, blocksOf, entryOf, footerOf, installedFrom, jobOf, modesOf, move, orderedIds, parseArg, pickTab, tabsFor } from './logic'
+import { EMPTY_STRIP, SIDEBAR_COLUMNS, sbActions, sbFrame, sbKit, sbPalette, sbRows, type SbSetting } from './sidebar-kit'
 import { viewRows } from './tabs'
 
 type Dollar = EngineInterface
@@ -23,6 +23,7 @@ const enhanceAtom = atom({ plugin: 'sidebar', key: 'enhance' } as const, null)
 const hiddenAtom = atom({ plugin: 'sidebar', key: 'hidden' } as const, [])
 const orderAtom = atom({ plugin: 'sidebar', key: 'order' } as const, [])
 const installedAtom = atom({ plugin: 'sidebar', key: 'installed' } as const, [])
+const blocksAtom = atom({ plugin: 'sidebar', key: 'blocks' } as const, [])
 
 /** The commands each mod registers, so a mod loaded with --plugin-dir counts as installed too. */
 const COMMAND_OF: Record<string, string> = {
@@ -31,6 +32,7 @@ const COMMAND_OF: Record<string, string> = {
   'idea-shelf': 'ideas',
   'folder-tracker': 'folders',
   'clean-view': 'simple',
+  context: 'passes',
 }
 
 let ticker: Timer | undefined
@@ -234,6 +236,14 @@ export const register: Register = on => {
       await update($, jobAtom, () => job)
     })
     await quiet(async () => {
+      const footer = footerOf((await $.state.get({ plugin: 'context', key: 'footer' })).value)
+      await update($, stripAtom, s => ({ ...(s ?? EMPTY_STRIP), footer }))
+    })
+    await quiet(async () => {
+      const blocks = blocksOf((await $.state.get({ plugin: 'rule-guard', key: 'blocks' })).value)
+      await update($, blocksAtom, () => blocks)
+    })
+    await quiet(async () => {
       const last = (await $.state.get({ plugin: 'prompt-enhancer', key: 'lastRun' })).value
       if (last) await update($, enhanceAtom, () => ({ counts: String(last.counts ?? ''), ok: last.ok === true }))
     })
@@ -315,11 +325,26 @@ export const register: Register = on => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  // Context's footer goes into the strip, so every tab draws it at the bottom.
+  on('state.set', { key: 'footer' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const w = writeOf(e)
+    if (w.plugin === 'context') await quiet(() => update($, stripAtom, s => ({ ...(s ?? EMPTY_STRIP), footer: footerOf(w.value) })))
+    return ran
+  }).catch(($, e, next) => next(e))
+
+  on('state.set', { key: 'blocks' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const w = writeOf(e)
+    if (w.plugin === 'rule-guard') await quiet(() => update($, blocksAtom, () => blocksOf(w.value)))
+    return ran
+  }).catch(($, e, next) => next(e))
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e) as unknown as Record<string, any>
     const strip = await read($, stripAtom)
     const view = await read($, viewAtom)
-    const k = sbKit(els, e.surface, sbPalette(strip.theme, strip.colour), e.props.bodyColumns, await read($, tickAtom))
+    const k = sbKit(els, e.surface, sbPalette(strip.theme, strip.colour), e.props.bodyColumns, await read($, tickAtom), sbRows(e.props))
     const installed = await read($, installedAtom)
     const ask = (args: string) => void sidebarCommand($, args).catch(() => {})
     const body = viewRows(k, {
@@ -328,6 +353,8 @@ export const register: Register = on => {
       modes: (await read($, modModesAtom)) as Record<string, Record<string, SbMode>>,
       job: (await read($, jobAtom)) as SbJob | null,
       enhance: await read($, enhanceAtom),
+      blocks: await read($, blocksAtom),
+      installed,
       all: orderedIds(installed, await read($, orderAtom)),
       hidden: await read($, hiddenAtom),
       tabs: strip.tabs,
@@ -335,6 +362,7 @@ export const register: Register = on => {
       setOption: (s, value) => void setOption($, s, value).catch(() => {}),
       flipMode: command => void $.command.run({ command, args: '' }).catch(() => {}),
       openTab: id => ask(`tab ${id}`),
+      openSettings: id => ask(`settings ${id}`),
       setHidden: (id, isHidden) =>
         void (async () => {
           const hidden = await read($, hiddenAtom)

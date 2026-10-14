@@ -3,7 +3,7 @@ import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
 import type { Phase, Tracker } from '../types'
 import { drawFolders } from './pane'
-import { SIDEBAR_COLUMNS, sbAsker, sbKit, sbPaneMove, sbPalette } from './sidebar-kit'
+import { SIDEBAR_COLUMNS, sbAsker, sbKit, sbPaneMove, sbPalette, sbRows } from './sidebar-kit'
 import type { SbStrip } from './sidebar-kit'
 import { PRUNE_MS, SAVE_EVERY_MS, addFile, describeOther, isLive, isTracker, relativeTo, sameFile, trackerKey, trackerPrefix } from './tracker'
 
@@ -182,7 +182,7 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e) as unknown as Record<string, any>
     const strip = await readStrip($)
-    const k = sbKit(els, e.surface, sbPalette(strip?.theme ?? 'dark', strip?.colour), e.props.bodyColumns, 0)
+    const k = sbKit(els, e.surface, sbPalette(strip?.theme ?? 'dark', strip?.colour), e.props.bodyColumns, 0, sbRows(e.props))
     const cwd = await $.session.cwd()
     const mine: unknown = await $.store.get(trackerKey(cwd, await $.session.id()))
     return drawFolders(k, strip, sbAsker(args => askSidebar($, args), 'folder-tracker', () => closePane($)), cwd, await $.clock.now(), isTracker(mine) ? mine : undefined, await otherSessions($))

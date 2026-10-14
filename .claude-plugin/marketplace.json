@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "doole-skills",
-  "description": "doolecg's Claude Code plugins: BlockDesigner, Claude Agent Viewer and Operant releases, Minecraft modding, and the Bottom Bar, Clean View, Flightdeck, Prompt Enhancer, Self Improve, Design Picker, Folder Tracker, Idea Shelf and Plain English mods.",
+  "description": "doolecg's Claude Code plugins: BlockDesigner, Claude Agent Viewer and Operant releases, Minecraft modding, and the Bottom Bar, Clean View, Flightdeck, Prompt Enhancer, Self Improve, Design Picker, Folder Tracker, Idea Shelf, Plain English, Sidebar, Context and Rule Guard mods.",
   "owner": {
     "name": "doolecg",
     "email": "doolecg@gmail.com"
@@ -150,6 +150,18 @@
       "description": "Asks Claude for short, plain replies with a Summary and Next steps, and checks each long reply against those rules.",
       "category": "productivity",
       "source": "./mods/plain-english"
+    },
+    {
+      "name": "context",
+      "description": "A footer at the bottom of every Sidebar tab: context used, Hindsight and CodeGraph, the git branch and changes, and test passes against your limit.",
+      "category": "productivity",
+      "source": "./mods/context"
+    },
+    {
+      "name": "rule-guard",
+      "description": "Stops tool calls that break your rules (AI credit in commits, v tags, pushing or releasing unasked, killing by name, skipping hooks, testing past the pass limit) and tells Claude why. Its rules are switches on its Sidebar tab.",
+      "category": "productivity",
+      "source": "./mods/rule-guard"
     }
   ]
 }

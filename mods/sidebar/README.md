@@ -28,8 +28,12 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 ## Which tabs
 
 - **Drawn by the mod itself:** Flightdeck, Self Improve, Idea Shelf and Folder Tracker. Each mod opens its own pane when the sidebar's strip names its tab and closes it when you leave the tab. Switching tabs never runs a command, so it works while Claude is busy.
-- **Drawn by the sidebar:** Clean View (the job running now), Prompt Enhancer, Design Picker, Plain English and Bottom Bar. Each shows what the mod does, its on/off modes and its options.
+- **Drawn by the sidebar:** Clean View (the job running now), Prompt Enhancer, Design Picker, Plain English, Bottom Bar and Rule Guard (the calls it stopped this session, and its rules as switches). Each shows what the mod does, its on/off modes and its options.
 - The ⚙ Settings button on a mod's own tab opens its settings page, with a Back button.
+
+## The footer
+
+With the Context mod installed, every tab has a footer at the bottom: how much context is used, whether Hindsight answers and the repo has a CodeGraph index, the git branch with its changed files, and the test passes against your limit. Its ⚙ opens Context's settings.
 
 ## The ⋯ page
 
@@ -45,6 +49,7 @@ To add a tab for your mod, add it to `CATALOG` in `hooks/logic.ts` and follow th
 - Ask the sidebar for things by writing your own `sidebarAsk` state (`{ args, n }`, `n` counting up), never with `$.command.run`. `sbAsker` wires the strip's presses to it and closes your pane first when a press leaves your tab.
 - When the person closes your pane, write `sidebarAsk` with `closed <id>` so the sidebar switches off with it.
 - Publish `sidebarBadge` (a number) in your state to show a count on your tab icon. Publish `modes` to show on/off modes on your settings page.
+- Pass `sbRows(e.props)` as `sbKit`'s last argument so the footer sits at the bottom of a docked pane. A tab that fills the pane's height itself takes `sbFooterRows(strip)` off what it fills.
 
 ## Development
 
