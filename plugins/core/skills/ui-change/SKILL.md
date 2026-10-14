@@ -72,3 +72,15 @@ with the main model.
 - A launched game can still grab focus at startup; if stray input might have opened a screen, check the shot and rerun.
 - Do not call it fixed from the code diff: the after shot is the evidence.
 - Respect the app's existing look (theme tokens, CSS) rather than inventing new styling.
+
+## Learned correction
+
+- Screenshots and test images must appear inline in the Claude chat, where a click opens the zoom, copy and save modal. Saving them to a folder with an index.html viewer was rejected by the user.
+
+## Learned correction
+
+- The ui-change skill expects before and after screenshots. For Core Keeper, the game cannot be captured without taking focus or holding ALT in a world, so the before and after shots were not possible. State that the visual result is unverified and do not claim it was checked.
+
+## Learned correction
+
+- For UI before and after screenshots, use the Operant internal browser (the operant-browser MCP tools such as browser_navigate, browser_resize and browser_take_screenshot), not Playwright MCP or capture-window.ps1. Put this rule in the brief of any subagent that takes screenshots, because a Haiku screenshot agent started on the wrong tools and had to be redirected mid-run.

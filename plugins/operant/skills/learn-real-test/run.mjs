@@ -58,7 +58,7 @@ try {
   db.exec('PRAGMA busy_timeout = 5000')
   db.prepare('UPDATE scratch SET session_id = ? WHERE id = ?').run(sid, tile.id)
   db.close()
-  await inv('settings:set', { learn: { enabled: true, mode: 'controlled', review: 'auto', hindsight: false, codegraph: false, memory: true } })
+  await inv('settings:set', { setupDone: true, learn: { enabled: true, mode: 'controlled', review: 'auto', hindsight: false, codegraph: false, memory: true } })
   await page.reload()
   await page.waitForFunction(() => !!window.operant)
   await page.locator(`[data-crew-row="${crew.id}"]`).click()

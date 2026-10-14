@@ -25,3 +25,7 @@ It uses `OPERANT_BACKGROUND=1` (no focus stealing), a throwaway `OPERANT_DATA_DI
 - An error starting `Skipped:` means the trivial-session gate fired: check `minUserTurns` / `minTokens` in `shared/learn.ts` against the 12,000-character transcript tail in `core/learn.ts`.
 
 Max 3 runs per problem, then stop and ask.
+
+## Learned correction
+
+- When the user asks for tests, run them against the real claude and opencode models, not the fake ones.

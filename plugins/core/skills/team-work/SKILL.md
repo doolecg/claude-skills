@@ -63,3 +63,11 @@ Right after a worker has reported and you have checked it, close its tile: `oper
 
 ## 7. Wrap up
 Integrate, run the full build and tests once more, then give the user a short result: what was done, what was verified, anything open. Commit, push or release only if the user asked in that turn.
+
+## Learned correction
+
+- The installed Operant CLI has no `team` command: `operant team` returns Unknown command. The team-work skill's first step fails on this machine, so check `operant --help` before relying on team mode.
+
+## Learned correction
+
+- The team-work skill says to run `operant team` first, but the installed Operant CLI has no `team` command and returns Unknown command. Run `operant --help` to check what is available, and skip that step.

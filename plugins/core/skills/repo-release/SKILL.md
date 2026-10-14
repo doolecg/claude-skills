@@ -153,3 +153,7 @@ Report in a few lines: release URL, what is in it, that only `main` and tags rem
 - Draft or prerelease flags: the script publishes a normal latest release; say so if the user wanted otherwise.
 - Other places the user ships to (CurseForge, Modrinth, a plugin list): not automated here; mention them as a manual
   follow-up if the repo has such a pack folder or notes.
+
+## Learned correction
+
+- The repo-release publish script was run without --repo and tried the old repo name, so the release failed. Pass `--repo doolecg/Operant` explicitly until the script reads the remote's current name.
