@@ -3,6 +3,7 @@
 ## Changed
 - Other mods' buttons, like Enhance Prompt, come first on the left of the bar, with the name in a filled chip.
 - In the desktop app, Enhance Prompt is a filled button. While Claude is idle the app hides the bar above the prompt, so Prompt Enhancer's own button shows under the prompt instead.
+- In the desktop app the context meter is a moving pixel bar, like Task View's: scattered dots in the level's colour, twinkling, with bright pulsing pixels at the front.
 
 ---
 

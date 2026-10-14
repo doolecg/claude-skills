@@ -4,6 +4,11 @@
 - Clean View is now called Task View. The plugin id is still `clean-view`, so your install, settings and `/simple` carry on as before.
 - The progress bars are pixel bars in your accent colour (the Colour setting shared with Bottom Bar), in the terminal and the desktop app. The pixels are more random, fade in from the tail, and the ones at the front are bright and glow.
 - In the desktop app the bars are small dots on a dark rounded track instead of smooth gradient bars.
+- Longer step bars, in the terminal and the app. In the app the main bar stretches to fill the room up to "Step N of M".
+- The pixels just behind a bar's front are brighter too, some glowing.
+- The ✕ that clears the band is always there, so a job stuck as working can be closed.
+- In the desktop app the pixels flicker like the terminal's: which dots are lit, and how bright, is picked at random again on every frame, and the bright front pixels glow.
+- Before a step reports a percent, a patch of scattered pixels runs along its bar instead of a solid block, and a finished bar stays scattered pixels too.
 
 ---
 

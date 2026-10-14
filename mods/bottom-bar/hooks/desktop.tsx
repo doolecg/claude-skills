@@ -10,18 +10,59 @@ export type AppEls = Pick<Elements['desktop'], 'Box' | 'Text' | 'Button' | 'Svg'
 
 const level = (pct: number, pal: Palette): string => (pct >= 80 ? pal.bad : pct >= 60 ? pal.warn : pal.good)
 
-/** A rounded-end meter: a themed track with a fill `pct` of `width` wide. */
+// A steady pseudo-random 0..1 per dot, so the meter looks the same each time it is drawn.
+function grain(i: number, seed: number): number {
+  let h = (i * 374761393 + seed * 668265263) | 0
+  h = Math.imul(h ^ (h >>> 13), 1274126177)
+  h ^= h >>> 16
+  return (h >>> 0) / 4294967295
+}
+
+/**
+ * A pixel meter, Task View's look: small dots on a dark rounded track, `pct` of them lit in the level's
+ * colour, scattered and fading in from the tail, the front dots bright and pulsing, some twinkling.
+ */
 function meter(els: AppEls, pal: Palette, pct: number, width: number, key: string, alt: string): JSX.Element {
   const { Svg } = els
-  const clamped = Math.min(Math.max(pct, 0), 100)
-  const bar = 6
-  const fill = Math.round((clamped / 100) * width)
+  const tall = 9
+  const pitch = 3
+  const rows = 3
+  const cols = Math.max(1, Math.floor(width / pitch))
+  const lit = Math.min(Math.max(pct, 0), 100) / 100
+  const front = Math.round(cols * lit)
+  const color = level(pct, pal)
+  const dots: string[] = []
+  const rect = (c: number, r: number, fill: string, o: number, anim = '', glow = false) =>
+    dots.push(
+      `<rect x="${c * pitch + 0.5}" y="${r * pitch + 0.5}" width="2" height="2" rx="0.4" fill="${fill}" opacity="${o.toFixed(2)}"${glow ? ' filter="url(#glow)"' : ''}>${anim}</rect>`,
+    )
+  const blink = (o: number, hi: number, n: number) =>
+    `<animate attributeName="opacity" values="${o.toFixed(2)};${hi.toFixed(2)};${o.toFixed(2)}" dur="${(1.6 + n * 2).toFixed(1)}s" begin="${(n * 2).toFixed(1)}s" repeatCount="indefinite"/>`
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      const i = c * rows + r
+      const n = grain(i, 7)
+      if (c < front) {
+        if (lit < 1 && c >= front - 1) {
+          rect(c, r, pal.text, 0.95, blink(0.95, 0.55, grain(i, 37)), true)
+          continue
+        }
+        const b = front <= 1 ? 1 : c / (front - 1)
+        if (n < 0.35 * (1 - b)) continue
+        const o = 0.2 + 0.7 * b * b * (0.45 + 0.55 * grain(i, 13))
+        rect(c, r, color, o, grain(i, 19) > 0.65 ? blink(o, Math.min(1, o + 0.45), n) : '')
+      } else if (n > 0.8) {
+        const o = 0.06 + 0.08 * grain(i, 23)
+        rect(c, r, pal.text, o, blink(o, o + 0.18, grain(i, 41)))
+      }
+    }
+  }
   const source =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${bar}" viewBox="0 0 ${width} ${bar}">` +
-    `<rect width="${width}" height="${bar}" rx="${bar / 2}" fill="${pal.sep}" fill-opacity="0.45"/>` +
-    (fill > 0 ? `<rect width="${Math.max(fill, bar)}" height="${bar}" rx="${bar / 2}" fill="${level(clamped, pal)}"/>` : '') +
-    `</svg>`
-  return <Svg key={key} source={source} alt={alt} width={width} height={bar} />
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${tall}" viewBox="0 0 ${width} ${tall}">` +
+    `<defs><filter id="glow" x="-2" y="-2" width="5" height="5"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
+    `<clipPath id="c"><rect width="${width}" height="${tall}" rx="${tall / 2}"/></clipPath></defs>` +
+    `<rect width="${width}" height="${tall}" rx="${tall / 2}" fill="${pal.sep}" fill-opacity="0.45"/><g clip-path="url(#c)">${dots.join('')}</g></svg>`
+  return <Svg key={key} source={source} alt={alt} width={width} height={tall} isInteractive />
 }
 
 export type DesktopBarArgs = {
@@ -68,7 +109,7 @@ export function desktopBar(a: DesktopBarArgs): JSX.Element {
         })}
         <Box key="ctx" flexDirection="row" alignItems="center" gap={1}>
           <Text color={pal.dim}>context</Text>
-          {meter(a.els, pal, pct, 56, 'ctx-meter', `Context ${Math.round(pct)}% full`)}
+          {meter(a.els, pal, pct, 72, 'ctx-meter', `Context ${Math.round(pct)}% full`)}
           <Text color={level(pct, pal)}>{`${Math.round(pct)}%`}</Text>
           {used ? <Text color={pal.dim}>{used}</Text> : null}
         </Box>

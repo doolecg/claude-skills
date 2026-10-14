@@ -67,7 +67,7 @@ const colourAtom = atom({ plugin: 'clean-view', key: 'colour' } as const, 'Coral
 const modesAtom = atom({ plugin: 'clean-view', key: 'modes' } as const, {})
 
 /** The narrowest a step's outlined bar gets before the steps take another row. */
-const STEP_MIN = 28
+const STEP_MIN = 44
 
 const PLAN = 'mcp__clean-view__plan_steps'
 const REPORT = 'mcp__clean-view__report_progress'
@@ -447,8 +447,8 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
     const cols = e.props.bodyColumns
     const took = formatElapsed((cl.finishedAt > 0 ? cl.finishedAt : now) - cl.startedAt)
 
-    // Shown once the job is no longer running (finished, stopped, stuck, waiting).
-    const hasClose = cl.phase !== 'working' || cl.helpers > 0
+    // Always closable, so a job that is stuck as working can be cleared too.
+    const hasClose = true
     const onClose = () => void dismissBand($).catch(() => {})
 
     if (cl.phase === 'done' && cl.isCollapsed && !ask.isOpen) {
@@ -660,7 +660,7 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
     }
 
     if (isDesktop) {
-      const warm = { from: sbMix(kp.track, kp.accent, 0.55), to: kp.accent, tint: kp.tint }
+      const warm = { from: sbMix(kp.track, kp.accent, 0.55), to: kp.accent, tint: kp.tint, tick }
       const good = warm
       return drawDesktop(els, kp, cl, {
         header: top,
@@ -707,7 +707,7 @@ export function registerCleanView(on: On, options: PluginOptions = {}): void {
     // Each bar is wide enough for the longest step name, its marker, its label and the outline.
     const n = cl.tasks.length
     const longest = Math.max(0, ...cl.tasks.map(t => [...t.name].length))
-    const stepMin = Math.min(full, Math.max(STEP_MIN, longest + 16))
+    const stepMin = Math.min(full, Math.max(STEP_MIN, longest + 28))
     const lines = Math.ceil(n / Math.max(1, Math.min(n, Math.floor((full + 1) / (stepMin + 1)))))
     const across = Math.max(1, Math.ceil(n / Math.max(1, lines)))
     const each = Math.floor((full - (across - 1)) / across)

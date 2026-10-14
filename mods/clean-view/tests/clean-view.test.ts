@@ -139,7 +139,8 @@ test('a to-do list plus a 60% report renders done, 60% and dim pending rows on b
     expect(await rowText($, 't3', surface)).toMatch(/○.*Polish the footer/s)
     const { ui, all } = await band($, surface)
     expect(all).toContain('Step 2 of 4')
-    expect(await ui.find({ type: 'Button' })).toBeUndefined()
+    // The only button on a working job is its close mark.
+    expect((await ui.findAll({ type: 'Button' })).map((b: any) => b.props?.key ?? b.key)).toEqual(['close'])
     await ui.unmount()
   }
 })
@@ -465,11 +466,11 @@ test('the answers read as a short message', () => {
   expect(answersMessage(a)).toBe('Here are my answers:\n- Which colour should the page be? Warm')
 })
 
-test('the close button clears a job left waiting for a reply, and has no place on a job that is still working', async ($, on) => {
+test('the close button clears a job left waiting for a reply, and also shows on a job that is still working', async ($, on) => {
   world(on)
   await planned($)
   const working = await band($, 'terminal')
-  expect(await working.ui.find({ key: 'close' })).toBeUndefined()
+  expect(await working.ui.find({ key: 'close' })).toBeDefined()
   await working.ui.unmount()
 
   await $.turn.complete(complete('t1', 'answer'))

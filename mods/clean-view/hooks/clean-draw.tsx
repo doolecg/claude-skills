@@ -106,62 +106,61 @@ function grain(i: number, seed: number): number {
 }
 
 /**
- * A pixel progress bar as SVG: a dark rounded track of small dots, `fraction` of them lit in `to`'s
- * colour. The lit dots scatter and fade in from the tail, the front two columns are bright and glow,
- * some dots twinkle, and the empty track keeps a faint scatter. With no percent yet, a lit patch
- * runs along the track instead.
+ * A pixel progress bar as SVG, drawn like the terminal's meter: a dark rounded track of small dots,
+ * `fraction` of them lit in `to`'s colour. Which dots are lit, and how bright, is picked at random
+ * again each frame (`tick`), so they flicker the way the terminal's do: sparse and dim at the tail,
+ * fuller and brighter toward the front, where the last column is bright and glows. The empty track
+ * keeps a faint scatter that shifts too. With no percent yet, a lit patch runs along the track.
  */
-export function barSvg(width: number, fraction: number, from: string, to: string, track: string, isSweep = false, tint = '#FFFFFF'): string {
+export function barSvg(width: number, fraction: number, from: string, to: string, track: string, isSweep = false, tint = '#FFFFFF', tick = 0): string {
   const h = 9
   const pitch = 3
-  const cols = Math.max(1, Math.floor(width / pitch))
   const rows = 3
+  const cols = Math.max(1, Math.floor(width / pitch))
+  const t = Math.floor(tick / 2)
   const lit = Math.max(0, Math.min(1, fraction))
-  const front = Math.round(cols * lit)
+  // The lit span: [start, end) in columns. A sweep is a patch 30% wide moving along with the frames.
+  const span = Math.max(4, Math.round(cols * 0.3))
+  const sweepEnd = (t % (cols + span)) + 1
+  const start = isSweep ? sweepEnd - span : 0
+  const end = isSweep ? sweepEnd : Math.round(cols * lit)
   const dots: string[] = []
-  const dot = (c: number, r: number, color: string, opacity: number, extra = '') =>
-    dots.push(`<rect x="${c * pitch + 0.5}" y="${r * pitch + 0.5}" width="2" height="2" rx="0.4" fill="${color}" opacity="${opacity.toFixed(2)}"${extra}/>`)
+  const dot = (c: number, r: number, color: string, o: number, glow = false) =>
+    dots.push(`<rect x="${c * pitch + 0.5}" y="${r * pitch + 0.5}" width="2" height="2" rx="0.4" fill="${color}" opacity="${o.toFixed(2)}"${glow ? ' filter="url(#glow)"' : ''}/>`)
   for (let c = 0; c < cols; c++) {
+    const isLit = c >= start && c < end
+    const isHead = isLit && c === end - 1 && (isSweep || lit < 1)
+    const b = end - start <= 1 ? 1 : (c - start) / (end - start - 1)
     for (let r = 0; r < rows; r++) {
-      const n = grain(c * rows + r, 7)
-      const isLit = !isSweep && c < front
-      if (isLit) {
-        const b = front <= 1 ? 1 : c / (front - 1)
-        const isHead = lit < 1 && c >= front - 2
-        if (isHead) {
-          dot(c, r, tint, 0.95, ' filter="url(#glow)"')
-          continue
-        }
-        if (n < 0.35 * (1 - b)) continue
-        const o = 0.18 + 0.7 * b * b * (0.45 + 0.55 * grain(c * rows + r, 13))
-        const color = n > 0.8 ? from : to
-        const twinkle = grain(c * rows + r, 19) > 0.82
-          ? `><animate attributeName="opacity" values="${o.toFixed(2)};${Math.min(1, o + 0.45).toFixed(2)};${o.toFixed(2)}" dur="${(1.6 + n * 2).toFixed(1)}s" begin="${(n * 2).toFixed(1)}s" repeatCount="indefinite"/></rect`
-          : ''
-        if (twinkle) dots.push(`<rect x="${c * pitch + 0.5}" y="${r * pitch + 0.5}" width="2" height="2" rx="0.4" fill="${color}" opacity="${o.toFixed(2)}"${twinkle}>`)
-        else dot(c, r, color, o)
-      } else if (n > 0.8) {
-        dot(c, r, tint, 0.06 + 0.08 * grain(c * rows + r, 23))
+      const i = c * rows + r
+      if (isHead) {
+        dot(c, r, tint, 0.75 + 0.25 * grain(i, t + 3), true)
+      } else if (isLit && c >= end - 5) {
+        // The few columns behind the front: dense and bright, some glowing.
+        if (grain(i, t * 7 + 11) > 0.92) continue
+        const near = (c - (end - 5)) / 4
+        const hot = grain(i, t * 13 + 5) > 0.55 - 0.3 * near
+        dot(c, r, hot ? tint : to, 0.7 + 0.3 * grain(i, t + 19), hot && near > 0.4)
+      } else if (isLit) {
+        // Fuller toward the front, and a fresh draw each frame.
+        if (grain(i, t * 7 + 11) > 0.3 + 0.65 * b) continue
+        const o = 0.2 + 0.75 * b * (0.35 + 0.65 * grain(i, t * 13 + 5))
+        dot(c, r, grain(i, t + 17) > 0.85 ? from : to, o)
+      } else if (grain(i, Math.floor(t / 2) * 3 + 23) > 0.84) {
+        dot(c, r, tint, 0.05 + 0.12 * grain(i, t + 29))
       }
     }
   }
-  const sweep = isSweep
-    ? (() => {
-        const w = Math.max(pitch * 4, Math.round(width * 0.3))
-        return `<g><rect width="${w}" height="${h}" fill="url(#lit)"/><animateTransform attributeName="transform" type="translate" from="-${w} 0" to="${width} 0" dur="1.6s" repeatCount="indefinite"/></g>`
-      })()
-    : ''
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${h}" viewBox="0 0 ${width} ${h}">` +
-    `<desc>${isSweep ? 0 : front} of ${cols} lit</desc>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${h}" viewBox="0 0 ${width} ${h}" preserveAspectRatio="none">` +
+    `<desc>${isSweep ? 0 : end} of ${cols} lit</desc>` +
     `<defs><filter id="glow" x="-2" y="-2" width="5" height="5"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
-    `<pattern id="lit" width="${pitch}" height="${pitch}" patternUnits="userSpaceOnUse"><rect x="0.5" y="0.5" width="2" height="2" rx="0.4" fill="${to}"/></pattern>` +
     `<clipPath id="c"><rect width="${width}" height="${h}" rx="${h / 2}"/></clipPath></defs>` +
-    `<rect width="${width}" height="${h}" rx="${h / 2}" fill="${track}"/><g clip-path="url(#c)">${dots.join('')}${sweep}</g></svg>`
+    `<rect width="${width}" height="${h}" rx="${h / 2}" fill="${track}"/><g clip-path="url(#c)">${dots.join('')}</g></svg>`
   )
 }
 
-export type DesktopBar = { fraction: number; from: string; to: string; tint?: string; isSweep?: boolean }
+export type DesktopBar = { fraction: number; from: string; to: string; tint?: string; isSweep?: boolean; tick?: number }
 
 /** The full checklist drawn for the desktop app. */
 export function drawDesktop(
@@ -181,8 +180,15 @@ export function drawDesktop(
   },
 ) {
   const { Box, Text, Svg } = els
-  const meter = (key: string, b: DesktopBar, width: number, label: string) => (
-    <Svg key={key} source={barSvg(width, b.fraction, b.from, b.to, pal.track, b.isSweep, b.tint)} alt={label} width={width} height={9} isInteractive={b.isSweep} />
+  // `fit`: drawn `width` wide at most and narrowed to the room it is given, so it fills it.
+  const meter = (key: string, b: DesktopBar, width: number, label: string, fit = false) => (
+    <Svg
+      key={key}
+      source={barSvg(width, b.fraction, b.from, b.to, pal.track, b.isSweep, b.tint, b.tick)}
+      alt={label}
+      width={fit ? undefined : width}
+      height={9}
+    />
   )
   const steps = cl.tasks.map((t, i) => {
     const isDone = t.status === 'done'
@@ -196,7 +202,7 @@ export function drawDesktop(
             {t.name}
           </Text>
         </Box>
-        {meter(`${t.id}-bar`, o.stepBar(i), 96, `${t.name}: ${label || 'not started'}`)}
+        {meter(`${t.id}-bar`, o.stepBar(i), 220, `${t.name}: ${label || 'not started'}`)}
         <Box width={6} justifyContent="flex-end">
           <Text color={isActive ? pal.accent : pal.dim} bold={isActive && t.hasReported}>
             {label}
@@ -213,7 +219,7 @@ export function drawDesktop(
       </Box>
       {o.bar ? (
         <Box alignItems="center" columnGap={1}>
-          <Box flexGrow={1}>{meter('job-bar', o.bar, 360, `${o.stepsText}, ${o.percentText}`)}</Box>
+          <Box flexGrow={1} flexShrink={1} minWidth={0}>{meter('job-bar', o.bar, 600, `${o.stepsText}, ${o.percentText}`, true)}</Box>
           <Text color={pal.dim}>{o.stepsText}</Text>
           <Text color={o.isDone ? pal.good : pal.accent} bold>
             {o.percentText}

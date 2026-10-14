@@ -152,7 +152,7 @@ export function sbNoise(i: number, tick: number, seed = 0): number {
  * frame, and the empty track keeps a sparse scatter of faint specks.
  */
 function band(width: number, from: number, to: number, look: SbLook): SbPixel[] {
-  if (from <= 0 && to >= 1) {
+  if (from <= 0 && to >= 1 && !look.jitter) {
     return Array.from({ length: width }, (_, i) => ({ ch: DENSE_FULL, color: sbAlong(look.stops, width <= 1 ? 0 : i / (width - 1)) }))
   }
   const seed = look.seed ?? 0
@@ -182,7 +182,9 @@ function band(width: number, from: number, to: number, look: SbLook): SbPixel[] 
       const base = sbAlong(look.stops, width <= 1 ? 0 : i / (width - 1))
       const shade = sbMix(look.track, base, 0.35 + 0.65 * b - jit * 0.3 * sbNoise(i, t, seed + 13))
       const sparkle = jit > 0 && sbNoise(i, t, seed + 17) > 1 - jit * 0.12 ? 0.45 : 0
-      out.push({ ch: String.fromCharCode(0x2800 + bits), color: sbMix(shade, look.tint, b * b * 0.35 + sbNoise(i, t, seed) * (0.08 + jit * 0.22) + sparkle) })
+      // With jitter, the cells just behind the head are brighter too.
+      const near = jit > 0 && to < 1 && head - i >= 1 && head - i <= 3 ? jit * (0.55 - (head - i) * 0.12) : 0
+      out.push({ ch: String.fromCharCode(0x2800 + bits), color: sbMix(shade, look.tint, Math.min(1, b * b * 0.35 + sbNoise(i, t, seed) * (0.08 + jit * 0.22) + sparkle + near)) })
     } else {
       for (let dx = 0; dx < 2; dx++) {
         for (let dy = 0; dy < 4; dy++) {
