@@ -1,19 +1,30 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, StateWrite, Timer } from 'claude-code'
 
-import type { FdAgent } from '../types'
+import type { FdAgent, FdCall } from '../types'
 import {
   EMPTY_MAIN,
   EMPTY_USAGE,
+  addCall,
+  agentNow,
   applyStep,
+  callOf,
+  diffOf,
   effortWord,
   finish,
+  headline,
+  isEditCall,
+  isFileCall,
   isWorking,
   limitOf,
   newAgent,
   paletteFor,
+  parseGitStatus,
+  pendingText,
   reconcile,
   statusFromReason,
+  stepText,
+  touchFile,
   wantOpen,
 } from './logic'
 import { drawPane, type PaneLayout } from './pane'
@@ -35,6 +46,11 @@ const askAtom = atom({ plugin: 'flightdeck', key: 'sidebarAsk' } as const, { arg
 const runOffsetAtom = atom({ plugin: 'flightdeck', key: 'runOffset' } as const, 0)
 const doneOffsetAtom = atom({ plugin: 'flightdeck', key: 'doneOffset' } as const, 0)
 const clearedAtom = atom({ plugin: 'flightdeck', key: 'cleared' } as const, [])
+const callsAtom = atom({ plugin: 'flightdeck', key: 'calls' } as const, [])
+const filesAtom = atom({ plugin: 'flightdeck', key: 'files' } as const, [])
+const lastEditAtom = atom({ plugin: 'flightdeck', key: 'lastEdit' } as const, null)
+const pendingAtom = atom({ plugin: 'flightdeck', key: 'pending' } as const, null)
+const gitAtom = atom({ plugin: 'flightdeck', key: 'git' } as const, null)
 
 /** Where the last draw put the two lists, so a wheel over one scrolls that list alone. */
 let layout: PaneLayout | undefined
@@ -46,6 +62,45 @@ const askSidebar = ($: Dollar, args: string) => update($, askAtom, v => ({ args,
 
 let ticker: Timer | undefined
 let frames = 0
+/** When git was last asked, so it is asked at most every few seconds. */
+let gitAt = 0
+const GIT_EVERY_MS = 4000
+
+/** Task View's current step and Self Improve's one-line summary, read when the pane draws; each is undefined without its mod. */
+async function sideNotes($: Dollar): Promise<{ step?: string; lessons?: string }> {
+  const out: { step?: string; lessons?: string } = {}
+  try {
+    out.step = stepText((await $.state.get({ plugin: 'clean-view', key: 'checklist' })).value)
+  } catch {}
+  try {
+    const band = (await $.state.get({ plugin: 'self-improve', key: 'band' })).value as { line?: unknown } | undefined
+    if (typeof band?.line === 'string' && band.line.trim() !== '') out.lessons = band.line.trim()
+  } catch {}
+  return out
+}
+
+/** The branch, what changed and how far ahead of main; null (and nothing drawn) when this is not a git repo. */
+async function refreshGit($: Dollar, force = false): Promise<void> {
+  const at = await $.clock.now()
+  if (!force && at - gitAt < GIT_EVERY_MS) return
+  gitAt = at
+  try {
+    const cwd = await $.session.cwd()
+    const git = (args: string[]) => $.process.run(['git', ...args], { cwd, timeoutMs: 4000 })
+    const top = await git(['rev-parse', '--show-toplevel'])
+    const status = top.exitCode === 0 ? await git(['status', '--porcelain=v1', '--branch', '--untracked-files=all']) : top
+    if (status.exitCode !== 0) return void (await update($, gitAtom, () => null))
+    const parsed = parseGitStatus(status.stdout, top.stdout.trim())
+    let ahead = -1
+    if (parsed.branch !== 'main') {
+      const count = await git(['rev-list', '--count', 'main..HEAD'])
+      if (count.exitCode === 0 && /^\d+$/.test(count.stdout.trim())) ahead = Number(count.stdout.trim())
+    }
+    await update($, gitAtom, () => ({ ...parsed, ahead }))
+  } catch {
+    await update($, gitAtom, () => null)
+  }
+}
 
 /** The Sidebar's strip; undefined when that mod is not installed. */
 async function stripOf($: Dollar): Promise<SbStrip | undefined> {
@@ -77,7 +132,10 @@ async function syncTicker($: Dollar): Promise<void> {
       frames += 1
       void quiet(async () => {
         await update($, tickAtom, n => n + 1)
-        if (frames % 8 === 0) await reconcileAgents($)
+        if (frames % 8 === 0) {
+          await reconcileAgents($)
+          await refreshGit($)
+        }
         if (!(await isLive($))) await syncTicker($)
       })
     })
@@ -184,6 +242,7 @@ export const register: Register = on => {
       if (!(await read($, mainAtom)).model) await update($, mainAtom, m => ({ ...m, model }))
     })
     await quiet(() => reconcileAgents($))
+    await quiet(() => refreshGit($, true))
     // A reload finds its pane still up; a new session reopens it if it was left open.
     let isOpen = false
     await quiet(async () => {
@@ -204,6 +263,10 @@ export const register: Register = on => {
       await quiet(async () => {
         await changeAgents($, () => [])
         await update($, clearedAtom, () => [])
+        await update($, callsAtom, () => [])
+        await update($, filesAtom, () => [])
+        await update($, lastEditAtom, () => null)
+        await update($, pendingAtom, () => null)
         await update($, mainAtom, m => ({ ...EMPTY_MAIN, model: m.model, effort: m.effort }))
       })
     }
@@ -221,6 +284,7 @@ export const register: Register = on => {
     await setOpen($, true)
     await quiet(() => refreshUsage($))
     await quiet(() => reconcileAgents($))
+    await quiet(() => refreshGit($, true))
     return { text: opened.isPlaced ? 'Flightdeck opened.' : `Flightdeck opened; it shows once there is room: ${opened.reason}` }
   })
 
@@ -241,6 +305,7 @@ export const register: Register = on => {
         await setOpen($, true)
         await refreshUsage($)
         await reconcileAgents($)
+        await refreshGit($, true)
       })
     } else if (move === 'close') await quiet(() => closePane($))
     return ran
@@ -263,6 +328,7 @@ export const register: Register = on => {
     await quiet(async () => {
       const now = await $.clock.now()
       await update($, mainAtom, m => ({ ...m, isRunning: true, turnStartedAt: now, turnEndedAt: 0 }))
+      await update($, pendingAtom, () => null)
       await syncTicker($)
     })
     return next(e)
@@ -294,7 +360,9 @@ export const register: Register = on => {
         return
       }
       await update($, mainAtom, m => ({ ...m, isRunning: false, turnEndedAt: now }))
+      await update($, pendingAtom, () => null)
       await refreshUsage($)
+      await refreshGit($, true)
       await syncTicker($)
     })
     return done
@@ -316,6 +384,57 @@ export const register: Register = on => {
     }
     return started
   })
+
+  // Observes every tool call for the Right now card and the agents' "now:" lines; it never blocks or changes one.
+  on('tool.call', async ($, e, next) => {
+    const input = e as unknown as Record<string, unknown>
+    const id = e.agentId
+    let call: FdCall | undefined
+    await quiet(async () => {
+      const at = await $.clock.now()
+      const made = callOf(String(e.tool_use_id ?? `${e.tool}@${at}`), e.tool, input, at)
+      call = made
+      if (id === undefined) {
+        await update($, callsAtom, list => addCall(list ?? [], made))
+        if (e.tool === 'AskUserQuestion') await update($, pendingAtom, () => ({ text: pendingText(e.tool, input), tool: e.tool }))
+      } else {
+        const now = agentNow(made)
+        await update($, agentsAtom, list => (list ?? []).map(a => (a.id === id ? { ...a, now } : a)))
+      }
+    })
+    let ran: Awaited<ReturnType<typeof next>> | undefined
+    try {
+      ran = await next(e)
+      return ran
+    } finally {
+      await quiet(async () => {
+        const done = call
+        if (!done) return
+        if (id === undefined) {
+          await update($, callsAtom, list => (list ?? []).map(c => (c.id === done.id ? { ...c, isDone: true } : c)))
+          await update($, pendingAtom, p => (p && p.tool === e.tool ? null : p))
+        }
+        const isOk = ran !== undefined && ran.deny === undefined && ran.isError !== true
+        if (isOk && isFileCall(e.tool) && done.path) {
+          const kind = isEditCall(e.tool) ? 'edit' : 'read'
+          await update($, filesAtom, list => touchFile(list ?? [], done.path!, kind, done.at))
+          if (kind === 'edit' && id === undefined) {
+            const diff = diffOf(e.tool, ran!.result)
+            if (diff) await update($, lastEditAtom, () => ({ path: done.path!, ...diff }))
+            await refreshGit($)
+          }
+        }
+      })
+    }
+  })
+
+  // A permission prompt the person has to answer: the card says Claude is waiting for them.
+  on('classic.PermissionRequest', async ($, e, next) => {
+    const out = await next(e)
+    if (out.decision !== undefined || e.agent_id) return out
+    await quiet(() => update($, pendingAtom, () => ({ text: pendingText(e.tool_name, e.tool_input), tool: e.tool_name })))
+    return out
+  }).catch(($, e, next) => next(e))
 
   on('session.measure', async ($, e, next) => {
     await quiet(() =>
@@ -352,12 +471,22 @@ export const register: Register = on => {
     const theme = await read($, themeAtom)
     const strip = await stripOf($)
     bodyOffset = e.props.scroll?.offset ?? 0
+    const main = await read($, mainAtom)
+    const notes = await sideNotes($)
+    const calls = await read($, callsAtom)
+    const lastEdit = await read($, lastEditAtom)
+    const pending = await read($, pendingAtom)
     const drawn = drawPane(els, e.surface, {
       pal: paletteFor(theme),
       theme,
       strip: isSidebarTab(strip, PANE) ? strip : undefined,
       ask: sbAsker(args => askSidebar($, args), 'flightdeck', () => closePane($)),
-      main: await read($, mainAtom),
+      main,
+      calls,
+      files: await read($, filesAtom),
+      git: await read($, gitAtom),
+      lessons: notes.lessons,
+      right: headline(calls, pending, main, lastEdit, notes.step),
       usage: await read($, usageAtom),
       agents: await read($, agentsAtom),
       tick: await read($, tickAtom),

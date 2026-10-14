@@ -3,18 +3,28 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import { NAMES, critterOf, critterPixels, rasterOf } from '../hooks/critter'
 import {
   DARK,
+  EMPTY_MAIN as EMPTY,
   LIGHT,
   agentMetrics,
+  actionOf,
+  agentNow,
+  agoText,
   applyStep,
+  callOf,
   costOf,
+  fileRows,
   fmtDuration,
   fmtTokens,
   groupAgents,
+  headline,
   modelName,
   newAgent,
   paletteFor,
+  parseGitStatus,
+  recentActions,
   reconcile,
   statusFromList,
+  stepText,
   summaryOf,
   wantOpen,
   windowOf,
@@ -135,6 +145,77 @@ describe('logic', () => {
   })
 })
 
+describe('right now', () => {
+  const main = { ...EMPTY, isRunning: true, turnStartedAt: T0 }
+  const call = (tool: string, input: Record<string, unknown>, at = T0 + 1000) => callOf(`id-${at}`, tool, input, at)
+
+  test('the headline says what Claude is doing in plain words', () => {
+    const edit = call('Edit', { file_path: 'F:/proj/mods/hooks/desktop.tsx' })
+    expect(headline([edit], null, main, { path: 'x', added: 18, removed: 6 }, 'step 2 of 4: Make the bars longer')).toMatchObject({
+      title: 'Claude is editing desktop.tsx in hooks',
+      added: 18,
+      removed: 6,
+      step: 'step 2 of 4: Make the bars longer',
+    })
+    expect(headline([call('Read', { file_path: 'F:/proj/a/clean-draw.tsx' })], null, main, null).title).toBe('Claude is reading clean-draw.tsx in a')
+    expect(headline([call('Bash', { command: 'claude plugin test  clean-view' })], null, main, null)).toMatchObject({
+      title: 'Claude is running a command',
+      detail: 'claude plugin test clean-view',
+    })
+    expect(headline([call('Grep', { pattern: 'barSvg' })], null, main, null).title).toBe('Claude is searching for barSvg')
+    expect(headline([], null, main, null).title).toBe('Claude is thinking')
+    expect(headline([], null, { ...main, isRunning: false }, null).title).toBe('Claude is idle')
+    expect(headline([edit], { text: 'Allow Bash: ls?', tool: 'Bash' }, main, null)).toMatchObject({ title: 'Waiting for you', detail: 'Allow Bash: ls?', isWaiting: true })
+    // A call from an earlier turn does not count as this moment.
+    expect(headline([call('Edit', { file_path: 'a.ts' }, T0 - 5000)], null, main, null).title).toBe('Claude is thinking')
+  })
+
+  test('the last actions are the five newest, in plain words, with how long ago', () => {
+    const calls = [
+      call('Read', { file_path: 'F:/p/old.ts' }, T0),
+      call('Edit', { file_path: 'F:/p/desktop.tsx' }, T0 + 1000),
+      call('Read', { file_path: 'F:/p/clean-draw.tsx' }, T0 + 2000),
+      call('Bash', { command: 'claude plugin test clean-view' }, T0 + 3000),
+      call('Grep', { pattern: 'barSvg' }, T0 + 4000),
+      call('Agent', { description: 'Check repo git status' }, T0 + 5000),
+    ]
+    const acts = recentActions(calls).map(actionOf)
+    expect(acts).toHaveLength(5)
+    expect(acts.map(a => `${a.verb} ${a.target}`)).toEqual([
+      'Started agent Check repo git status',
+      'Searched for barSvg',
+      'Ran claude plugin test clean-view',
+      'Read clean-draw.tsx',
+      'Edited desktop.tsx',
+    ])
+    expect(agoText(2_000)).toBe('just now')
+    expect(agoText(12_000)).toBe('12s')
+    expect(agoText(90_000)).toBe('1m')
+  })
+
+  test('an agent now line, the Task View step, git and the file rows', () => {
+    expect(agentNow(call('Bash', { command: 'git status' }))).toBe('running git status')
+    expect(agentNow(call('Read', { file_path: 'F:/p/a.ts' }))).toBe('reading a.ts')
+    expect(agentNow(call('Grep', { pattern: 'x' }))).toBe('searching for x')
+    const job = { phase: 'working', tasks: [{ name: 'A', status: 'done' }, { name: 'Make the bars longer', status: 'active' }, { name: 'C', status: 'waiting' }, { name: 'D', status: 'waiting' }] }
+    expect(stepText(job)).toBe('step 2 of 4: Make the bars longer')
+    expect(stepText({ phase: 'idle', tasks: [] })).toBeUndefined()
+    const git = parseGitStatus('## dev-1.8.0...origin/dev-1.8.0 [ahead 1]\n M hooks/desktop.tsx\nR  a.ts -> b.ts\n', 'F:\\proj')
+    expect(git).toEqual({ branch: 'dev-1.8.0', changed: ['F:/proj/hooks/desktop.tsx', 'F:/proj/b.ts'] })
+    const rows = fileRows(
+      [
+        { path: 'F:/proj/hooks/desktop.tsx', kind: 'edit', at: 2 },
+        { path: 'F:/proj/other/read.ts', kind: 'read', at: 1 },
+      ],
+      { ...git, ahead: 1 },
+    )
+    expect(rows.map(r => [r.name, r.dir, r.kind, r.isUncommitted])).toEqual([
+      ['desktop.tsx', 'hooks', 'edit', true],
+      ['read.ts', 'other', 'read', false],
+    ])
+  })
+})
+
 // ---------------------------------------------------------------- wiring
 
 type World = { opened: any[]; closed: string[]; panes: string[]; modes: unknown[]; listed: any[]; stopped: string[] }
@@ -184,6 +265,18 @@ function world(on: any): World {
     return { value: undefined }
   })
   on('ui.panes', () => ({ value: w.panes.map(id => ({ id, title: 'Flightdeck', isShown: true, isFocused: false, isPlaced: true })) }))
+  on('session.cwd', () => ({ value: 'F:/proj' }))
+  on('process.run', (_$: any, e: any) => {
+    const argv = (e.argv as string[]).join(' ')
+    const ok = (stdout: string) => ({ value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
+    if (argv.includes('--show-toplevel')) return ok('F:/proj\n')
+    if (argv.includes('status')) return ok('## dev-1.8.0...origin/dev-1.8.0\n M hooks/desktop.tsx\n?? notes.txt\n')
+    if (argv.includes('rev-list')) return ok('2\n')
+    return { value: { exitCode: 1, stdout: '', stderr: 'no', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('tool.call', { tool: 'Edit' } as any, () => ({ result: { structuredPatch: [{ lines: ['+a', '+b', '+c', '-d'] }] }, text: 'ok' }))
+  on('tool.call', { tool: 'Read' } as any, () => ({ result: {}, text: 'ok' }))
+  on('tool.call', { tool: 'Bash' } as any, () => ({ result: {}, text: 'ok' }))
   on('state.set', { key: 'modes' }, async (_$: any, e: any, next: any) => {
     w.modes.push(e.value)
     return next(e)
@@ -348,6 +441,49 @@ describe('wiring', () => {
       const { ui, all } = await texts($, 'terminal', cols)
       expect(all).toContain('FLIGHTDECK')
       expect(all).toContain(critterOf('agent-one').name)
+      await ui.unmount()
+    }
+  })
+
+  test('both surfaces draw the Right now card, and each running agent shows what it is doing now', async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await $.command.run(command('open'))
+    await $.turn.start({ text: 'edit it', turnId: 't1' })
+    await spawn($, 'one')
+    await step($, 'agent-one')
+    await $.tool.call({ tool: 'Read', tool_use_id: 'u1', file_path: 'F:/proj/hooks/clean-draw.tsx' } as any)
+    await $.tool.call({ tool: 'Edit', tool_use_id: 'u2', file_path: 'F:/proj/hooks/desktop.tsx', old_string: 'a', new_string: 'b' } as any)
+    await $.tool.call({ tool: 'Bash', tool_use_id: 'u3', agentId: 'agent-one', command: 'git status' } as any)
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const { ui, all } = await texts($, surface, 100)
+      expect(all).toContain('RIGHT NOW')
+      expect(all).toContain('Claude is editing desktop.tsx in hooks')
+      expect(all).toContain('+3')
+      expect(all).toContain('LAST FEW ACTIONS')
+      expect(all).toContain('Edited')
+      expect(all).toContain('clean-draw.tsx')
+      expect(all).toContain('dev-1.8.0')
+      expect(all).toContain('2 changed')
+      expect(all).toContain('2 ahead of main')
+      expect(all).toContain('Claude read')
+      expect(all).toContain('Not committed')
+      expect(all).toContain('now: running git status')
+      expect(all).toContain('Cost')
+      expect(all).toContain('Time')
+      if (surface === 'desktop') expect(await ui.findAll({ type: 'Svg' })).not.toHaveLength(0)
+      await ui.unmount()
+    }
+  })
+
+  test('with nothing happening the card says Claude is idle', async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await $.command.run(command('open'))
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const { ui, all } = await texts($, surface)
+      expect(all).toContain('Claude is idle')
+      expect(all).toContain('Nothing yet.')
       await ui.unmount()
     }
   })

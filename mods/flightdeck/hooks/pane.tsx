@@ -1,16 +1,23 @@
 import type { RenderElement } from 'claude-code'
-import type { FdAgent, FdMain, FdUsage } from '../types'
+import type { FdAgent, FdCall, FdFile, FdGit, FdMain, FdUsage } from '../types'
 import { critterOf, critterPixels, rasterOf, smallPixels, svgOf } from './critter'
+import { barSvg } from './pixel-bar'
 import {
+  actionOf,
   agentMetrics,
+  agoText,
+  fileRows,
   fmtDuration,
   fmtUsd,
   groupAgents,
   limitLabel,
   modelName,
+  paletteFor,
+  recentActions,
   summaryOf,
   windowLabel,
   windowOf,
+  type Headline,
   type Palette,
 } from './logic'
 import {
@@ -20,6 +27,7 @@ import {
   sbKit,
   sbLevel,
   sbMeter,
+  sbMix,
   sbStripRows,
   sbSweep,
   sbTitle,
@@ -36,6 +44,13 @@ export type PaneData = {
   main: FdMain
   usage: FdUsage
   agents: FdAgent[]
+  /** The main session's recent tool calls and files, the repository, and what Claude is doing this moment. */
+  calls: FdCall[]
+  files: FdFile[]
+  git: FdGit | null
+  /** Self Improve's one-line summary; undefined without that mod. */
+  lessons?: string
+  right: Headline
   tick: number
   now: number
   columns: number
@@ -87,6 +102,20 @@ function meterSvg(fraction: number, fill: string, track: string, w = 240, h = 8)
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><rect width="${w}" height="${h}" rx="${h / 2}" fill="${track}"/>${bar}</svg>`
 }
 
+/** The git line's words: `4 changed`, or `clean`, and `2 ahead of main` when known. */
+const changedText = (git: FdGit): string => (git.changed.length > 0 ? `${git.changed.length} changed` : 'clean')
+const aheadText = (git: FdGit): string => (git.ahead > 0 ? `${git.ahead} ahead of main` : '')
+
+/** The accent look for a Task View style pixel meter in the terminal: pixels from the track toward the accent, scattered more than the kit's. */
+const accentLook = (pal: Palette | { track: string; accent: string; tint: string }, tick: number, seed = 0): SbLook => ({
+  stops: [sbMix(pal.track, pal.accent, 0.55), pal.accent],
+  track: pal.track,
+  tint: pal.tint,
+  tick,
+  seed,
+  jitter: 0.8,
+})
+
 /** The pane as the Claude app draws it (desktop, editor and mobile): the same facts and buttons as native boxes, text and Svg meters. */
 function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: RenderElement; layout: PaneLayout } {
   const { Box, Text, Button } = els
@@ -100,6 +129,7 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
   const meter = (key: string, fraction: number, color: string, alt: string) =>
     Svg ? <Svg key={key} source={meterSvg(fraction, color, pal.track)} alt={alt} width={240} height={8} /> : null
 
+  const fx = paletteFor(strip?.theme ?? d.theme)
   const status = working > 0 ? `${working} agent${working === 1 ? '' : 's'} working` : 'no agents working'
   const header = strip ? (
     sbTitle(k, { icon: '✈', name: 'Flightdeck', status })
@@ -153,12 +183,128 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
     ) : null
 
   const sum = summaryOf(d.agents, now)
-  const totals = (
-    <Box key="totals" columnGap={1} flexWrap="wrap">
-      <Text color={pal.dim} bold>
-        Agents
+  const tile = (label: string, value: string) => (
+    <Box key={`tile-${label}`} flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1} flexGrow={1}>
+      <Text color={pal.dim}>{label}</Text>
+      <Text color={pal.text} bold>
+        {value}
       </Text>
-      <Text color={pal.dim}>{d.agents.length > 0 ? `${sum.cost} · ${sum.tokens} tokens · ${sum.time}` : 'none yet'}</Text>
+    </Box>
+  )
+  const totals = (
+    <Box key="totals" columnGap={1}>
+      {tile('Cost', sum.cost)}
+      {tile('Tokens', sum.tokens)}
+      {tile('Time', sum.time)}
+    </Box>
+  )
+
+  // ---- Right now: what Claude is doing, its last few actions, the branch and the files ----
+  const rn = d.right
+  const rule = Svg ? <Svg key="rn-rule" source={`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="1" viewBox="0 0 100 1" preserveAspectRatio="none"><rect width="100" height="1" fill="${pal.sep}"/></svg>`} alt="" height={1} /> : null
+  const actionRow = (c: FdCall) => {
+    const a = actionOf(c)
+    const color = a.kind === 'edit' ? fx.edit : a.kind === 'read' ? fx.read : a.kind === 'agent' ? pal.accent : pal.dim
+    return (
+      <Box key={`act:${c.id}`} columnGap={1} justifyContent="space-between">
+        <Box columnGap={1} flexShrink={1}>
+          <Text color={color}>{a.glyph}</Text>
+          <Text color={pal.text}>{a.verb}</Text>
+          {a.target ? (
+            <Text color={a.isCode ? pal.info : pal.text} bold={!a.isCode} wrap="truncate-end">
+              {a.target}
+            </Text>
+          ) : null}
+        </Box>
+        <Text color={pal.dim}>{agoText(now - c.at)}</Text>
+      </Box>
+    )
+  }
+  const acts = recentActions(d.calls)
+  const files = fileRows(d.files, d.git)
+  const hasSub = rn.added !== undefined || rn.step !== undefined
+  const rightNow = (
+    <Box key="right-now" flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1} rowGap={1}>
+      <Box columnGap={1}>
+        <Text color={pal.accent}>✶</Text>
+        <Box flexDirection="column" flexShrink={1}>
+          <Text color={pal.dim} bold>
+            RIGHT NOW
+          </Text>
+          <Text color={rn.isWaiting ? pal.warn : pal.text} bold wrap="wrap">
+            {rn.title}
+          </Text>
+          {rn.detail ? (
+            <Text color={pal.dim} wrap="wrap">
+              {rn.detail}
+            </Text>
+          ) : null}
+          {hasSub ? (
+            <Box columnGap={1} flexWrap="wrap">
+              {rn.added !== undefined ? <Text color={pal.good}>{`+${rn.added}`}</Text> : null}
+              {rn.removed !== undefined ? <Text color={pal.bad}>{`−${rn.removed}`}</Text> : null}
+              {rn.step ? <Text color={pal.dim}>{`${rn.added !== undefined ? '· ' : ''}${rn.step}`}</Text> : null}
+            </Box>
+          ) : null}
+        </Box>
+      </Box>
+      <Box flexDirection="column">
+        <Text color={pal.dim} bold>
+          LAST FEW ACTIONS
+        </Text>
+        {acts.length > 0 ? acts.map(actionRow) : <Text color={pal.dim}>Nothing yet.</Text>}
+      </Box>
+      {rule}
+      <Box flexDirection="column">
+        {d.git ? (
+          <Box key="git" columnGap={1} flexWrap="wrap">
+            <Text color={pal.dim}>⎇</Text>
+            <Text color={pal.text} bold>
+              {d.git.branch}
+            </Text>
+            <Text color={d.git.changed.length > 0 ? fx.dirty : pal.dim}>{changedText(d.git)}</Text>
+            {aheadText(d.git) ? <Text color={pal.dim}>{`· ${aheadText(d.git)}`}</Text> : null}
+          </Box>
+        ) : null}
+        {d.lessons ? (
+          <Box key="lessons" columnGap={1}>
+            <Text color={pal.dim}>◈</Text>
+            <Text color={pal.text} wrap="wrap">
+              {d.lessons}
+            </Text>
+          </Box>
+        ) : null}
+      </Box>
+      <Box columnGap={2} flexWrap="wrap">
+        {(
+          [
+            [fx.read, 'Claude read'],
+            [fx.edit, 'Claude edited'],
+            [fx.dirty, 'Not committed'],
+          ] as const
+        ).map(([color, label]) => (
+          <Box key={`legend-${label}`} columnGap={1}>
+            <Text color={color}>■</Text>
+            <Text color={pal.dim}>{label}</Text>
+          </Box>
+        ))}
+      </Box>
+      {files.length > 0 ? (
+        <Box flexDirection="column">
+          {files.map(f => (
+            <Box key={`file:${f.path}`} columnGap={1}>
+              <Text color={f.kind === 'edit' ? fx.edit : fx.read}>■</Text>
+              <Text color={pal.text} wrap="truncate-middle">
+                {f.name}
+              </Text>
+              <Text color={pal.dim} wrap="truncate-start">
+                {f.dir}
+              </Text>
+              {f.isUncommitted ? <Text color={fx.dirty}>●</Text> : null}
+            </Box>
+          ))}
+        </Box>
+      ) : null}
     </Box>
   )
 
@@ -189,10 +335,23 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
     const c = critterOf(a.id)
     return <Svg key={`critter:${a.id}`} source={svgOf(a.id, a.status === 'running')} alt={`${c.name}, a ${c.tint} critter in a ${c.hat}`} width={36} height={36} />
   }
-  const runCard = (a: FdAgent) => {
+  // Task View's pixel bar: running agents sweep in the accent colour, finished ones sit full in the good colour.
+  const pixelBar = (a: FdAgent) => {
+    if (!Svg) return null
+    const isRun = a.status === 'running' || a.status === 'waiting'
+    const to = a.status === 'waiting' ? pal.warn : isRun ? pal.accent : pal.good
+    return (
+      <Svg
+        key={`agent-m:${a.id}`}
+        source={barSvg(300, isRun ? 0 : 1, sbMix(pal.track, to, 0.55), to, pal.track, isRun, pal.tint, tick)}
+        alt={isRun ? 'Working' : 'Finished'}
+        height={9}
+      />
+    )
+  }
+  const agentCard = (a: FdAgent, isRun: boolean) => {
     const [glyph, glyphColor] = mark(a)
     const win = windowOf(a.model, main.model, usage.window)
-    const ctx = win && a.ctxTokens > 0 ? Math.min(100, Math.round((a.ctxTokens / win) * 100)) : 0
     const name = modelName(a.model)
     const metrics = agentMetrics(a, win, now).split('  ')
     const time = metrics.pop() ?? ''
@@ -209,41 +368,28 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
             </Box>
             <Box columnGap={1} alignItems="center">
               <Text color={pal.dim}>{time}</Text>
-              <Button key={`stop:${a.id}`} label="Stop" onPress={() => d.onStop(a.id)} />
+              {isRun ? <Button key={`stop:${a.id}`} label="Stop" onPress={() => d.onStop(a.id)} /> : <Button key={`clear:${a.id}`} label="Clear" onPress={() => d.onClear(a.id)} />}
             </Box>
           </Box>
-          {meter(`agent-m:${a.id}`, ctx / 100, a.status === 'waiting' ? pal.warn : pal.accent, `Context ${ctx} percent used`)}
+          {pixelBar(a)}
           <Box columnGap={1} flexWrap="wrap">
             <Text color={pal.info}>{critterOf(a.id).name}</Text>
             <Text color={pal.dim}>{`${name}${a.type ? ` · ${a.type}` : ''}${metrics.length > 0 ? ` · ${metrics.join(' ')}` : ''}`}</Text>
+            {isRun && a.now ? <Text color={pal.accent}>{`now: ${a.now}`}</Text> : null}
           </Box>
         </Box>
       </Box>
     )
   }
-  const doneRow = (a: FdAgent) => {
-    const [glyph, glyphColor] = mark(a)
-    const time = agentMetrics(a, windowOf(a.model, main.model, usage.window), now).split('  ').pop() ?? ''
-    return (
-      <Box key={`done:${a.id}`} columnGap={1} alignItems="center" justifyContent="space-between">
-        <Box columnGap={1} flexShrink={1} flexWrap="wrap">
-          <Text color={glyphColor}>{glyph}</Text>
-          <Text color={pal.text}>{a.description || a.type || 'Subagent'}</Text>
-          <Text color={pal.dim}>{critterOf(a.id).name}</Text>
-        </Box>
-        <Box columnGap={1} alignItems="center">
-          <Text color={pal.dim}>{time}</Text>
-          <Button key={`clear:${a.id}`} label="Clear" onPress={() => d.onClear(a.id)} />
-        </Box>
-      </Box>
-    )
-  }
+  const runCard = (a: FdAgent) => agentCard(a, true)
+  const doneRow = (a: FdAgent) => agentCard(a, false)
 
   const parts: unknown[] = [
     header,
+    rightNow,
+    totals,
     mainCard,
     limitCards,
-    totals,
     heading('run-head', 'Running', working, working > 0, working > 0 ? { label: 'Stop all', onPress: d.onStopAll } : undefined),
     working === 0 ? (
       <Text key="run-empty" color={pal.dim}>
@@ -290,6 +436,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
   const full = Math.max(16, d.columns)
   const groups = groupAgents(d.agents)
   const working = groups.working.length
+  const fx = paletteFor(strip?.theme ?? d.theme)
   let row = strip ? sbStripRows(k, strip) : 0
 
   const line = (key: string, children: unknown, w = full) => (
@@ -330,6 +477,97 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
         null,
       )
   row += 1
+
+  // ---- Right now: what Claude is doing, its last few actions, the branch and the files ----
+  const rn = d.right
+  const acts = recentActions(d.calls)
+  const files = fileRows(d.files, d.git)
+  const nowRows: unknown[] = [
+    line('rn-cap', <Text color={pal.dim} bold>{'✶ RIGHT NOW'}</Text>),
+    line('rn-title', <Text color={rn.isWaiting ? pal.warn : pal.text} bold wrap="truncate-end">{rn.title}</Text>),
+  ]
+  if (rn.detail) nowRows.push(line('rn-detail', <Text color={pal.dim} wrap="truncate-end">{rn.detail}</Text>))
+  if (rn.added !== undefined || rn.step !== undefined) {
+    nowRows.push(
+      line(
+        'rn-sub',
+        <Text wrap="truncate-end">
+          {rn.added !== undefined ? <Text color={pal.good}>{`+${rn.added}`}</Text> : null}
+          {rn.removed !== undefined ? <Text color={pal.bad}>{` −${rn.removed}`}</Text> : null}
+          {rn.step ? <Text color={pal.dim}>{`${rn.added !== undefined ? ' · ' : ''}${rn.step}`}</Text> : null}
+        </Text>,
+      ),
+    )
+  }
+  nowRows.push(line('rn-acts', <Text color={pal.dim} bold>LAST FEW ACTIONS</Text>))
+  if (acts.length === 0) nowRows.push(line('rn-none', <Text color={pal.dim}>{'  Nothing yet.'}</Text>))
+  for (const c of acts) {
+    const a = actionOf(c)
+    const color = a.kind === 'edit' ? fx.edit : a.kind === 'read' ? fx.read : a.kind === 'agent' ? pal.accent : pal.dim
+    nowRows.push(
+      split(
+        `act:${c.id}`,
+        <Text wrap="truncate-end">
+          <Text color={color}>{`${a.glyph} `}</Text>
+          <Text color={pal.text}>{a.verb}</Text>
+          {a.target ? <Text color={a.isCode ? pal.info : pal.text} bold={!a.isCode}>{` ${a.target}`}</Text> : null}
+        </Text>,
+        <Text color={pal.dim}>{agoText(now - c.at)}</Text>,
+      ),
+    )
+  }
+  nowRows.push(line('rn-rule', <Text color={pal.sep}>{'─'.repeat(full)}</Text>))
+  if (d.git) {
+    nowRows.push(
+      line(
+        'rn-git',
+        <Text wrap="truncate-end">
+          <Text color={pal.dim}>{'⎇ '}</Text>
+          <Text color={pal.text} bold>{d.git.branch}</Text>
+          <Text color={d.git.changed.length > 0 ? fx.dirty : pal.dim}>{` ${changedText(d.git)}`}</Text>
+          {aheadText(d.git) ? <Text color={pal.dim}>{` · ${aheadText(d.git)}`}</Text> : null}
+        </Text>,
+      ),
+    )
+  }
+  if (d.lessons) {
+    nowRows.push(
+      line(
+        'rn-lessons',
+        <Text wrap="truncate-end">
+          <Text color={pal.dim}>{'◈ '}</Text>
+          <Text color={pal.text}>{d.lessons}</Text>
+        </Text>,
+      ),
+    )
+  }
+  nowRows.push(
+    line(
+      'rn-legend',
+      <Text wrap="truncate-end">
+        <Text color={fx.read}>■</Text>
+        <Text color={pal.dim}>{' Claude read  '}</Text>
+        <Text color={fx.edit}>■</Text>
+        <Text color={pal.dim}>{' Claude edited  '}</Text>
+        <Text color={fx.dirty}>■</Text>
+        <Text color={pal.dim}>{' Not committed'}</Text>
+      </Text>,
+    ),
+  )
+  for (const f of files) {
+    nowRows.push(
+      line(
+        `file:${f.path}`,
+        <Text wrap="truncate-end">
+          <Text color={f.kind === 'edit' ? fx.edit : fx.read}>{'■ '}</Text>
+          <Text color={pal.text}>{f.name}</Text>
+          <Text color={pal.dim}>{` ${f.dir}`}</Text>
+          {f.isUncommitted ? <Text color={fx.dirty}>{' ●'}</Text> : null}
+        </Text>,
+      ),
+    )
+  }
+  row += nowRows.length
 
   // ---- main session: context in an outlined meter, the usage limits beside each other ----
   const model = modelName(main.model) || 'Main session'
@@ -380,7 +618,12 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       <Text color={pal.dim} bold>
         AGENTS
       </Text>
-      <Text color={pal.dim}>{d.agents.length > 0 ? `  ${sum.cost} · ${sum.tokens} tokens · ${sum.time}` : '  none yet'}</Text>
+      <Text color={pal.dim}>{d.agents.length > 0 ? '  Cost ' : '  none yet'}</Text>
+      {d.agents.length > 0 ? <Text color={pal.text} bold>{sum.cost}</Text> : null}
+      {d.agents.length > 0 ? <Text color={pal.dim}>{'  Tokens '}</Text> : null}
+      {d.agents.length > 0 ? <Text color={pal.text} bold>{sum.tokens}</Text> : null}
+      {d.agents.length > 0 ? <Text color={pal.dim}>{'  Time '}</Text> : null}
+      {d.agents.length > 0 ? <Text color={pal.text} bold>{sum.time}</Text> : null}
     </Text>,
     null,
   )
@@ -473,7 +716,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       color: a.status === 'waiting' ? pal.warn : pal.dim,
       bar: cells =>
         a.status === 'running'
-          ? sbSweep(cells, sbWarm(k, 10 + i))
+          ? sbSweep(cells, accentLook(k.pal, tick, 10 + i))
           : sbMeter(cells, (ctx ?? 0) / 100, flat([pal.warn, pal.warn], 10 + i)),
       top: [
         { text: `${glyph} `, color: glyphColor },
@@ -482,7 +725,8 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       topRight: [{ text: `${time} `, color: pal.dim }, stop],
       bottom: [
         { text: critterOf(a.id).name, color: pal.info },
-        { text: `${name ? ` · ${name}` : ''}${a.type ? ` · ${a.type}` : ''}`, color: pal.dim },
+        { text: `${name ? ` · ${name}` : ''}${a.now ? '' : a.type ? ` · ${a.type}` : ''}`, color: pal.dim },
+        ...(a.now ? [{ text: ` · now: ${a.now}`, color: pal.accent }] : []),
       ],
       bottomRight: metrics.length > 0 ? [{ text: metrics.join(' '), color: pal.dim }] : [],
     })
@@ -543,9 +787,10 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
 
   const parts: unknown[] = [
     header,
+    ...nowRows,
+    totals,
     ctxFrame,
     limitFrames,
-    totals,
     heading('run-head', 'RUNNING', working, working > 0, working > 0 ? { label: '■ Stop all', color: pal.bad, onPress: d.onStopAll } : undefined),
     runList,
     heading('done-head', 'DONE', groups.finished.length, false, groups.finished.length > 0 ? { label: '✕ Clear', color: pal.dim, onPress: d.onClearAll } : undefined),

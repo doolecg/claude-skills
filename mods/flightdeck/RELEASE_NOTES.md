@@ -1,3 +1,18 @@
+# Flightdeck 1.6.0
+
+## New
+- A "Right now" card at the top: what Claude is doing this moment (editing, reading, running a command, searching, thinking or waiting for you), the lines added and removed by its last edit, and the current Task View step.
+- The last five things Claude did, newest first, in plain words with how long ago.
+- The git branch with how many files changed and how far ahead of main, the Self Improve lessons line when that mod is installed, and the five most recent files marked read, edited or not committed.
+- Cost, Tokens and Time as three tiles.
+- Each running agent shows what it is doing now, such as "now: running git status".
+
+## Changed
+- Agent bars use Task View's pixel look: a flickering bar with a bright glowing front, in the accent colour while an agent works and green once it has finished.
+- In the desktop app, finished agents are cards like running ones, with their own bar and a Clear button.
+
+---
+
 # Flightdeck 1.5.1
 
 ## Fixed

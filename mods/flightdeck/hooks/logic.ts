@@ -1,4 +1,4 @@
-import type { FdAgent, FdLimit, FdMain, FdStatus, FdUsage } from '../types'
+import type { FdAgent, FdCall, FdEdit, FdFile, FdGit, FdLimit, FdMain, FdPending, FdStatus, FdUsage } from '../types'
 
 export const EMPTY_MAIN: FdMain = { model: '', effort: '', steps: 0, isRunning: false, turnStartedAt: 0, turnEndedAt: 0 }
 export const EMPTY_USAGE: FdUsage = { ctxPct: null, ctxTokens: null, window: 0, costUsd: null, limits: [] }
@@ -28,6 +28,10 @@ export type Palette = {
   warmTo: string
   goodFrom: string
   goodTo: string
+  /** The Right now card's file marks: read, edited, not committed. */
+  read: string
+  edit: string
+  dirty: string
 }
 
 // Claude's warm coral, cream and sage, softened for a dark terminal.
@@ -51,6 +55,9 @@ export const DARK: Palette = {
   warmTo: '#D9667F',
   goodFrom: '#5E9A6A',
   goodTo: '#A9D6AE',
+  read: '#B39DDB',
+  edit: '#E08A5A',
+  dirty: '#E5C07B',
 }
 
 export const LIGHT: Palette = {
@@ -73,6 +80,9 @@ export const LIGHT: Palette = {
   warmTo: '#B8435F',
   goodFrom: '#3E7A4A',
   goodTo: '#6FAE7A',
+  read: '#8A7BD0',
+  edit: '#C15F3C',
+  dirty: '#B58A10',
 }
 
 export const paletteFor = (theme: unknown): Palette =>
@@ -378,3 +388,211 @@ export function wantOpen(arg: string, isOpen: boolean): boolean {
   if (a === 'close' || a === 'off' || a === 'hide') return false
   return !isOpen
 }
+
+// ---- what Claude is doing now ---------------------------------------------------------
+
+const READ_TOOLS = new Set(['Read', 'NotebookRead'])
+const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
+const SHELL_TOOLS = new Set(['Bash', 'PowerShell'])
+const SEARCH_TOOLS = new Set(['Grep', 'Glob', 'LS', 'ToolSearch', 'WebSearch'])
+const AGENT_TOOLS = new Set(['Agent', 'Task'])
+
+const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined)
+
+export const oneLine = (s: string, max = 80): string => {
+  const line = s.replace(/\s+/g, ' ').trim()
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line
+}
+
+const norm = (p: string): string => p.replace(/\\/g, '/')
+const trimmed = (p: string): string => norm(p).replace(/\/+$/, '')
+export const baseName = (p: string): string => trimmed(p).split('/').pop() ?? p
+export const dirName = (p: string): string => baseName(trimmed(p).split('/').slice(0, -1).join('/'))
+const pathKey = (p: string): string => norm(p).toLowerCase()
+
+/** What a tool call works on: a file, a command, a pattern, a query or an agent's task. */
+export function callOf(id: string, tool: string, input: Record<string, unknown>, at: number): FdCall {
+  const call: FdCall = { id, tool, at, isDone: false }
+  if (READ_TOOLS.has(tool) || EDIT_TOOLS.has(tool)) call.path = str(input.file_path) ?? str(input.notebook_path)
+  else if (SHELL_TOOLS.has(tool)) call.text = str(input.command)
+  else if (SEARCH_TOOLS.has(tool)) call.text = str(input.pattern) ?? str(input.query) ?? str(input.path)
+  else if (AGENT_TOOLS.has(tool)) call.text = str(input.description) ?? str(input.subagent_type)
+  else if (tool === 'WebFetch') call.text = str(input.url)
+  return call
+}
+
+export const isEditCall = (tool: string): boolean => EDIT_TOOLS.has(tool)
+export const isFileCall = (tool: string): boolean => READ_TOOLS.has(tool) || EDIT_TOOLS.has(tool)
+
+/** Lines added and removed by an edit, from the tool's own record; undefined when it does not say. */
+export function diffOf(tool: string, result: unknown): { added: number; removed: number } | undefined {
+  if (!result || typeof result !== 'object') return undefined
+  const r = result as Record<string, unknown>
+  const hunks = r.structuredPatch
+  if (Array.isArray(hunks) && hunks.length > 0) {
+    let added = 0
+    let removed = 0
+    for (const hunk of hunks) {
+      const lines = (hunk as { lines?: unknown })?.lines
+      if (!Array.isArray(lines)) return undefined
+      for (const line of lines) {
+        if (typeof line !== 'string') continue
+        if (line.startsWith('+')) added++
+        else if (line.startsWith('-')) removed++
+      }
+    }
+    return { added, removed }
+  }
+  if (tool === 'Write' && r.type === 'create' && typeof r.content === 'string') {
+    const body = r.content as string
+    return { added: body === '' ? 0 : body.replace(/\n$/, '').split('\n').length, removed: 0 }
+  }
+  return undefined
+}
+
+/** Adds or refreshes a file at the top of the list; edited wins over read. */
+export function touchFile(files: readonly FdFile[], path: string, kind: 'read' | 'edit', at: number): FdFile[] {
+  const key = pathKey(path)
+  const old = files.find(f => pathKey(f.path) === key)
+  const rest = files.filter(f => pathKey(f.path) !== key)
+  return [{ path, kind: old?.kind === 'edit' || kind === 'edit' ? 'edit' : 'read', at }, ...rest].slice(0, 50)
+}
+
+/** Adds a call, or replaces the one with its id, keeping the newest few. */
+export const addCall = (calls: readonly FdCall[], call: FdCall): FdCall[] => [...calls.filter(c => c.id !== call.id), call].slice(-12)
+
+/** `mcp__server__tool` as `server tool`. */
+const toolWords = (tool: string): string => (tool.startsWith('mcp__') ? tool.split('__').slice(1).join(' ') : tool)
+
+/** A call in plain words for a list of actions: the verb, what it names, and whether the name is code. */
+export type Action = { kind: 'read' | 'edit' | 'command' | 'search' | 'agent' | 'other'; glyph: string; verb: string; target: string; isCode: boolean }
+
+export function actionOf(c: FdCall): Action {
+  const name = c.path ? baseName(c.path) : ''
+  if (READ_TOOLS.has(c.tool)) return { kind: 'read', glyph: '◉', verb: 'Read', target: name, isCode: false }
+  if (EDIT_TOOLS.has(c.tool)) return { kind: 'edit', glyph: '✎', verb: c.tool === 'Write' ? 'Wrote' : 'Edited', target: name, isCode: false }
+  if (SHELL_TOOLS.has(c.tool)) return { kind: 'command', glyph: '>_', verb: 'Ran', target: c.text ? oneLine(c.text, 60) : 'a command', isCode: !!c.text }
+  if (c.tool === 'WebSearch') return { kind: 'search', glyph: '⌕', verb: 'Searched the web for', target: c.text ? oneLine(c.text, 50) : '', isCode: !!c.text }
+  if (c.tool === 'WebFetch') return { kind: 'search', glyph: '⌕', verb: 'Fetched', target: c.text ? oneLine(c.text, 50) : 'a page', isCode: false }
+  if (SEARCH_TOOLS.has(c.tool)) return { kind: 'search', glyph: '⌕', verb: 'Searched for', target: c.text ? oneLine(c.text, 50) : 'files', isCode: !!c.text }
+  if (AGENT_TOOLS.has(c.tool)) return { kind: 'agent', glyph: '◆', verb: 'Started agent', target: c.text ? oneLine(c.text, 50) : '', isCode: false }
+  return { kind: 'other', glyph: '·', verb: 'Used', target: toolWords(c.tool), isCode: false }
+}
+
+/** How long ago, short: `just now`, `12s`, `3m`, `2h`. */
+export function agoText(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  if (s < 5) return 'just now'
+  if (s < 60) return `${s}s`
+  if (s < 3600) return `${Math.floor(s / 60)}m`
+  return `${Math.floor(s / 3600)}h`
+}
+
+/** The most recent calls, newest first. */
+export const recentActions = (calls: readonly FdCall[], n = 5): FdCall[] =>
+  calls
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => b.c.at - a.c.at || b.i - a.i)
+    .slice(0, n)
+    .map(x => x.c)
+
+/** A subagent's latest call in plain words, for its card: `running git status`. */
+export function agentNow(c: FdCall): string {
+  const a = actionOf(c)
+  switch (a.kind) {
+    case 'read':
+      return `reading ${a.target || 'a file'}`
+    case 'edit':
+      return `editing ${a.target || 'a file'}`
+    case 'command':
+      return c.text ? `running ${oneLine(c.text, 40)}` : 'running a command'
+    case 'search':
+      return c.text ? `searching for ${oneLine(c.text, 40)}` : 'searching'
+    case 'agent':
+      return c.text ? `starting agent ${oneLine(c.text, 30)}` : 'starting an agent'
+    default:
+      return `using ${a.target}`
+  }
+}
+
+export type Headline = { title: string; detail?: string; isWaiting: boolean; added?: number; removed?: number; step?: string }
+
+/** "step 2 of 4: Make the bars longer" from Task View's `checklist` state; undefined with no job under way. */
+export function stepText(value: unknown): string | undefined {
+  const v = value as { phase?: unknown; tasks?: unknown } | null
+  if (!v || typeof v !== 'object' || typeof v.phase !== 'string' || v.phase === 'idle' || v.phase === 'done' || !Array.isArray(v.tasks)) return undefined
+  const tasks = v.tasks as { name?: unknown; status?: unknown }[]
+  const at = tasks.findIndex(t => t?.status === 'active')
+  if (at < 0) return undefined
+  const name = typeof tasks[at]!.name === 'string' ? (tasks[at]!.name as string) : ''
+  return `step ${at + 1} of ${tasks.length}${name ? `: ${name}` : ''}`
+}
+
+/** What Claude is doing this moment, for the Right now card. */
+export function headline(calls: readonly FdCall[], pending: FdPending | null, main: FdMain, lastEdit: FdEdit | null, step?: string): Headline {
+  const base = { isWaiting: false, step, ...(lastEdit ? { added: lastEdit.added, removed: lastEdit.removed } : {}) }
+  if (pending) return { ...base, title: 'Waiting for you', detail: pending.text, isWaiting: true }
+  const call = main.isRunning ? recentActions(calls, 1).find(c => c.at >= main.turnStartedAt) : undefined
+  if (call) {
+    const a = actionOf(call)
+    const where = call.path ? `${baseName(call.path)} in ${dirName(call.path)}` : ''
+    if (a.kind === 'read') return { ...base, title: where ? `Claude is reading ${where}` : 'Claude is reading' }
+    if (a.kind === 'edit') return { ...base, title: where ? `Claude is editing ${where}` : 'Claude is editing' }
+    if (a.kind === 'command') return { ...base, title: 'Claude is running a command', detail: call.text ? oneLine(call.text) : undefined }
+    if (a.kind === 'search') return { ...base, title: call.text ? `Claude is searching for ${oneLine(call.text, 50)}` : 'Claude is searching' }
+    if (a.kind === 'agent') return { ...base, title: 'Claude is starting an agent', detail: call.text ? oneLine(call.text) : undefined }
+    return { ...base, title: 'Claude is working', detail: a.target }
+  }
+  return { ...base, title: main.isRunning ? 'Claude is thinking' : 'Claude is idle' }
+}
+
+/** The text of a permission prompt or question. */
+export function pendingText(tool: string, input: unknown): string {
+  const i = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  if (tool === 'AskUserQuestion') {
+    const q = (Array.isArray(i.questions) ? i.questions[0] : undefined) as { question?: unknown } | undefined
+    return typeof q?.question === 'string' ? oneLine(q.question, 120) : 'Claude has a question'
+  }
+  if (tool === 'ExitPlanMode') return 'Approve the plan?'
+  const command = str(i.command)
+  if (command) return `Allow ${tool}: ${oneLine(command, 70)}?`
+  const path = str(i.file_path)
+  if (path) return `Allow ${tool} on ${baseName(path)}?`
+  return `Allow ${toolWords(tool)}?`
+}
+
+// ---- git and files ----------------------------------------------------------------
+
+/** `git status --porcelain=v1 --branch`: the branch and the changed files as absolute paths under `root`. */
+export function parseGitStatus(stdout: string, root: string): { branch: string; changed: string[] } {
+  let branch = ''
+  const changed: string[] = []
+  const base = trimmed(root)
+  for (const raw of stdout.split(/\r?\n/)) {
+    if (raw === '') continue
+    if (raw.startsWith('## ')) {
+      const head = raw.slice(3)
+      if (head.startsWith('No commits yet on ')) branch = head.slice('No commits yet on '.length)
+      else if (head.startsWith('HEAD (no branch)')) branch = 'detached HEAD'
+      else branch = head.split('...')[0]!.split(' ')[0]!
+      continue
+    }
+    let path = raw.slice(3)
+    const arrow = path.indexOf(' -> ')
+    if (arrow >= 0) path = path.slice(arrow + 4)
+    if (path.startsWith('"') && path.endsWith('"')) path = path.slice(1, -1).replace(/\\(.)/g, '$1')
+    changed.push(`${base}/${path}`)
+  }
+  return { branch, changed }
+}
+
+export const isUncommitted = (path: string, git: FdGit | null): boolean => !!git && git.changed.some(c => pathKey(c) === pathKey(path))
+
+export type FileRow = { path: string; name: string; dir: string; kind: 'read' | 'edit'; isUncommitted: boolean }
+
+/** The most recent files, newest first, each marked read or edited and whether git has it uncommitted. */
+export const fileRows = (files: readonly FdFile[], git: FdGit | null, n = 5): FileRow[] =>
+  [...files]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, n)
+    .map(f => ({ path: f.path, name: baseName(f.path), dir: dirName(f.path), kind: f.kind, isUncommitted: isUncommitted(f.path, git) }))

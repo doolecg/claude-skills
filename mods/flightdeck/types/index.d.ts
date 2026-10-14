@@ -17,7 +17,33 @@ export type FdAgent = {
   /** Summed over its responses at list prices; 0 with isCostKnown false when its model has no price here. */
   costUsd: number
   isCostKnown: boolean
+  /** Its latest tool call in plain words (`running git status`); empty until it makes one. */
+  now?: string
 }
+
+/** One tool call of the main session, kept for the Right now card. */
+export type FdCall = {
+  id: string
+  tool: string
+  at: number
+  /** The file the call works on, absolute. */
+  path?: string
+  /** The command, pattern, query or agent description the call names. */
+  text?: string
+  isDone: boolean
+}
+
+/** A file Claude read or edited, newest first. */
+export type FdFile = { path: string; kind: 'read' | 'edit'; at: number }
+
+/** The last edit's size, from the tool's own record. */
+export type FdEdit = { path: string; added: number; removed: number }
+
+/** What a permission prompt or a question is waiting on. */
+export type FdPending = { text: string; tool: string }
+
+/** The repository: its branch, the changed files as absolute paths, and the commits ahead of main (-1 when not known). */
+export type FdGit = { branch: string; changed: string[]; ahead: number }
 
 /** The main loop. */
 export type FdMain = {
@@ -59,7 +85,15 @@ declare module 'claude-code' {
       doneOffset: number
       /** Agents the person cleared off the list this session. */
       cleared: string[]
+      calls: FdCall[]
+      files: FdFile[]
+      lastEdit: FdEdit | null
+      pending: FdPending | null
+      git: FdGit | null
     }
+    /** Read only: Task View's job, and Self Improve's one-line summary. */
+    'clean-view': { checklist: unknown }
+    'self-improve': { band: { line: string; isRunning: boolean } }
     /** The Sidebar mod's strip, as it publishes it (the same shape as its SbStrip). */
     'sidebar': {
       strip: {
