@@ -11,6 +11,12 @@ export type BarFigures = {
 }
 
 /** A mod's on/off mode, as the mod publishes it in its own `modes` state, keyed by its command. */
+/** One item of Task View's list, as the bar draws it. */
+export type BarTodoItem = { name: string; status: 'done' | 'active' | 'upcoming' }
+
+/** Task View's published to-do list (its `checklist` state), drawn above the bar while Claude works. */
+export type BarTodo = { phase: string; items: BarTodoItem[]; finishedAt: number }
+
 export type BarMode = {
   label: string
   isOn: boolean
@@ -72,6 +78,8 @@ declare module 'claude-code' {
       /** The tools pill's name, from the `name` option; the toolbox is headed with it. */
       label: string
       mods: BarMod[]
+      /** Task View's to-do list, followed live. */
+      todo: BarTodo
     }
   }
 }

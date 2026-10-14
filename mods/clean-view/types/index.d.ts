@@ -26,35 +26,14 @@ export type CvChecklist = {
   helpers: number
 }
 
-export type CvAskOption = { label: string; description: string }
-
-export type CvAskQuestion = {
-  header: string
-  question: string
-  multiSelect: boolean
-  options: CvAskOption[]
-}
-
-/** The questions Claude is asking, shown in the band beside the checklist; `isOpen` is false when none are. */
-export type CvAsk = {
-  isOpen: boolean
-  toolUseId: string
-  questions: CvAskQuestion[]
-  /** The question tab showing. */
-  current: number
-  /** Per question, the answer given (the labels comma-joined, or typed text), or null. */
-  answers: (string | null)[]
-  /** Per multi-select question, the labels ticked so far. */
-  picks: string[][]
-}
-
 declare module 'claude-code' {
   interface PluginState {
     'clean-view': {
       cleanViewEnabled: boolean
       checklist: CvChecklist
-      ask: CvAsk
       tick: number
+      /** The tool_use_id of the latest to-do tool call: the row that is drawn live. */
+      todoUse: string
       theme: string
       colour: string
       modes: Record<string, CvMode>

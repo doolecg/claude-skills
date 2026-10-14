@@ -23,7 +23,11 @@ import {
   sameFigures,
   segmentOffset,
   segments,
+  footerSummary,
   toolLabel,
+  EMPTY_TODO,
+  showsTodo,
+  todoFrom,
 } from './bar-logic'
 import { desktopBar, desktopToolbox } from './desktop'
 import type { AppEls } from './desktop'
@@ -49,6 +53,7 @@ const filter = atom({ plugin: 'bottom-bar', key: 'filter' } as const, '')
 const label = atom({ plugin: 'bottom-bar', key: 'label' } as const, LABEL)
 const mods = atom({ plugin: 'bottom-bar', key: 'mods' } as const, [])
 const published = atom({ plugin: 'bottom-bar', key: 'published' } as const, {})
+const todo = atom({ plugin: 'bottom-bar', key: 'todo' } as const, EMPTY_TODO)
 
 /**
  * `segments` writes the bar could not hook as they landed: a publisher's command the bar itself ran
@@ -220,6 +225,16 @@ async function closeTools($: Dollar): Promise<void> {
   } catch {}
 }
 
+/** Opens the toolbox as a pane in the app, its lists fresh. */
+async function openAppToolbox($: Dollar): Promise<void> {
+  void loadMods($).catch(() => {})
+  try {
+    await loadChoices($)
+  } catch {}
+  await update($, menu, () => 'tools')
+  await $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
+}
+
 /** The toolbox's rows, for the box in the bar or the docked pane. */
 async function toolboxTree(
   $: Dollar,
@@ -333,6 +348,14 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // Task View's to-do list, drawn above the bar in the app while Claude works.
+  on('state.set', { key: 'checklist' } as never, async ($, e, next) => {
+    const ran = await next(e)
+    const write = e as unknown as StateWrite
+    if (write.plugin === 'clean-view') await update($, todo, () => todoFrom(write.value))
+    return ran
+  }).catch(($, e, next) => next(e))
+
   on('command.run', { command: CHOOSE }, async $ => {
     await openPicker($)
     return {}
@@ -360,29 +383,17 @@ export const register: Register = (on, options) => {
       await $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
     }
     const pal = paletteFor(await read($, theme), colour)
-    const els = $.ui.resolve(e) as AppEls
-    const bar = desktopBar({
-      els,
+    const list = await read($, todo)
+    return desktopBar({
+      els: $.ui.resolve(e) as AppEls,
       pal,
       title: await read($, label),
       figures: await read($, figures),
       published: publishedSegments(await read($, published), pal),
       runCommand: command => void runCommand($, command),
       openToolbox: () => void openToolbox(),
+      todo: showsTodo(list, await $.clock.now()) ? list : undefined,
     })
-    // Another mod's band in the same place (Task View's checklist) stays on top, the bar under it.
-    let above: unknown = null
-    try {
-      above = await next(e)
-    } catch {}
-    if (!above) return bar
-    const { Box } = els
-    return (
-      <Box flexDirection="column" width="100%" rowGap={1}>
-        {above as JSX.Element}
-        {bar}
-      </Box>
-    )
   })
 
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
@@ -390,9 +401,16 @@ export const register: Register = (on, options) => {
     // only then does the key tell a mod with a fallback button (Enhance Prompt) that the bar hosts it;
     // the rest of the time that mod draws its own button here.
     if (e.surface === 'desktop') {
-      if (!(await read($, isWorking))) return next(e)
-      const { Box: AppBox } = $.ui.resolve(e)
-      return <AppBox key="bottom-bar-segments">{await next(e)}</AppBox>
+      const { Box: AppBox, Text: AppText, Button: AppButton } = $.ui.resolve(e)
+      if (await read($, isWorking)) return <AppBox key="bottom-bar-segments">{await next(e)}</AppBox>
+      // Idle: the app hides the band above the prompt, so the bar stays in view here as one short line.
+      const pal = paletteFor(await read($, theme), colour)
+      const f = await read($, figures)
+      return (
+        <AppButton key="pill" plain onPress={() => void openAppToolbox($)}>
+          <AppText color={pal.dim}>{footerSummary(f)}</AppText>
+        </AppButton>
+      )
     }
     if (e.surface !== 'terminal') return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)

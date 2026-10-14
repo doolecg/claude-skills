@@ -1,3 +1,16 @@
+# Bottom Bar 1.8.2
+
+## New
+- In the desktop app, Task View's to-do list shows above the bar while Claude works: a main pixel bar, then a line and a bar for each step. The step in progress has a moving pixel run. When every step is done the bars turn green and stop, and the list stays for two minutes.
+
+## Changed
+- In the desktop app the bar never disappears: while Claude is idle (when the app hides the band above the prompt) a short bar shows under the prompt, with context, tokens used and the 5-hour and 7-day usage. Click it to open the toolbox.
+
+## Fixed
+- In the desktop app the bar above the prompt shows again while Claude works.
+
+---
+
 # Bottom Bar 1.8.1
 
 ## Fixed

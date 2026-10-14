@@ -1,3 +1,15 @@
+# Task View 1.8.0
+
+## Changed
+- Task View now restyles Claude's own to-do list instead of drawing its own band above the prompt. The to-do row in the transcript shows a "To-do" header with "N of M done · P%", a main pixel bar, and a line with a small pixel bar for each item.
+- Done items are dim with a green still bar, the item in progress is bold with a flickering accent bar, and pending items are dim with an empty bar. When everything is done it says "All done" and every bar is green and still.
+- It works for the TodoWrite tool and for the TaskCreate, TaskUpdate and TaskList tools. The matching result row is blanked so the list shows once.
+- Claude no longer plans steps for you, other tools are no longer held back, and tool calls, diffs and command output are no longer hidden. The questions in the band, the Style setting and the plan_steps and report_progress tools are gone.
+- In the desktop app it follows the app's own working list too (the steps Claude shows under its messages), and the list is drawn with pixel bars above the Bottom Bar while Claude works. When Claude wraps up, every step is checked off. This needs Bottom Bar 1.8.2.
+- `/simple` still turns it on and off; off gives you the normal to-do rows. The Sidebar's Task View tab still reads the checklist.
+
+---
+
 # Task View 1.7.1
 
 ## Changed

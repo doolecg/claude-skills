@@ -21,6 +21,7 @@ import {
   segmentOffset,
   segments,
   toolLabel,
+  footerSummary,
   usedLabel,
   windowLabel,
 } from '../hooks/bar-logic'
@@ -1446,11 +1447,12 @@ test('app: the bar sits above the prompt with no model or effort, and the footer
   on('ui.render', { component: 'SessionMode' }, ($: any, e: any) => (globalThis as any).h($.ui.resolve(e).Text, {}, 'Opus 5.5 High'))
   on('turn.start', (_$: any, e: any) => ({ turnId: e.turnId }))
   await startSession($)
-  // Idle, the app hides the band above the prompt, so the footer is left as it is and a mod's own
-  // button can show there; while Claude works the bar hosts it, and the footer says so.
+  // Idle, the app hides the band above the prompt, so the bar stays in view in the footer as one
+  // short line (and a mod's own button can sit beside it); while Claude works the band hosts it all.
   const idle = await mountBar($, 'desktop')
-  expect(textsOf(await idle.drawn()).join(' ')).toBe('Opus 5.5 High')
+  expect(textsOf(await idle.drawn()).join(' ')).toMatch(/^ctx 10%/)
   expect(await idle.find({ key: 'bottom-bar-segments' })).toBeUndefined()
+  expect(await idle.find({ key: 'pill' })).toBeDefined()
   await $.turn.start({ text: 'go', turnId: 't1' } as any)
   const footer = await mountBar($, 'desktop')
   expect(textsOf(await footer.drawn()).join(' ')).toBe('Opus 5.5 High')
@@ -1524,15 +1526,52 @@ test('app: the picker pane draws with Buttons and no glyph art', async ($, on) =
   expect(seen.writes).toEqual([])
 })
 
-test("app: another mod's band in the same place (Task View) stays on top, the bar under it", async ($, on) => {
+
+test('footerSummary is the short bar for the app footer while Claude is idle', () => {
+  expect(footerSummary({ ...EMPTY_FIGURES, ctx: 37, tokens: 373_000, window: 1_000_000, fiveHour: 8, sevenDay: 65 })).toBe(
+    'ctx 37% · 373K/1M · 5h 8% · 7d 65%',
+  )
+  expect(footerSummary(EMPTY_FIGURES)).toBe('ctx 0%')
+})
+
+
+// Task View publishing its to-do list as its `checklist` state.
+const TASK_VIEW = {
+  name: 'clean-view',
+  register: ((on: any) => {
+    on('command.run', { command: 'publish-list' }, async ($: any, e: any) => {
+      const [phase, ...statuses] = e.args.trim().split(' ')
+      // A test plugin runs on its own, so the list is built here rather than by a helper.
+      const tasks = statuses.map((status: string, i: number) => ({ id: `t${i}`, name: `Step ${i + 1}`, status, percent: 0, hasReported: false }))
+      const list = { title: 'To-do', phase, tasks, needsYouReason: '', stuckReason: '', startedAt: 1, finishedAt: phase === 'done' ? await $.clock.now() : 0, isCollapsed: false, helpers: 0 }
+      await $.state.set({ plugin: 'clean-view', key: 'checklist' }, list)
+      return { text: 'ok' }
+    })
+  }) as any,
+}
+
+test("app: Task View's list sits above the bar in the band, and turns green and still when done", { plugins: [TASK_VIEW] }, async ($, on) => {
   world(on)
   registerCommands(on)
   seedModel(on)
-  on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => (globalThis as any).h($.ui.resolve(e).Text, {}, 'TASK VIEW BAND'))
   await startSession($)
-  const ui = await $.ui.mount({ plugin: 'bottom-bar', surface: 'desktop', component: 'AbovePrompt', props: ABOVE_PROPS })
-  const all = textsOf(await ui.drawn()).join(' ')
-  expect(all).toContain('TASK VIEW BAND')
-  expect(all.indexOf('TASK VIEW BAND')).toBeLessThan(all.indexOf('context'))
-  expect(await ui.find({ key: 'pill' })).toBeDefined()
+  const before = await mountAppBar($)
+  expect(await before.find({ key: 'todo' })).toBeUndefined()
+  await $.command.run({ command: 'publish-list', args: 'working done active upcoming' } as any)
+  const bar = await mountAppBar($)
+  expect(await bar.find({ key: 'todo' })).toBeDefined()
+  expect(await bar.find({ key: 'pill' })).toBeDefined()
+  const all = textsOf(await bar.drawn()).join(' ')
+  expect(all).toContain('1 of 3 done · 33%')
+  expect(all.indexOf('Step 1')).toBeLessThan(all.indexOf('context'))
+  const svgs = async (m: any) => (await m.findAll({ type: 'Svg' })) as any[]
+  const active = (await svgs(bar)).find(x => x.props.alt === 'Step 2: in progress')
+  expect(String(active.props.source)).toContain('animateTransform')
+  await $.command.run({ command: 'publish-list', args: 'done done done done' } as any)
+  const finished = await mountAppBar($)
+  expect(textsOf(await finished.drawn()).join(' ')).toContain('All done · 3 of 3')
+  const main = (await svgs(finished)).find(x => x.props.alt === 'All 3 done')
+  expect(String(main.props.source)).not.toContain('<animate')
+  await $.command.run({ command: 'publish-list', args: 'idle' } as any)
+  expect(await (await mountAppBar($)).find({ key: 'todo' })).toBeUndefined()
 })

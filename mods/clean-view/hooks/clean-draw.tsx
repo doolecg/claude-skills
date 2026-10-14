@@ -1,101 +1,24 @@
-import type { CvAsk, CvChecklist } from '../types'
-import { OTHER_HINT, rowLabel } from './clean-logic'
-import type { SbPalette, SbSeg } from './sidebar-kit'
+import type { CvTask } from '../types'
+import { summary } from './clean-logic'
+import { sbBar, sbGood, sbKit, sbMeter, sbMix, sbSweep, sbWarm, type SbKit, type SbLook, type SbPalette } from './sidebar-kit'
 
 type Els = Record<string, any>
 
-/** The marker in front of a step: done, current (or paused) and still to do. */
-export function stepMarker(status: string, isPaused: boolean): string {
-  return status === 'done' ? '✓' : status === 'active' ? (isPaused ? '‖' : '▶') : '○'
-}
+/** Task View's terminal meters: pixels in the accent colour (the Colour setting), scattered more than the kit's. */
+const accentLook = (k: SbKit, seed = 0): SbLook => ({
+  ...sbWarm(k, seed),
+  stops: [sbMix(k.pal.track, k.pal.accent, 0.55), k.pal.accent],
+  jitter: 0.8,
+})
 
-function segTexts(Text: any, list: readonly SbSeg[], prefix: string) {
-  return list.map((s, i) => (
-    <Text key={`${prefix}${i}`} color={s.color} bold={s.bold}>
-      {s.text}
-    </Text>
-  ))
-}
+/** Bar sizes: SVG bars in pixels (desktop), pixel bars in cells (terminal). */
+export const MAIN_PX = 360
+export const ITEM_PX = 160
+export const MAIN_CELLS = 36
+export const ITEM_CELLS = 16
 
-/** The right-hand bits of a header: plain text, or a quiet button when it has a press. */
-function rightBits(els: Els, list: readonly SbSeg[]) {
-  const { Text, Button } = els
-  return list.map((s, i) =>
-    s.onPress ? (
-      <Button key={s.key ?? `r${i}`} plain dimColor onPress={s.onPress}>
-        {s.text}
-      </Button>
-    ) : (
-      <Text key={s.key ?? `r${i}`} color={s.color}>
-        {s.text}
-      </Text>
-    ),
-  )
-}
-
-// ---- Steps only: one calm line per step, on any surface ------------------------------
-
-/** The smaller checklist: a header line and one line per step, no outlined bars. */
-export function drawCompact(
-  els: Els,
-  pal: SbPalette,
-  cl: CvChecklist,
-  o: { header: SbSeg[]; right: SbSeg[]; outline: string; isPaused: boolean; summary: string; width: number; isDesktop: boolean },
-) {
-  const { Box, Text } = els
-  const d = o.isDesktop
-  const steps = cl.tasks.map((t, i) => {
-    const isDone = t.status === 'done'
-    const isActive = t.status === 'active'
-    const label = rowLabel(cl.tasks, i)
-    return (
-      <Box key={t.id} height={d ? undefined : 1} overflow={d ? undefined : 'hidden'}>
-        <Box flexGrow={1} flexShrink={1}>
-          <Text wrap="truncate-end">
-            <Text color={isDone ? pal.good : isActive ? (o.isPaused ? pal.warn : pal.accent) : pal.faint}>{`${stepMarker(t.status, o.isPaused)} `}</Text>
-            <Text color={isDone ? pal.dim : isActive ? pal.text : pal.faint} bold={isActive}>
-              {t.name}
-            </Text>
-          </Text>
-        </Box>
-        {label ? (
-          <Box flexShrink={0} marginLeft={1}>
-            <Text color={isActive ? pal.accent : pal.dim}>{label}</Text>
-          </Box>
-        ) : null}
-      </Box>
-    )
-  })
-  const right = rightBits(els, o.right)
-  return (
-    <Box
-      key="checklist"
-      flexDirection="column"
-      width={d ? '100%' : o.width}
-      flexShrink={0}
-      {...(d ? { borderStyle: 'round', borderColor: o.outline, paddingX: 1 } : {})}
-    >
-      <Box height={d ? undefined : 1}>
-        <Box flexGrow={1} flexShrink={1} height={d ? undefined : 1} overflow={d ? undefined : 'hidden'}>
-          <Text wrap="truncate-end">{segTexts(Text, o.header, 'h')}</Text>
-        </Box>
-        {o.summary ? (
-          <Box flexShrink={0} marginLeft={1}>
-            <Text color={pal.dim}>{o.summary}</Text>
-          </Box>
-        ) : null}
-        {right.length > 0 ? (
-          <Box flexShrink={0} marginLeft={1} columnGap={1}>
-            {right}
-          </Box>
-        ) : null}
-      </Box>
-      {steps}
-    </Box>
-  )
-}
-
-// ---- the Claude desktop app: native boxes, buttons and SVG meters --------------------
+/** The marker in front of a to-do: done, in progress and still to do. */
+export const markerOf = (status: CvTask['status']): string => (status === 'done' ? '✓' : status === 'active' ? '▶' : '○')
 
 // A steady pseudo-random 0..1 per pixel, so a bar looks the same each time it is drawn.
 function grain(i: number, seed: number): number {
@@ -113,7 +36,7 @@ function grain(i: number, seed: number): number {
  * keeps a faint scatter that shifts too. With no percent yet, a lit patch runs along the track.
  */
 export function barSvg(width: number, fraction: number, from: string, to: string, track: string, isSweep = false, tint = '#FFFFFF', tick = 0): string {
-  const h = 9
+  const tall = 9
   const pitch = 3
   const rows = 3
   const cols = Math.max(1, Math.floor(width / pitch))
@@ -152,168 +75,126 @@ export function barSvg(width: number, fraction: number, from: string, to: string
     }
   }
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${h}" viewBox="0 0 ${width} ${h}" preserveAspectRatio="none">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${tall}" viewBox="0 0 ${width} ${tall}">` +
     `<desc>${isSweep ? 0 : end} of ${cols} lit</desc>` +
     `<defs><filter id="glow" x="-2" y="-2" width="5" height="5"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
-    `<clipPath id="c"><rect width="${width}" height="${h}" rx="${h / 2}"/></clipPath></defs>` +
-    `<rect width="${width}" height="${h}" rx="${h / 2}" fill="${track}"/><g clip-path="url(#c)">${dots.join('')}</g></svg>`
+    `<clipPath id="c"><rect width="${width}" height="${tall}" rx="${tall / 2}"/></clipPath></defs>` +
+    `<rect width="${width}" height="${tall}" rx="${tall / 2}" fill="${track}"/><g clip-path="url(#c)">${dots.join('')}</g></svg>`
   )
 }
 
-export type DesktopBar = { fraction: number; from: string; to: string; tint?: string; isSweep?: boolean; tick?: number }
 
-/** The full checklist drawn for the desktop app. */
-export function drawDesktop(
-  els: Els,
-  pal: SbPalette,
-  cl: CvChecklist,
-  o: {
-    header: SbSeg[]
-    right: SbSeg[]
-    outline: string
-    isPaused: boolean
-    stepsText: string
-    percentText: string
-    isDone: boolean
-    bar: DesktopBar | null
-    stepBar: (i: number) => DesktopBar
-  },
-) {
-  const { Box, Text, Svg } = els
-  // `fit`: drawn `width` wide at most and narrowed to the room it is given, so it fills it.
-  const meter = (key: string, b: DesktopBar, width: number, label: string, fit = false) => (
-    <Svg
-      key={key}
-      source={barSvg(width, b.fraction, b.from, b.to, pal.track, b.isSweep, b.tint, b.tick)}
-      alt={label}
-      width={fit ? undefined : width}
-      height={9}
-    />
-  )
-  const steps = cl.tasks.map((t, i) => {
-    const isDone = t.status === 'done'
-    const isActive = t.status === 'active'
-    const label = rowLabel(cl.tasks, i)
-    return (
-      <Box key={t.id} alignItems="center" columnGap={1}>
-        <Text color={isDone ? pal.good : isActive ? (o.isPaused ? pal.warn : pal.accent) : pal.faint}>{stepMarker(t.status, o.isPaused)}</Text>
-        <Box flexGrow={1} flexShrink={1}>
-          <Text color={isDone ? pal.dim : isActive ? pal.text : pal.faint} bold={isActive}>
-            {t.name}
-          </Text>
-        </Box>
-        {meter(`${t.id}-bar`, o.stepBar(i), 220, `${t.name}: ${label || 'not started'}`)}
-        <Box width={6} justifyContent="flex-end">
-          <Text color={isActive ? pal.accent : pal.dim} bold={isActive && t.hasReported}>
-            {label}
-          </Text>
-        </Box>
-      </Box>
-    )
-  })
+export type TodoDraw = {
+  pal: SbPalette
+  /** The row is the latest list and a turn is running: in-progress bars move. */
+  isLive: boolean
+  /** The frame clock. */
+  tick: number
+  /** Cells across the terminal; the bars take what fits. */
+  columns?: number
+}
+
+/** The header: "To-do" and how far along, or "All done" when every item is. */
+function header(els: Els, pal: SbPalette, tasks: readonly CvTask[]) {
+  const { Box, Text } = els
+  const s = summary(tasks)
   return (
-    <Box key="checklist" flexDirection="column" width="100%" flexShrink={0} borderStyle="round" borderColor={o.outline} paddingX={1} gap={1}>
-      <Box justifyContent="space-between" alignItems="center">
-        <Text>{segTexts(Text, o.header, 'h')}</Text>
-        <Box columnGap={1}>{rightBits(els, o.right)}</Box>
-      </Box>
-      {o.bar ? (
-        <Box alignItems="center" columnGap={1}>
-          <Box flexGrow={1} flexShrink={1} minWidth={0}>{meter('job-bar', o.bar, 600, `${o.stepsText}, ${o.percentText}`, true)}</Box>
-          <Text color={pal.dim}>{o.stepsText}</Text>
-          <Text color={o.isDone ? pal.good : pal.accent} bold>
-            {o.percentText}
-          </Text>
-        </Box>
-      ) : null}
-      <Box flexDirection="column">{steps}</Box>
+    <Box key="head" justifyContent="space-between" columnGap={2}>
+      <Text color={pal.text} bold>
+        {'To-do'}
+      </Text>
+      {s.isAllDone ? (
+        <Text color={pal.good}>{`All done · ${s.total} of ${s.total}`}</Text>
+      ) : (
+        <Text color={pal.dim}>{`${s.done} of ${s.total} done · ${s.percent}%`}</Text>
+      )}
     </Box>
   )
 }
 
-/** The questions for the desktop app: a rounded card, native buttons for the options, an Other field. */
-export function drawDesktopAsk(
-  els: Els,
-  pal: SbPalette,
-  ask: CvAsk,
-  acts: {
-    title: string
-    onSkip: () => void
-    onClose: () => void
-    onTab: (i: number) => void
-    onOption: (label: string) => void
-    onOther: (value: string) => void
-    onDone: () => void
-  },
-) {
-  const { Box, Text, Button, Input } = els
-  const q = ask.questions[ask.current]!
-  const ticked = ask.picks[ask.current] ?? []
-  const given = ask.answers[ask.current]
-  return (
-    <Box flexDirection="column" width="100%" flexShrink={0} borderStyle="round" borderColor={pal.warn} paddingX={1} gap={1}>
-      <Box justifyContent="space-between" alignItems="center">
-        <Text>
-          <Text color={pal.warn} bold>
-            ‖ Needs you
+const nameColor = (pal: SbPalette, t: CvTask) => (t.status === 'done' ? pal.dim : t.status === 'active' ? pal.text : pal.faint)
+const markColor = (pal: SbPalette, t: CvTask) => (t.status === 'done' ? pal.good : t.status === 'active' ? pal.accent : pal.faint)
+
+/** A to-do list in the terminal: header, a main pixel bar, then a line and a bar for each item. */
+export function drawTodoTerminal(els: Els, d: TodoDraw, tasks: readonly CvTask[]) {
+  const { Box, Text } = els
+  const { pal } = d
+  const k = sbKit(els, 'terminal', pal, d.columns ?? 80, d.isLive ? d.tick : 0)
+  const still = sbKit(els, 'terminal', pal, d.columns ?? 80, 0)
+  const s = summary(tasks)
+  const room = Math.max(8, (d.columns ?? 80) - 2)
+  const main = Math.min(MAIN_CELLS, room)
+  const item = Math.max(6, Math.min(ITEM_CELLS, Math.floor(room / 3)))
+  const rows = tasks.map((t, i) => {
+    const look = t.status === 'done' ? sbGood(still, i + 1) : t.status === 'active' ? accentLook(k, i + 1) : accentLook(still, i + 1)
+    const pixels =
+      t.status === 'active'
+        ? d.isLive
+          ? sbSweep(item, look)
+          : sbMeter(item, 0.5, look)
+        : sbMeter(item, t.status === 'done' ? 1 : 0, look)
+    return (
+      <Box key={t.id} height={1} columnGap={1}>
+        <Text color={markColor(pal, t)}>{markerOf(t.status)}</Text>
+        <Box flexGrow={1} flexShrink={1} minWidth={0} height={1} overflow="hidden">
+          <Text wrap="truncate-end" color={nameColor(pal, t)} bold={t.status === 'active'}>
+            {t.name}
           </Text>
-          <Text color={pal.dim}>{acts.title}</Text>
-        </Text>
-        <Box columnGap={2}>
-          <Button key="skip" plain dimColor onPress={acts.onSkip}>
-            Skip
-          </Button>
-          <Button key="close" plain dimColor onPress={acts.onClose}>
-            ✕
-          </Button>
         </Box>
+        <Box flexShrink={0}>{sbBar(k, `${t.id}-bar`, pixels)}</Box>
       </Box>
-      {ask.questions.length > 1 ? (
-        <Box columnGap={2}>
-          {ask.questions.map((t, i) => {
-            const isNow = i === ask.current
-            const isDone = ask.answers[i] !== null
-            return (
-              <Button key={`q${i}`} plain onPress={() => acts.onTab(i)}>
-                <Text color={isDone ? pal.good : isNow ? pal.text : pal.dim} bold={isNow}>
-                  {`${isDone ? '✓' : isNow ? '▶' : '○'} ${t.header}`}
-                </Text>
-              </Button>
-            )
-          })}
-        </Box>
-      ) : null}
-      <Text color={pal.text} bold>
-        {q.question}
-      </Text>
-      <Box flexDirection="column">
-        {q.options.map((o, i) => {
-          const isOn = q.multiSelect ? ticked.includes(o.label) : given === o.label
-          const mark = q.multiSelect ? (isOn ? '◼' : '◻') : isOn ? '●' : '○'
-          return (
-            <Box key={`ow${i}`} flexDirection="column">
-              <Button key={`o${i}`} plain hotkey={String(i + 1)} onPress={() => acts.onOption(o.label)}>
-                <Text color={pal.faint}>{`${i + 1} `}</Text>
-                <Text color={isOn ? pal.good : pal.accent}>{`${mark} `}</Text>
-                <Text color={isOn ? pal.good : pal.text} bold>
-                  {o.label}
-                </Text>
-              </Button>
-              {o.description !== '' && o.description !== o.label ? <Text color={pal.dim}>{o.description}</Text> : null}
-            </Box>
-          )
-        })}
+    )
+  })
+  return (
+    <Box key="todo" flexDirection="column" flexShrink={0}>
+      {header(els, pal, tasks)}
+      <Box key="main-bar" height={1}>
+        {sbBar(k, 'main-bar', sbMeter(main, s.done / Math.max(1, s.total), s.isAllDone ? sbGood(still) : accentLook(k)))}
       </Box>
-      {Input ? <Input key="other" placeholder={OTHER_HINT} submitLabel="answer" onSubmit={(value: string) => acts.onOther(value)} /> : null}
-      {q.multiSelect ? (
-        <Box>
-          <Button key="done" plain hotkey="d" onPress={acts.onDone}>
-            <Text color={ticked.length > 0 ? pal.good : pal.faint} bold>
-              d: Done
-            </Text>
-          </Button>
+      {rows}
+    </Box>
+  )
+}
+
+/** A to-do list in the desktop app: a rounded card with SVG pixel bars, each drawn at its real width. */
+export function drawTodoDesktop(els: Els, d: TodoDraw, tasks: readonly CvTask[]) {
+  const { Box, Text, Svg } = els
+  const { pal } = d
+  const s = summary(tasks)
+  const tick = d.isLive ? d.tick : 0
+  const warm = { from: sbMix(pal.track, pal.accent, 0.55), to: pal.accent }
+  const good = { from: sbMix(pal.track, pal.good, 0.55), to: pal.good }
+  const svg = (key: string, width: number, fraction: number, c: { from: string; to: string }, isSweep: boolean, t: number, alt: string) => (
+    <Svg key={key} source={barSvg(width, fraction, c.from, c.to, pal.track, isSweep, pal.tint, t)} alt={alt} width={width} height={9} />
+  )
+  const rows = tasks.map(t => {
+    const bar =
+      t.status === 'done'
+        ? svg(`${t.id}-bar`, ITEM_PX, 1, good, false, 0, `${t.name}: done`)
+        : t.status === 'active'
+          ? d.isLive
+            ? svg(`${t.id}-bar`, ITEM_PX, 0, warm, true, tick, `${t.name}: in progress`)
+            : svg(`${t.id}-bar`, ITEM_PX, 0.5, warm, false, 0, `${t.name}: in progress`)
+          : svg(`${t.id}-bar`, ITEM_PX, 0, warm, false, 0, `${t.name}: not started`)
+    return (
+      <Box key={t.id} alignItems="center" columnGap={1}>
+        <Text color={markColor(pal, t)}>{markerOf(t.status)}</Text>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
+          <Text color={nameColor(pal, t)} bold={t.status === 'active'}>
+            {t.name}
+          </Text>
         </Box>
-      ) : null}
+        <Box flexShrink={0}>{bar}</Box>
+      </Box>
+    )
+  })
+  return (
+    <Box key="todo" flexDirection="column" flexShrink={0} borderStyle="round" borderColor={pal.sep} paddingX={1} gap={1}>
+      {header(els, pal, tasks)}
+      <Box key="main-bar" flexShrink={0}>
+        {svg('main-bar', MAIN_PX, s.done / Math.max(1, s.total), s.isAllDone ? good : warm, false, s.isAllDone ? 0 : tick, `${s.done} of ${s.total} done, ${s.percent}%`)}
+      </Box>
+      <Box flexDirection="column">{rows}</Box>
     </Box>
   )
 }

@@ -1,21 +1,9 @@
 {
   "name": "clean-view",
-  "version": "1.7.1",
-  "description": "A calm, plain-English checklist above the prompt while Claude works, with the tool calls, diffs and command output hidden.",
+  "version": "1.8.0",
+  "description": "Restyles Claude's own to-do list in the transcript: a header with the count, a pixel progress bar, and a pixel bar for each item.",
   "author": {
     "name": "doolecg"
   },
-  "types": "./types/index.d.ts",
-  "userConfig": {
-    "style": {
-      "type": "string",
-      "title": "Style",
-      "description": "Clean shows the full checklist band above the prompt and hides tool calls, diffs and command output. Steps only shows a smaller checklist (one compact line per step) and leaves everything else in the transcript as normal. Default: Clean.",
-      "options": [
-        "Clean",
-        "Steps only"
-      ],
-      "default": "Clean"
-    }
-  }
+  "types": "./types/index.d.ts"
 }

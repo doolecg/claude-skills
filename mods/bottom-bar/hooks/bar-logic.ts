@@ -1,4 +1,25 @@
-import type { BarFigures, BarMode, BarSegment, BarSegmentAction, BarSegmentState, BarTool } from '../types'
+import type { BarFigures, BarMode, BarTodo, BarSegment, BarSegmentAction, BarSegmentState, BarTool } from '../types'
+
+export const EMPTY_TODO: BarTodo = { phase: 'idle', items: [], finishedAt: 0 }
+
+/** Task View's `checklist` state, cut down to what the bar draws. Anything else gives an empty list. */
+export function todoFrom(value: unknown): BarTodo {
+  const v = value as { phase?: unknown; tasks?: unknown; finishedAt?: unknown } | undefined
+  if (!v || !Array.isArray(v.tasks)) return EMPTY_TODO
+  const items = (v.tasks as { name?: unknown; status?: unknown }[])
+    .filter(t => t && typeof t === 'object')
+    .map(t => ({ name: String(t.name ?? ''), status: t.status === 'done' || t.status === 'active' ? t.status : ('upcoming' as const) }))
+  return { phase: typeof v.phase === 'string' ? v.phase : 'idle', items, finishedAt: typeof v.finishedAt === 'number' ? v.finishedAt : 0 }
+}
+
+/** How long a finished list stays in view, green and still. */
+export const DONE_LINGER_MS = 120_000
+
+/** The list shows while it is open, and for a short while once every item is done. */
+export function showsTodo(t: BarTodo, now: number): boolean {
+  if (t.items.length === 0 || t.phase === 'idle') return false
+  return t.phase !== 'done' || now - t.finishedAt < DONE_LINGER_MS
+}
 
 export const EMPTY_FIGURES: BarFigures = {
   model: '',
@@ -111,6 +132,16 @@ export function usedLabel(tokens: number | null, window: number): string {
 export function effortLabel(effort: string | number | undefined | null): string {
   if (effort === undefined || effort === null) return ''
   return String(effort)
+}
+
+/** The app footer's short bar while Claude is idle: `ctx 37% · 373K/1M · 5h 8% · 7d 65%`. */
+export function footerSummary(f: BarFigures): string {
+  const parts = [`ctx ${Math.round(f.ctx ?? 0)}%`]
+  const used = usedLabel(f.tokens, f.window)
+  if (used) parts.push(used)
+  if (f.fiveHour !== null) parts.push(`5h ${Math.round(f.fiveHour)}%`)
+  if (f.sevenDay !== null) parts.push(`7d ${Math.round(f.sevenDay)}%`)
+  return parts.join(' · ')
 }
 
 /** `isPress`: the one part a pickable segment's button holds, so its highlight is one colour. */

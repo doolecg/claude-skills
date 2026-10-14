@@ -2,17 +2,15 @@
 
 Was called Clean View. Its plugin id is still `clean-view`, so installs, settings and `/simple` keep working.
 
-A Claude Code mod that makes Claude feel calm and friendly for people who aren't technical. While Claude works, the tool calls, file diffs and command output are hidden, and one plain checklist sits above the prompt: the plan, what is happening now and how far along it is.
+A Claude Code mod that restyles Claude's own to-do list. When Claude writes its to-do list, the row in the transcript is redrawn as a header, one pixel progress bar for the whole list, and a line with its own small pixel bar for each to-do. Nothing sits above the prompt and no other rows are hidden.
 
 ```
-╭──────────────────────────────────────────────────────────────────────────────────╮
-│ ✶ Build my landing page                                                   1m 12s │
-│ Step 2 of 4 ⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠖⠶⠶⠶⠶⠶⠶⠶⠶⠦⠶⠲⠶⠴⠐⠀⠄⠀⠀⠠⠀⠂⠀⠀⠐⠀⠀⠄⠀⠀⠀⠂⠀⠀⠠⠀⠀⠀⠐⠀⠀⠄⠀⠀⠀⠀⠂   40% │
-│ ✓ Read your brand notes       ⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶  done                                   │
-│ ▶ Build the pricing section   ⠶⠶⠶⠶⠶⠲⠴⠐⠀⠄  60%                                    │
-│ ○ Add the contact form        ⠀⠂⠀⠀⠠⠀⠀⠐⠀⠀                                         │
-│ ○ Polish the footer           ⠄⠀⠀⠂⠀⠀⠠⠀⠀⠀                                         │
-╰──────────────────────────────────────────────────────────────────────────────────╯
+To-do                                              1 of 4 done · 25%
+⠶⠶⠶⠶⠶⠶⠶⠶⠖⠶⠶⠦⠶⠲⠶⠴⠐⠀⠄⠀⠀⠠⠀⠂⠀⠀⠐⠀⠀⠄⠀⠀⠀⠂⠀⠀⠠⠀
+✓ Read your brand notes          ⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶⠶
+▶ Build the pricing section      ⠀⠀⠶⠲⠴⠐⠀⠄⠀⠀⠠⠀⠀⠀⠐⠀
+○ Add the contact form           ⠀⠂⠀⠀⠠⠀⠀⠐⠀⠀⠠⠀⠀⠐⠀⠀
+○ Polish the footer              ⠄⠀⠀⠂⠀⠀⠠⠀⠀⠀⠐⠀⠀⠂⠀⠀
 ```
 
 ## Install
@@ -26,36 +24,42 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 ## Turning it on and off
 
 - It starts on.
-- With the Bottom Bar mod, the toolbox's Mods list shows Task View with an On/Off switch (● on, ○ off); one click flips it.
+- With the Bottom Bar mod, the toolbox's Mods list shows Task View with an On/Off switch; one click flips it.
 - Or type `/simple off`. `/simple on` turns it back on, and `/simple` on its own flips it.
-- When it's off, every hidden row comes back and the band goes away. Your choice is remembered after a restart.
-- The band only shows while there is a job; nothing sits above the prompt otherwise.
+- When it's off, the to-do rows are Claude Code's normal ones. Your choice is remembered after a restart.
 
-## Style
+## What it draws
 
-Set it in `/plugin` (Task View, Style). Default: Clean.
-
-- **Clean:** the full checklist band above the prompt, with tool calls, diffs and command output hidden.
-- **Steps only:** a smaller checklist, one compact line per step under a short header, and everything else in the transcript (tool calls, code, diffs, command output, reasoning) shows as normal. Claude still plans with `plan_steps` and `report_progress`, and questions still open in the band.
-
-## What the band shows
-
-- **Working:** drawn like Flightdeck: the job is an outlined bar with its name and running time in the top edge and Step N of M and the percent in the bottom edge, then every step is its own outlined bar, side by side, wrapping onto more rows on a narrow terminal. Done steps get a green check, the current step a ▶, an accent outline and a meter that fills as Claude reports progress (a moving sweep until the first report), upcoming steps are faint with an empty meter. The job's outline turns amber for Needs you, red for Stuck and green for All done; highlights follow the Bottom Bar's Colour setting.
-- **Meters:** pixel bars in your accent colour (the Colour setting, shared with Bottom Bar: Coral, Amber, Sage, Sky, Lilac or Rose). The lit pixels are scattered at random and fade in from the tail; the pixels at the front are bright and glow. They build up smoothly to each new percent and twinkle; the empty track keeps a faint scatter of dim pixels. A finished bar is solid. The desktop app draws the same look as an SVG: small dots on a dark rounded track.
-- **Needs you:** a highlighted badge and the reason, when Claude needs your OK or has a question.
-- **Questions:** when Claude asks you something, the question takes the whole band in the same outlined look, and the steps come back once it is answered. The question and each option's description wrap in full; the options are numbered, an Other row lets you type your own, and the question tabs sit in the bottom edge. Press an option's number or click it; multi-select questions tick options and finish with Done (`d`); Skip dismisses. Claude's own question dialog is not shown while the band asks, and your answer goes back as your next message. With no job on screen the panel still opens. A ✕ at the top right clears a stale band.
-- **Helpers:** while background subagents keep running after Claude's turn ends, the header adds Waiting for N helpers and the job only finishes when they are done. A helper's own question still uses Claude's normal dialog.
-- **Stuck:** one plain sentence, when you said no to a step, a step keeps failing, or Claude's servers, your usage limit or the connection got in the way.
-- **Stopped:** when you press Esc.
-- **All done:** with how long it took. After 5 seconds it shrinks to one line.
+- **Header:** "To-do" and how far along: "2 of 4 done · 50%". When every item is done it says "All done · 4 of 4".
+- **Main bar:** done items out of all items. It flickers while an item is in progress.
+- **Each item:** a line with a marker and a small bar. Done items are dim with a green, still bar and a ✓. The item in progress is bold with a ▶ and a flickering accent bar that sweeps along, because Claude gives no percent for it. Pending items are dim with an empty bar and a ○.
+- **Done:** every bar turns green and stays still.
+- **Colour:** the accent follows the Bottom Bar's Colour setting (Coral, Amber, Sage, Sky, Lilac or Rose).
+- **Bars:** in the terminal they are pixel bars made of braille dots. In the desktop app they are small dots on a dark rounded track drawn as SVG, 360 pixels wide for the main bar and 160 for each item.
 
 ## How it works
 
-- Claude gets two tools, `plan_steps` and `report_progress`, and is told to plan every request in plain English first. Other tools wait until a plan exists (subagents are never held up). A to-do list from TodoWrite or TaskCreate counts as the plan too.
-- Haiku names each job in a few words in the background.
-- The checklist is kept in plugin state under `clean-view` (`cleanViewEnabled`, `checklist`, `tick`, and `modes` for the Bottom Bar), typed in `types/index.d.ts`, so other mods can read it.
+- It redraws the `ToolUse` row of Claude's `TodoWrite` tool from the list in that call, and blanks the matching result row so the list shows once. Older to-do rows in the transcript keep their own list, with no moving bars.
+- The `TaskCreate`, `TaskUpdate` and `TaskList` tools change one running list, so Task View keeps that list itself and the latest of those rows draws it; the earlier ones are hidden.
+- The 250ms frame clock runs only while the latest list has an item in progress and Claude's turn is running. It stops when everything is done, when Claude waits for you, and when you press Esc.
+- The list is kept in plugin state under `clean-view` (`cleanViewEnabled`, `checklist`, `tick`, `todoUse`, and `modes` for the Bottom Bar), typed in `types/index.d.ts`. The Sidebar's Task View tab reads `checklist`.
 
-Works in the terminal and in the desktop app. The desktop app gets its own drawing: a rounded card, native buttons for the questions and an Other field, and pixel bars drawn as SVG, with no box-drawing.
+Works in the terminal and in the desktop app.
+
+## In the desktop app
+
+In the Code tab Claude keeps the app's own working list (its `update_plan` tool) instead of `TodoWrite`. Task View follows that list as well: `items` sets it, `advance`, `done` and `start` move it, and `wrap_up` checks everything off. With the Bottom Bar mod installed, the list is drawn with pixel bars in the band above the prompt while Claude works, with the bar underneath. A finished list stays green and still for two minutes.
+
+## Limits
+
+- The app's own pinned task list still shows; mods can't hide or restyle it, so in the app the steps appear twice.
+- In the app the list above the prompt needs the Bottom Bar mod, and shows only while Claude works (the app hides that band when idle).
+- It only restyles rows for the to-do tools above. Claude has to be using its to-do list; Task View no longer asks Claude to plan, and nothing is drawn above the prompt.
+- The in-progress item has no real percent, so its bar moves instead of filling.
+- The Task tools' running list starts from the calls Task View sees, so a list made before the mod loaded shows only what changes afterwards (a `TaskList` call fills it in again).
+- Item names are Claude's own words, cut to 120 characters. On a narrow terminal long names are cut with an ellipsis.
+- The terminal bars are a fixed size (36 cells for the main bar, 16 for each item), shrunk only when the row is narrower than that.
+- Restart Claude Code after updating so the new version loads.
 
 ## Development
 

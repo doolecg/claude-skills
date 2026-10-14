@@ -1,6 +1,6 @@
 {
   "name": "bottom-bar",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "A compact rounded bar at the bottom of the terminal and the desktop app (model, effort, context and tokens used, 5-hour and 7-day usage, agents) with a Doole's Tools button that opens a toolbox.",
   "author": { "name": "doolecg" },
   "types": "./types/index.d.ts",
