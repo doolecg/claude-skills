@@ -8,20 +8,22 @@ export type CatalogEntry = {
   id: string
   icon: string
   name: string
+  /** The one word its tab shows in the strip. */
+  label: string
   about: string
   pane?: { command: string }
 }
 
 export const CATALOG: readonly CatalogEntry[] = [
-  { id: 'flightdeck', icon: '✈', name: 'Flightdeck', about: 'The main session and every subagent working now.', pane: { command: 'flightdeck' } },
-  { id: 'self-improve', icon: '✺', name: 'Self Improve', about: 'Learns from finished sessions and keeps soul.md.', pane: { command: 'learn' } },
-  { id: 'clean-view', icon: '✶', name: 'Clean View', about: 'A plain checklist above the prompt while Claude works.' },
-  { id: 'idea-shelf', icon: '◇', name: 'Idea Shelf', about: 'Park ideas while Claude works and send them later.', pane: { command: 'ideas' } },
-  { id: 'folder-tracker', icon: '⇄', name: 'Folder Tracker', about: 'Other sessions working in this folder.', pane: { command: 'folders' } },
-  { id: 'prompt-enhancer', icon: '✎', name: 'Prompt Enhancer', about: 'Rewrites the prompt box into a clearer prompt.' },
-  { id: 'design-picker', icon: '◐', name: 'Design Picker', about: 'Opens a gallery when Claude asks you to pick a look.' },
-  { id: 'plain-english', icon: '¶', name: 'Plain English', about: 'Plainer replies, checked against your rules.' },
-  { id: 'bottom-bar', icon: '▭', name: 'Bottom Bar', about: 'The rounded bar under the prompt and its toolbox.' },
+  { id: 'flightdeck', icon: '✈', name: 'Flightdeck', label: 'Flightdeck', about: 'The main session and every subagent working now.', pane: { command: 'flightdeck' } },
+  { id: 'self-improve', icon: '✺', name: 'Self Improve', label: 'Improve', about: 'Learns from finished sessions and keeps soul.md.', pane: { command: 'learn' } },
+  { id: 'clean-view', icon: '✶', name: 'Clean View', label: 'Steps', about: 'A plain checklist above the prompt while Claude works.' },
+  { id: 'idea-shelf', icon: '◇', name: 'Idea Shelf', label: 'Ideas', about: 'Park ideas while Claude works and send them later.', pane: { command: 'ideas' } },
+  { id: 'folder-tracker', icon: '⇄', name: 'Folder Tracker', label: 'Folders', about: 'Other sessions working in this folder.', pane: { command: 'folders' } },
+  { id: 'prompt-enhancer', icon: '✎', name: 'Prompt Enhancer', label: 'Enhance', about: 'Rewrites the prompt box into a clearer prompt.' },
+  { id: 'design-picker', icon: '◐', name: 'Design Picker', label: 'Design', about: 'Opens a gallery when Claude asks you to pick a look.' },
+  { id: 'plain-english', icon: '¶', name: 'Plain English', label: 'Plain', about: 'Plainer replies, checked against your rules.' },
+  { id: 'bottom-bar', icon: '▭', name: 'Bottom Bar', label: 'Bar', about: 'The rounded bar under the prompt and its toolbox.' },
 ]
 
 export const SIDEBAR_TAB = 'sidebar'
@@ -39,7 +41,7 @@ export function tabsFor(installed: readonly string[], order: readonly string[], 
   return known
     .filter(c => !hidden.includes(c.id))
     .sort((a, b) => rank(a.id) - rank(b.id))
-    .map(c => ({ id: c.id, icon: c.icon, name: c.name, badge: Math.max(0, Math.floor(badges[c.id] ?? 0)) }))
+    .map(c => ({ id: c.id, icon: c.icon, name: c.name, label: c.label, badge: Math.max(0, Math.floor(badges[c.id] ?? 0)) }))
 }
 
 /** All installed catalog mods in the person's order, hidden ones included: the sidebar's own settings list. */

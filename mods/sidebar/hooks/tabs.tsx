@@ -1,9 +1,10 @@
 import type { SbJob, SbMode, SbTab } from '../types'
 import { CATALOG, SETTINGS_PREFIX, SIDEBAR_TAB, entryOf, fmtElapsed, progressOf } from './logic'
 import {
-  sbBar,
   sbButton,
+  sbCappedBar,
   sbCard,
+  sbFramedBar,
   sbGood,
   sbMeter,
   sbPad,
@@ -100,8 +101,7 @@ function cleanView(k: SbKit, d: ViewData) {
     const label = isDone ? `${sum.total} of ${sum.total} steps` : `Step ${sum.step} of ${sum.total}`
     const pctText = `${sum.percent}%`.padStart(4)
     const inner = k.columns - 4
-    const bar = Math.max(4, inner - label.length - pctText.length - 2)
-    const nameWidth = Math.max(8, Math.min(26, inner - 2 - 10 - 7))
+    const nameWidth = Math.max(8, Math.min(26, inner - 2 - 12 - 7))
     const rows = job.tasks.map((t, i) => {
       const done = t.status === 'done'
       const active = t.status === 'active'
@@ -114,7 +114,7 @@ function cleanView(k: SbKit, d: ViewData) {
             {sbPad(t.name, nameWidth)}
           </Text>
           <Text> </Text>
-          {sbBar(k, `step-bar:${t.id}`, pixels)}
+          {sbCappedBar(k, `step-bar:${t.id}`, pixels)}
           <Text color={active ? pal.accent : pal.dim}>{done ? '  done' : active ? (t.hasReported ? `  ${t.percent}%` : '  …') : ''}</Text>
         </Box>
       )
@@ -135,13 +135,14 @@ function cleanView(k: SbKit, d: ViewData) {
             </Text>,
             <Text color={pal.dim}>{isDone ? `took ${took}` : took}</Text>,
           ),
-          sum.total > 0 ? (
-            <Box key="job-bar" height={1}>
-              <Text color={pal.dim}>{`${label} `}</Text>
-              {sbBar(k, 'job-all', isDone ? sbMeter(bar, 1, sbGood(k)) : sbMeter(bar, sum.percent / 100, sbWarm(k)))}
-              <Text color={isDone ? pal.good : pal.accent} bold>{` ${pctText}`}</Text>
-            </Box>
-          ) : null,
+          sum.total > 0
+            ? sbFramedBar(k, 'job-bar', {
+                width: inner,
+                bar: cells => (isDone ? sbMeter(cells, 1, sbGood(k)) : sbMeter(cells, sum.percent / 100, sbWarm(k))),
+                top: [{ text: label, color: pal.dim }],
+                topRight: [{ text: pctText.trim(), color: isDone ? pal.good : pal.accent, bold: true }],
+              })
+            : null,
           ...rows,
         ],
         { border: isDone ? pal.good : job.phase === 'needs-you' ? pal.warn : job.phase === 'stuck' ? pal.bad : undefined },

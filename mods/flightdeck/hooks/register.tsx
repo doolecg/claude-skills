@@ -16,7 +16,7 @@ import {
   statusFromReason,
   wantOpen,
 } from './logic'
-import { drawPane } from './pane'
+import { drawPane, type PaneLayout } from './pane'
 import { SIDEBAR_COLUMNS, isSidebarTab, sbAsker, sbPaneMove, type SbStrip } from './sidebar-kit'
 
 type Dollar = EngineInterface
@@ -32,6 +32,14 @@ const tickAtom = atom({ plugin: 'flightdeck', key: 'tick' } as const, 0)
 const themeAtom = atom({ plugin: 'flightdeck', key: 'theme' } as const, 'dark')
 const modesAtom = atom({ plugin: 'flightdeck', key: 'modes' } as const, {})
 const askAtom = atom({ plugin: 'flightdeck', key: 'sidebarAsk' } as const, { args: '', n: 0 })
+const runOffsetAtom = atom({ plugin: 'flightdeck', key: 'runOffset' } as const, 0)
+const doneOffsetAtom = atom({ plugin: 'flightdeck', key: 'doneOffset' } as const, 0)
+const clearedAtom = atom({ plugin: 'flightdeck', key: 'cleared' } as const, [])
+
+/** Where the last draw put the two lists, so a wheel over one scrolls that list alone. */
+let layout: PaneLayout | undefined
+/** The first row the engine's window showed at the last draw. */
+let bodyOffset = 0
 
 /** Asks the Sidebar to do what `/sidebar <args>` does, through this mod's own state: no command is run. */
 const askSidebar = ($: Dollar, args: string) => update($, askAtom, v => ({ args, n: (v?.n ?? 0) + 1 }))
@@ -85,7 +93,8 @@ async function changeAgents($: Dollar, fn: (list: FdAgent[]) => FdAgent[]): Prom
 }
 
 async function reconcileAgents($: Dollar): Promise<void> {
-  const listed = await $.agent.list()
+  const cleared = await read($, clearedAtom)
+  const listed = (await $.agent.list()).filter(l => !cleared.includes(l.id))
   const now = await $.clock.now()
   const was = await read($, agentsAtom)
   const next = reconcile(was, listed, now)
@@ -120,6 +129,36 @@ async function setOpen($: Dollar, isOn: boolean): Promise<void> {
   await publishMode($, isOn)
   await quiet(() => $.store.set('isOpen', isOn))
   await syncTicker($)
+}
+
+/** Stops a subagent the way the TaskStop tool does, as the person's own press; a refusal is toasted. */
+async function stopAgent($: Dollar, id: string): Promise<void> {
+  const agent = (await read($, agentsAtom)).find(a => a.id === id)
+  let why = ''
+  try {
+    const r = await $.tool.call({ tool: 'TaskStop', task_id: id, consent: `The user pressed "Stop" on the agent "${agent?.description ?? id}" in Flightdeck.` } as never)
+    if ('deny' in r && r.deny) why = r.deny
+    else if (r.isError) why = r.text ?? 'the agent did not stop'
+  } catch (err) {
+    why = err instanceof Error ? err.message : String(err)
+  }
+  if (why) {
+    $.ui.toast(`Could not stop ${agent?.description || 'that agent'}: ${why}`)
+    return
+  }
+  const now = await $.clock.now()
+  await changeAgents($, list => list.map(a => (a.id === id ? finish(a, 'stopped', now) : a)))
+}
+
+async function stopAll($: Dollar): Promise<void> {
+  for (const a of (await read($, agentsAtom)).filter(isWorking)) await stopAgent($, a.id)
+}
+
+/** Takes finished agents off the list for the rest of this session. */
+async function clearAgents($: Dollar, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return
+  await update($, clearedAtom, list => [...new Set([...(list ?? []), ...ids])].slice(-200))
+  await changeAgents($, list => list.filter(a => !ids.includes(a.id)))
 }
 
 const openPane = ($: Dollar) => $.ui.open({ id: PANE, title: TITLE, columns: SIDEBAR_COLUMNS })
@@ -164,6 +203,7 @@ export const register: Register = on => {
     if (e.reason === 'clear') {
       await quiet(async () => {
         await changeAgents($, () => [])
+        await update($, clearedAtom, () => [])
         await update($, mainAtom, m => ({ ...EMPTY_MAIN, model: m.model, effort: m.effort }))
       })
     }
@@ -290,11 +330,29 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // A wheel over the running or the finished list scrolls that list alone; anywhere else the pane scrolls.
+  on('ui.scroll', { requestId: PANE } as never, async ($, e, next) => {
+    const s = e as unknown as { by: number; pointer?: { row: number } }
+    const L = layout
+    if (!s.pointer || !L || s.by === 0) return next(e)
+    const at = bodyOffset + s.pointer.row
+    const which = at >= L.run[0] && at < L.run[1] ? 'run' : at >= L.done[0] && at < L.done[1] ? 'done' : undefined
+    if (!which) return next(e)
+    const max = which === 'run' ? L.runMax : L.doneMax
+    if (max === 0) return next(e)
+    const step = which === 'run' ? Math.sign(s.by) : s.by
+    const move = (n: number) => Math.max(0, Math.min(max, (n ?? 0) + step))
+    if (which === 'run') await update($, runOffsetAtom, move)
+    else await update($, doneOffsetAtom, move)
+    return {}
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e) as unknown as Record<string, any>
     const theme = await read($, themeAtom)
     const strip = await stripOf($)
-    return drawPane(els, e.surface, {
+    bodyOffset = e.props.scroll?.offset ?? 0
+    const drawn = drawPane(els, e.surface, {
       pal: paletteFor(theme),
       theme,
       strip: isSidebarTab(strip, PANE) ? strip : undefined,
@@ -305,6 +363,16 @@ export const register: Register = on => {
       tick: await read($, tickAtom),
       now: await $.clock.now(),
       columns: e.props.bodyColumns,
+      bodyRows: e.props.scroll?.bodyRows ?? 40,
+      runOffset: await read($, runOffsetAtom),
+      doneOffset: await read($, doneOffsetAtom),
+      onStop: id => void quiet(() => stopAgent($, id)),
+      onStopAll: () => void quiet(() => stopAll($)),
+      onClear: id => void quiet(() => clearAgents($, [id])),
+      onClearAll: () =>
+        void quiet(async () => clearAgents($, (await read($, agentsAtom)).filter(a => !isWorking(a)).map(a => a.id))),
     })
+    layout = drawn.layout
+    return drawn.el
   })
 }

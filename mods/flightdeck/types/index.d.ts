@@ -54,13 +54,18 @@ declare module 'claude-code' {
       modes: Record<string, FdMode>
       /** The Sidebar request a strip press or pane close writes (what `/sidebar <args>` does); `n` counts up so a repeat is a new value. */
       sidebarAsk: { args: string; n: number }
+      /** The first running card and the first finished row the pane's two lists show. */
+      runOffset: number
+      doneOffset: number
+      /** Agents the person cleared off the list this session. */
+      cleared: string[]
     }
     /** The Sidebar mod's strip, as it publishes it (the same shape as its SbStrip). */
     'sidebar': {
       strip: {
         isOn: boolean
         active: string
-        tabs: { id: string; icon: string; name: string; badge: number }[]
+        tabs: { id: string; icon: string; name: string; label?: string; badge: number }[]
         theme: string
         colour: string
         isSettings?: boolean

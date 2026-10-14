@@ -19,6 +19,7 @@ import {
   wantOpen,
   windowOf,
 } from '../hooks/logic'
+import { RUN_ROWS, scrollThumb, splitRows } from '../hooks/pane'
 import { DENSE_FULL, sbMeter, sbRasterCells, sbSweep } from '../hooks/sidebar-kit'
 
 const PLUGIN = 'flightdeck'
@@ -107,6 +108,18 @@ describe('logic', () => {
     expect(wantOpen('off', false)).toBe(false)
   })
 
+  test('the running and finished lists share the rows left, each scrolling on its own', () => {
+    expect(splitRows(30, 9, 4)).toEqual({ run: 9, done: 4 })
+    const tight = splitRows(20, 10 * RUN_ROWS, 12)
+    expect(tight.run % RUN_ROWS).toBe(0)
+    expect(tight.run + tight.done).toBeLessThanOrEqual(20)
+    expect(tight.done).toBeGreaterThanOrEqual(3)
+    expect(splitRows(2, 6, 5)).toEqual({ run: 3, done: 3 })
+    expect(scrollThumb(6, 3, 6, 0)).toEqual([0, 6])
+    expect(scrollThumb(6, 12, 6, 0)).toEqual([0, 3])
+    expect(scrollThumb(6, 12, 6, 6)).toEqual([3, 6])
+  })
+
   test('pixel meters and critters have the size they are drawn at', () => {
     const look = { stops: ['#E8A06A', '#D9667F'], track: '#3A3531', tint: '#FFF6EC', tick: 3 }
     expect(sbMeter(20, 0.4, look)).toHaveLength(20)
@@ -124,10 +137,14 @@ describe('logic', () => {
 
 // ---------------------------------------------------------------- wiring
 
-type World = { opened: any[]; closed: string[]; panes: string[]; modes: unknown[]; listed: any[] }
+type World = { opened: any[]; closed: string[]; panes: string[]; modes: unknown[]; listed: any[]; stopped: string[] }
 
 function world(on: any): World {
-  const w: World = { opened: [], closed: [], panes: [], modes: [], listed: [] }
+  const w: World = { opened: [], closed: [], panes: [], modes: [], listed: [], stopped: [] }
+  on('tool.call', { tool: 'TaskStop' } as any, (_$: any, e: any) => {
+    w.stopped.push(e.task_id)
+    return { result: { message: 'stopped' }, text: 'stopped' }
+  })
   const clock = mock.clock(on, { now: T0 })
   void clock
   mock.store(on)
@@ -261,9 +278,10 @@ describe('wiring', () => {
       expect(all).toContain('high')
       expect(all).toContain('23%')
       expect(all).toContain('$1.42')
-      expect(all).toContain('5h ')
-      expect(all).toContain('7d ')
-      expect(all).toContain('No subagents yet')
+      expect(all).toContain('5h')
+      expect(all).toContain('7d')
+      expect(all).toContain('╭')
+      expect(all).toContain('Subagents show here while they work.')
       await ui.unmount()
     }
   })
@@ -279,7 +297,9 @@ describe('wiring', () => {
     const name = critterOf('agent-one').name
 
     const during = await texts($)
-    expect(during.all).toContain('Working')
+    expect(during.all).toContain('RUNNING')
+    expect(during.all).toContain('■ stop')
+    expect(during.all).toContain('■ Stop all')
     expect(during.all).toContain('Say hi (agent one)')
     expect(during.all).toContain('Say hi (agent two)')
     expect(during.all).toContain(name)
@@ -291,10 +311,31 @@ describe('wiring', () => {
 
     await $.turn.complete({ answer: 'hi', durationMs: 6000, isAborted: false, reason: 'answer', turnId: 'S1', agentId: 'agent-one' } as any)
     const after = await texts($)
-    expect(after.all).toMatch(/Finished/)
+    expect(after.all).toContain('DONE')
     expect(after.all).toContain('✓ ')
     expect(after.all).toContain('1 agent working')
     await after.ui.unmount()
+  })
+
+  test('stop asks TaskStop for that agent, and clear takes finished agents off for the session', async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
+    await $.command.run(command('open'))
+    await $.turn.start({ text: 'use two agents', turnId: 't1' })
+    await spawn($, 'one')
+    await spawn($, 'two', 'Say hi (agent two)')
+    const ui = await $.ui.mount({ ...pane(60), surface: 'terminal' })
+    await ui.press({ key: 'stop:agent-one' })
+    expect(w.stopped).toEqual(['agent-one'])
+    let all = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join('\n')
+    expect(all).toContain('DONE')
+    expect(all).toContain('1 agent working')
+    w.listed = [{ id: 'agent-one', description: 'Say hi (agent one)', type: 'general-purpose', status: 'killed' }]
+    await ui.press({ key: 'done-head-btn' })
+    all = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join('\n')
+    expect(all).not.toContain('Say hi (agent one)')
+    expect(all).toContain('Nothing finished yet.')
+    await ui.unmount()
   })
 
   test('a narrow sidebar still draws every card', async ($, on) => {

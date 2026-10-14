@@ -1,5 +1,5 @@
 /** One tab in the strip. `id` is the mod's plugin name. */
-export type SbTab = { id: string; icon: string; name: string; badge: number }
+export type SbTab = { id: string; icon: string; name: string; label?: string; badge: number }
 
 /** What every mod's tab pane reads to draw the strip: the tabs, the open one, whether the sidebar is up, and whether it shows that mod's settings page rather than its tab. */
 export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; isSettings?: boolean }

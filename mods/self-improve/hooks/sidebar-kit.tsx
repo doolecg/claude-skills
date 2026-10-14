@@ -2,7 +2,7 @@
 // Every mod that draws a sidebar tab keeps a copy of this file as hooks/sidebar-kit.tsx.
 // Edit it in mods/sidebar/hooks and run `python mods/sidebar/copy-kit.py` so the copies stay the same.
 
-export const KIT_VERSION = 1
+export const KIT_VERSION = 2
 
 /** The pane id every sidebar tab is drawn under its own plugin, and the width they all open at. */
 export const SIDEBAR_COLUMNS = 56
@@ -240,8 +240,8 @@ export function sbRasterCells(pixels: readonly SbPixel[], background?: string): 
 
 // ---- the strip the Sidebar publishes ------------------------------------------
 
-/** One tab in the strip. `id` is the mod's plugin name. */
-export type SbTab = { id: string; icon: string; name: string; badge: number }
+/** One tab in the strip. `id` is the mod's plugin name; `label` the one word the strip shows (`name` without one). */
+export type SbTab = { id: string; icon: string; name: string; label?: string; badge: number }
 
 /** The Sidebar's `strip` state: which tabs show, which one is open, and whether the sidebar is up. */
 export type SbStrip = { isOn: boolean; active: string; tabs: SbTab[]; theme: string; colour: string; isSettings?: boolean }
@@ -394,8 +394,11 @@ export function sbToggle(k: SbKit, key: string, isOn: boolean, onPress: () => vo
 
 const SUPERSCRIPT = '⁰¹²³⁴⁵⁶⁷⁸⁹'
 
-/** A tab's count as one superscript cell (⁺ above 9), or a blank cell for none, so every icon takes three cells. */
+/** A tab's count as one superscript cell (⁺ above 9), or a blank cell for none. */
 export const sbBadge = (n: number): string => (n <= 0 ? ' ' : n > 9 ? '⁺' : SUPERSCRIPT[n]!)
+
+/** The count a tab carries after its word: one superscript cell, or nothing for none. */
+const tabBadge = (n: number): string => (n <= 0 ? '' : sbBadge(n))
 
 export type SbStripActions = {
   /** Opens a tab by its id. */
@@ -406,29 +409,75 @@ export type SbStripActions = {
   onClose: () => void
 }
 
-/** The top card: the sidebar's name, ⋯ and ✕, then a rounded pill for the open tab and a one-cell icon with its count for each other one. */
+/** What a tab shows in the strip: its icon and one word. */
+export const sbTabText = (t: SbTab): string => `${t.icon} ${t.label ?? t.name}`
+
+/** Cells a tab takes: a space either side of its text and its count. */
+const tabCells = (t: SbTab): number => [...sbTabText(t)].length + 2 + tabBadge(t.badge).length
+
+/** The cells across the strip's card, inside its border and padding. */
+export const sbStripWidth = (k: SbKit): number => Math.max(8, k.columns - 4)
+
+/**
+ * The tabs in rows that fill `width`: as many to a row as fit (each tab's own padding parts them), and on
+ * every row the spare cells spread between them, so the strip reaches both edges. `gaps[i]` is
+ * the extra space before tab i.
+ */
+export function sbTabRows(tabs: readonly SbTab[], width: number): { tabs: SbTab[]; gaps: number[] }[] {
+  const rows: SbTab[][] = []
+  let row: SbTab[] = []
+  let used = 0
+  for (const t of tabs) {
+    const w = tabCells(t)
+    if (row.length > 0 && used + w > width) {
+      rows.push(row)
+      row = []
+      used = 0
+    }
+    used += w
+    row.push(t)
+  }
+  if (row.length > 0) rows.push(row)
+  return rows.map(r => {
+    const slots = r.length - 1
+    const spare = width - r.reduce((n, t) => n + tabCells(t), 0)
+    const gaps = r.map((_, i) => {
+      if (i === 0) return 0
+      if (slots === 0) return 0
+      return Math.floor(spare / slots) + (i <= spare % slots ? 1 : 0)
+    })
+    return { tabs: r, gaps }
+  })
+}
+
+/** The rows the strip's card takes: its border, the name row and the tab rows. */
+export const sbStripRows = (k: SbKit, strip: SbStrip): number => 3 + Math.max(1, sbTabRows(strip.tabs, sbStripWidth(k)).length)
+
+/** The top card: the sidebar's name, ⋯ and ✕, then every tab as its icon and word, the open one filled in the accent colour. */
 export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
   const { Box, Text, Button } = k.els
   const { pal } = k
-  const tabs = strip.tabs.map(t => {
-    if (t.id === strip.active) {
-      return (
-        <Button key={`sb-tab:${t.id}`} plain onPress={() => a.onTab(t.id)}>
-          <Text color={pal.accent}>◖</Text>
-          <Text backgroundColor={pal.accent} color={pal.ink} bold>
-            {` ${t.icon} ${t.name} `}
-          </Text>
-          <Text color={pal.accent}>◗</Text>
-        </Button>
-      )
-    }
-    return (
-      <Button key={`sb-tab:${t.id}`} plain onPress={() => a.onTab(t.id)}>
-        <Text color={pal.dim}>{` ${t.icon}`}</Text>
-        <Text color={pal.warn}>{sbBadge(t.badge)}</Text>
-      </Button>
-    )
-  })
+  const rows = sbTabRows(strip.tabs, sbStripWidth(k)).map((r, ri) => (
+    <Box key={`sb-tabs:${ri}`} height={1} overflow="hidden">
+      {r.tabs.map((t, i) => {
+        const isOpen = t.id === strip.active
+        return [
+          r.gaps[i]! > 0 ? <Text key={`sb-gap:${t.id}`}>{' '.repeat(r.gaps[i]!)}</Text> : null,
+          <Button key={`sb-tab:${t.id}`} plain onPress={() => a.onTab(t.id)}>
+            <Text backgroundColor={isOpen ? pal.accent : undefined} color={isOpen ? pal.ink : pal.dim} bold={isOpen}>
+              {` ${sbTabText(t)}`}
+            </Text>
+            {t.badge > 0 ? (
+              <Text backgroundColor={isOpen ? pal.accent : undefined} color={isOpen ? pal.ink : pal.accent}>
+                {tabBadge(t.badge)}
+              </Text>
+            ) : null}
+            <Text backgroundColor={isOpen ? pal.accent : undefined}> </Text>
+          </Button>,
+        ]
+      })}
+    </Box>
+  ))
   return sbCard(k, 'sb-strip', [
     sbSplit(
       k,
@@ -446,10 +495,118 @@ export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
         </Button>
       </Box>,
     ),
-    <Box key="sb-tabs" height={1} overflow="hidden">
-      {tabs}
-    </Box>,
+    ...(rows.length > 0 ? rows : [<Box key="sb-tabs:0" height={1} />]),
   ])
+}
+
+// ---- outlined bars ----------------------------------------------------------------
+
+/** A run of text in a frame's edge; one with `onPress` is a button. */
+export type SbSeg = { text: string; color: string; bold?: boolean; onPress?: () => void; key?: string }
+
+const segCells = (segs: readonly SbSeg[]): number => segs.reduce((n, s) => n + [...s.text].length, 0)
+
+/** `segs` cut to `room` cells, the one that overflows ending in an ellipsis. */
+function clipSegs(segs: readonly SbSeg[], room: number): SbSeg[] {
+  const out: SbSeg[] = []
+  let left = room
+  for (const s of segs) {
+    if (left <= 0) break
+    const n = [...s.text].length
+    out.push(n <= left ? s : { ...s, text: sbClip(s.text, left) })
+    left -= Math.min(n, left)
+  }
+  return out
+}
+
+function drawSegs(k: SbKit, key: string, segs: readonly SbSeg[]) {
+  const { Text, Button } = k.els
+  return segs.map((s, i) => {
+    const text = (
+      <Text key={`${key}:${i}`} color={s.color} bold={s.bold}>
+        {s.text}
+      </Text>
+    )
+    return s.onPress ? (
+      <Button key={s.key ?? `${key}:b${i}`} plain onPress={s.onPress}>
+        {text}
+      </Button>
+    ) : (
+      text
+    )
+  })
+}
+
+/** One edge of a frame `width` cells across: a corner, ` left `, a rule to fill, ` right `, a corner. */
+function frameEdge(k: SbKit, key: string, width: number, corners: [string, string], left: readonly SbSeg[], right: readonly SbSeg[], color: string) {
+  const { Box, Text } = k.els
+  const inner = Math.max(0, width - 2)
+  // The left label keeps at least two fifths of the edge; the right one is cut to what is left.
+  const keep = left.length > 0 ? Math.min(segCells(left) + 2, Math.floor(inner * 0.4)) : 0
+  const r = right.length > 0 ? clipSegs(right, Math.max(0, inner - keep - 3)) : []
+  const rightCells = r.length > 0 ? segCells(r) + 2 : 0
+  const room = Math.max(0, inner - rightCells - 3)
+  const l = left.length > 0 && room > 0 ? clipSegs(left, room) : []
+  const leftCells = l.length > 0 ? segCells(l) + 2 : 0
+  const rule = Math.max(0, inner - leftCells - rightCells)
+  return (
+    <Box key={key} height={1} overflow="hidden">
+      <Text color={color}>{corners[0]}</Text>
+      {l.length > 0 ? <Text color={color}> </Text> : null}
+      {drawSegs(k, `${key}-l`, l)}
+      {l.length > 0 ? <Text color={color}> </Text> : null}
+      <Text color={color}>{'─'.repeat(rule)}</Text>
+      {r.length > 0 ? <Text color={color}> </Text> : null}
+      {drawSegs(k, `${key}-r`, r)}
+      {r.length > 0 ? <Text color={color}> </Text> : null}
+      <Text color={color}>{corners[1]}</Text>
+    </Box>
+  )
+}
+
+export type SbFramed = {
+  /** Cells across, the outline included. */
+  width: number
+  /** The bar's pixels for the cells inside the outline (`width - 2`). */
+  bar: (cells: number) => SbPixel[]
+  top?: SbSeg[]
+  topRight?: SbSeg[]
+  bottom?: SbSeg[]
+  bottomRight?: SbSeg[]
+  /** The outline's colour; the dim text colour by default, so the bar's edge shows. */
+  color?: string
+}
+
+/** A bar inside a rounded outline, three rows tall, with labels set into the top and bottom edges. */
+export function sbFramedBar(k: SbKit, key: string, f: SbFramed) {
+  const { Box, Text } = k.els
+  const color = f.color ?? k.pal.dim
+  const cells = Math.max(1, f.width - 2)
+  return (
+    <Box key={key} flexDirection="column" width={f.width} flexShrink={0} backgroundColor={k.pal.panel}>
+      {frameEdge(k, `${key}-top`, f.width, ['╭', '╮'], f.top ?? [], f.topRight ?? [], color)}
+      <Box key={`${key}-mid`} height={1} overflow="hidden">
+        <Text color={color}>│</Text>
+        {sbBar(k, `${key}-bar`, f.bar(cells))}
+        <Text color={color}>│</Text>
+      </Box>
+      {frameEdge(k, `${key}-bot`, f.width, ['╰', '╯'], f.bottom ?? [], f.bottomRight ?? [], color)}
+    </Box>
+  )
+}
+
+/** A one-row bar with thin outline caps either side (`▕bar▏`), for bars that sit in a line of text. */
+export function sbCappedBar(k: SbKit, key: string, pixels: SbPixel[], bg?: string) {
+  const { Text } = k.els
+  return [
+    <Text key={`${key}-l`} color={k.pal.dim}>
+      ▕
+    </Text>,
+    sbBar(k, key, pixels, bg),
+    <Text key={`${key}-r`} color={k.pal.dim}>
+      ▏
+    </Text>,
+  ]
 }
 
 /** A tab's title row: its icon and NAME in the accent colour, a dim status, and ⚙ Settings or ‹ Back on the right. */

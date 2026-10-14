@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import { CATALOG, fmtElapsed, installedFrom, jobOf, modesOf, move, parseArg, pickTab, progressOf, tabsFor } from '../hooks/logic'
-import { DENSE_FULL, sbAsker, sbBadge, sbMeter, sbPaneMove } from '../hooks/sidebar-kit'
+import { DENSE_FULL, sbAsker, sbBadge, sbMeter, sbPaneMove, sbTabRows } from '../hooks/sidebar-kit'
 
 const SESSION = { cwd: 'F:/proj', surface: 'terminal', isInteractive: true } as any
 const ALL = CATALOG.map(c => c.id)
@@ -31,8 +31,9 @@ describe('logic', () => {
     expect(badged[0]).toMatchObject({ id: 'flightdeck', name: 'Flightdeck' })
   })
 
-  test('every tab icon is one cell and the strip badges are one superscript cell', () => {
+  test('every tab icon is one cell, its label one word, and the strip badges are one superscript cell', () => {
     for (const c of CATALOG) expect([...c.icon]).toHaveLength(1)
+    for (const c of CATALOG) expect(c.label).toMatch(/^\S+$/)
     expect(CATALOG.find(c => c.id === 'bottom-bar')?.icon).toBe('▭')
     expect([0, 1, 5, 9, 12].map(sbBadge)).toEqual([' ', '¹', '⁵', '⁹', '⁺'])
   })
@@ -138,6 +139,18 @@ describe('kit meter', () => {
       near += lit(m[16]!.ch) + lit(m[17]!.ch) + lit(m[18]!.ch)
     }
     expect(tail).toBeLessThan(near)
+  })
+})
+
+describe('kit strip rows', () => {
+  test('the tabs fill the width in as few rows as fit, full rows reaching both edges', () => {
+    const tabs = tabsFor(CATALOG.map(c => c.id), [], [], {})
+    const rows = sbTabRows(tabs, 52)
+    expect(rows).toHaveLength(2)
+    expect(rows.flatMap(r => r.tabs).map(t => t.id)).toEqual(tabs.map(t => t.id))
+    const cells = (r: (typeof rows)[number]) => r.tabs.reduce((n, t, i) => n + r.gaps[i]! + [...`${t.icon} ${t.label}`].length + 2, 0)
+    expect(cells(rows[0]!)).toBe(52)
+    for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(52)
   })
 })
 
@@ -417,15 +430,17 @@ describe('wiring', () => {
     expect(w.ran).toEqual([])
   })
 
-  test('the open tab is a rounded pill with its icon and name', async ($, on) => {
+  test('every tab shows its icon and one word, the open one filled in the accent colour alone', async ($, on) => {
     world(on)
     await $.session.start(SESSION)
     await settle()
     await $.command.run(command('tab clean-view'))
     const { ui, all } = await texts($)
-    expect(all).toContain('◖')
-    expect(all).toContain(' ✶ Clean View ')
-    expect(all).toContain('◗')
+    expect(all).toContain(' ✶ Steps')
+    expect(all).toContain(' ✎ Enhance')
+    expect(all).not.toContain('◖')
+    const open = (await ui.findAll({ type: 'Text' })).find((t: any) => String(t.text) === ' ✶ Steps')
+    expect(open?.props?.backgroundColor).toBe('#D97757')
     await ui.unmount()
   })
 

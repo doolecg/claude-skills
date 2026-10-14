@@ -1,3 +1,19 @@
+# Flightdeck 1.3.0
+
+## New
+- A stop button on each running agent, and Stop all in the Running heading.
+- An ✕ on each finished agent to clear it, and Clear in the Done heading. Cleared agents stay hidden for the rest of the session.
+- The Running and Done lists scroll on their own: the mouse wheel scrolls the list it is over, and each shows a scrollbar when it has more than fits.
+
+## Changed
+- Agents take much less room: a running agent is a 3-row outlined bar with its task, time and stop button on the top edge and its nickname, model and context on the bottom edge. A finished agent is one line.
+- Every bar has an outline: context, the 5-hour and 7-day limits, and each agent.
+- The Done list keeps every finished agent instead of the last 5.
+- The totals are one line, and the pixel critter picture is gone from the agent rows (the nickname stays).
+- The Sidebar's tab strip on top shows each tab as a symbol and a word, spread across the full width, with the open tab filled in one accent colour.
+
+---
+
 # Flightdeck 1.2.0
 
 ## Changed

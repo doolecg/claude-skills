@@ -1,3 +1,12 @@
+# Sidebar 1.2.0
+
+## Changed
+- Each tab shows a symbol and a word (Flightdeck, Improve, Steps, Ideas, Folders, Enhance, Design, Plain, Bar), and the tabs spread across the full width in as few rows as fit.
+- The open tab is filled in the one accent colour. Counts on tabs use the same colour.
+- Clean View's overall progress bar has an outline, and each step's small bar has edge lines.
+
+---
+
 # Sidebar 1.1.0
 
 ## Changed

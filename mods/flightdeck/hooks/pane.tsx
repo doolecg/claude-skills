@@ -1,34 +1,31 @@
 import type { FdAgent, FdMain, FdUsage } from '../types'
-import { critterOf, critterPixels, rasterOf, svgOf } from './critter'
+import { critterOf } from './critter'
 import {
-  STATUS_WORD,
   agentMetrics,
-  clip,
   fmtDuration,
   fmtUsd,
   groupAgents,
-  isFinished,
   limitLabel,
   modelName,
   summaryOf,
-  width,
   windowLabel,
   windowOf,
   type Palette,
 } from './logic'
 import {
-  sbBar,
   sbFrame,
-  sbGood,
+  sbFramedBar,
   sbKit,
   sbLevel,
   sbMeter,
+  sbStripRows,
   sbSweep,
   sbTitle,
   sbWarm,
   sbActions,
   sbPalette,
   type SbLook,
+  type SbSeg,
   type SbStrip,
 } from './sidebar-kit'
 
@@ -40,47 +37,65 @@ export type PaneData = {
   tick: number
   now: number
   columns: number
+  /** The rows the pane's body shows at once. */
+  bodyRows: number
+  /** The first running card and the first finished row the two lists show. */
+  runOffset: number
+  doneOffset: number
   /** The Sidebar's strip when this pane is its open tab; the pane then draws as a tab. */
   strip?: SbStrip
   theme: unknown
   /** Asks the Sidebar for a tab or its settings (see `sbAsker`). */
   ask: (args: string) => void
+  onStop: (id: string) => void
+  onStopAll: () => void
+  onClear: (id: string) => void
+  onClearAll: () => void
 }
 
-const CRITTER = 12
+/** Where the two lists sit in the pane's rows, for the scroll hook: `[first, end)` rows and how far each can scroll. */
+export type PaneLayout = { run: [number, number]; done: [number, number]; runMax: number; doneMax: number }
 
-/** The sidebar: a card for the main session, the subagents' totals, then a card per subagent. */
-export function drawPane(els: Record<string, any>, surface: string, d: PaneData) {
-  const { Box, Text } = els
-  const isTerminal = surface === 'terminal'
-  const Raster = isTerminal && 'Raster' in els ? els.Raster : undefined
-  const Svg = !isTerminal && 'Svg' in els ? els.Svg : undefined
+/** Rows a running agent's outlined card takes. */
+export const RUN_ROWS = 3
+
+/** How many rows each list gets: both whole when they fit, else the running list first, keeping some for the finished one. */
+export function splitRows(avail: number, runNeed: number, doneNeed: number): { run: number; done: number } {
+  if (runNeed + doneNeed <= avail) return { run: runNeed, done: doneNeed }
+  const doneFloor = Math.min(doneNeed, Math.max(3, Math.floor(avail / 3)))
+  let run = Math.min(runNeed, Math.max(RUN_ROWS, avail - doneFloor))
+  run -= run % RUN_ROWS
+  run = Math.max(Math.min(runNeed, RUN_ROWS), run)
+  const done = Math.min(doneNeed, Math.max(Math.min(doneNeed, 3), avail - run))
+  return { run, done }
+}
+
+/** The thumb of a one-column scrollbar `rows` tall over `total` items, `shown` of them from `offset`. */
+export function scrollThumb(rows: number, total: number, shown: number, offset: number): [number, number] {
+  if (total <= shown || rows <= 0) return [0, rows]
+  const size = Math.max(1, Math.round((rows * shown) / total))
+  const top = Math.min(rows - size, Math.round(((rows - size) * offset) / Math.max(1, total - shown)))
+  return [top, top + size]
+}
+
+/** The sidebar: the main session's outlined meters, then a list of running agents and one of finished agents, each scrolling on its own. */
+export function drawPane(els: Record<string, any>, surface: string, d: PaneData): { el: unknown; layout: PaneLayout } {
+  const { Box, Text, Button } = els
   const { main, usage, tick, now, strip } = d
   const k = sbKit(els, surface, sbPalette(strip?.theme ?? d.theme, strip?.colour), d.columns, tick)
   const pal = strip ? k.pal : d.pal
-  const inner = Math.max(16, d.columns - 4)
+  const full = Math.max(16, d.columns)
   const groups = groupAgents(d.agents)
+  const working = groups.working.length
+  let row = strip ? sbStripRows(k, strip) : 0
 
-  const meter = (key: string, pixels: ReturnType<typeof sbMeter>) => sbBar(k, key, pixels, pal.panel)
-
-  const card = (key: string, children: unknown, direction: 'row' | 'column' = 'column') => (
-    <Box
-      key={key}
-      flexDirection={direction}
-      columnGap={direction === 'row' ? 1 : undefined}
-      borderStyle="round"
-      borderColor={pal.border}
-      backgroundColor={pal.panel}
-      paddingX={1}
-      width="100%"
-    >
+  const line = (key: string, children: unknown, w = full) => (
+    <Box key={key} height={1} width={w} overflow="hidden">
       {children}
     </Box>
   )
-
-  // A row with text on the left that clips and text on the right that stays whole.
-  const split = (key: string, left: unknown, right: unknown) => (
-    <Box key={key} width="100%">
+  const split = (key: string, left: unknown, right: unknown, w = full) => (
+    <Box key={key} height={1} width={w}>
       <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
         {left}
       </Box>
@@ -91,114 +106,130 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       ) : null}
     </Box>
   )
+  const button = (key: string, label: string, color: string, onPress: () => void) => (
+    <Button key={key} plain onPress={onPress}>
+      <Text color={color}>{label}</Text>
+    </Button>
+  )
 
   // ---- header ----
-  const working = groups.working.length
+  const status = working > 0 ? `${working} agent${working === 1 ? '' : 's'} working` : 'no agents working'
   const header = strip
-    ? sbTitle(
-        k,
-        { icon: '✈', name: 'Flightdeck', status: working > 0 ? `${working} agent${working === 1 ? '' : 's'} working` : 'no agents working' },
-        { label: 'Settings', onPress: () => d.ask('settings flightdeck') },
-      )
+    ? sbTitle(k, { icon: '✈', name: 'Flightdeck', status }, { label: 'Settings', onPress: () => d.ask('settings flightdeck') })
     : split(
         'header',
         <Text wrap="truncate-end">
           <Text color={pal.accent} bold>
             ✈ FLIGHTDECK
           </Text>
-          <Text color={pal.dim}>{working > 0 ? ` · ${working} agent${working === 1 ? '' : 's'} working` : ' · no agents working'}</Text>
+          <Text color={pal.dim}>{` · ${status}`}</Text>
         </Text>,
-        <Text>
-          <Text color={pal.accent}>■</Text>
-          <Text color={pal.dim}> main </Text>
-          <Text color={pal.info}>■</Text>
-          <Text color={pal.dim}> agents</Text>
-        </Text>,
+        null,
       )
+  row += 1
 
-  // ---- main session ----
+  // ---- main session: context in an outlined meter, the usage limits beside each other ----
   const model = modelName(main.model) || 'Main session'
   const size = windowLabel(usage.window)
-  const effort = main.effort
-  const stateText = main.isRunning ? '● working' : '○ idle'
-  const top = split(
-    'main-top',
-    <Text wrap="truncate-end">
-      <Text color={pal.accent}>◆ </Text>
-      <Text color={pal.text} bold>
-        {model}
-      </Text>
-      {size ? <Text color={pal.dim}>{` · ${size}`}</Text> : null}
-      {effort ? <Text color={pal.dim}>{'  effort '}</Text> : null}
-      {effort ? <Text color={pal.info} bold>{effort}</Text> : null}
-    </Text>,
-    <Text color={main.isRunning ? pal.good : pal.dim}>{stateText}</Text>,
-  )
-
   const pct = usage.ctxPct ?? 0
-  const pctText = usage.ctxPct === null ? '  —' : `${Math.round(pct)}%`.padStart(4)
-  const cost = usage.costUsd !== null ? fmtUsd(usage.costUsd) : ''
-  const ctxBar = Math.max(4, inner - 4 - 1 - width(pctText) - (cost ? width(cost) + 3 : 0))
-  const ctxRow = (
-    <Box key="main-ctx">
-      <Text color={pal.dim}>ctx </Text>
-      {meter('ctx', sbMeter(ctxBar, pct / 100, sbLevel(k, pct, 1)))}
-      <Text color={pal.text}>{` ${pctText}`}</Text>
-      {cost ? <Text color={pal.dim}>{' · '}</Text> : null}
-      {cost ? <Text color={pal.text}>{cost}</Text> : null}
-    </Box>
-  )
-
+  const turnMs = main.turnStartedAt > 0 ? (main.turnEndedAt > 0 ? main.turnEndedAt : now) - main.turnStartedAt : 0
+  const turnText = main.turnStartedAt > 0 ? `${main.isRunning ? 'turn' : 'last turn'} ${fmtDuration(turnMs)}` : 'no turn yet'
+  const ctxFrame = sbFramedBar(k, 'main-ctx', {
+    width: full,
+    bar: cells => sbMeter(cells, pct / 100, sbLevel(k, pct, 1)),
+    top: [
+      { text: '◆ ', color: pal.accent },
+      { text: model, color: pal.text, bold: true },
+      ...(size ? [{ text: ` · ${size}`, color: pal.dim }] : []),
+      ...(main.effort ? [{ text: ' · effort ', color: pal.dim }, { text: main.effort, color: pal.info, bold: true }] : []),
+    ],
+    topRight: [{ text: main.isRunning ? '● working' : '○ idle', color: main.isRunning ? pal.good : pal.dim }],
+    bottom: [
+      { text: 'ctx ', color: pal.dim },
+      { text: usage.ctxPct === null ? '—' : `${Math.round(pct)}%`, color: pal.text },
+      ...(usage.costUsd !== null ? [{ text: ` · ${fmtUsd(usage.costUsd)}`, color: pal.text }] : []),
+    ],
+    bottomRight: [{ text: `${turnText} · ${main.steps} req`, color: pal.dim }],
+  })
+  row += 3
   const limits = usage.limits.slice(0, 2)
-  const half = limits.length > 1 ? Math.floor((inner - 3) / 2) : inner
-  const limitRow =
+  const half = limits.length > 1 ? Math.floor((full - 1) / 2) : full
+  const limitFrames =
     limits.length > 0 ? (
-      <Box key="main-limits">
-        {limits.map((l, i) => {
-          const label = `${limitLabel(l.kind)} `
-          const value = ` ${Math.round(l.pct)}%`.padStart(5)
-          const bar = Math.max(3, half - width(label) - width(value))
-          return [
-            i > 0 ? <Text key={`gap${i}`}>{'   '}</Text> : null,
-            <Text key={`l${i}`} color={pal.dim}>
-              {label}
-            </Text>,
-            meter(`lim${i}`, sbMeter(bar, l.pct / 100, sbLevel(k, l.pct, 2 + i))),
-            <Text key={`v${i}`} color={l.pct >= 80 ? pal.bad : l.pct >= 60 ? pal.warn : pal.text}>
-              {value}
-            </Text>,
-          ]
-        })}
+      <Box key="main-limits" columnGap={1}>
+        {limits.map((l, i) =>
+          sbFramedBar(k, `lim${i}`, {
+            width: i === 1 ? full - 1 - half : half,
+            bar: cells => sbMeter(cells, l.pct / 100, sbLevel(k, l.pct, 2 + i)),
+            top: [{ text: limitLabel(l.kind), color: pal.dim }],
+            topRight: [{ text: `${Math.round(l.pct)}%`, color: l.pct >= 80 ? pal.bad : l.pct >= 60 ? pal.warn : pal.text }],
+          }),
+        )}
       </Box>
     ) : null
+  if (limits.length > 0) row += 3
 
-  const turnMs = main.turnStartedAt > 0 ? (main.turnEndedAt > 0 ? main.turnEndedAt : now) - main.turnStartedAt : 0
-  const turnText =
-    main.turnStartedAt > 0 ? `${main.isRunning ? 'turn' : 'last turn'} ${fmtDuration(turnMs)}` : 'no turn yet'
-  const footer = split(
-    'main-foot',
-    <Text color={pal.dim} wrap="truncate-end">
-      {`${turnText} · ${main.steps} request${main.steps === 1 ? '' : 's'}`}
+  // ---- the agents' totals and the two lists ----
+  const sum = summaryOf(d.agents, now)
+  const totals = split(
+    'totals',
+    <Text wrap="truncate-end">
+      <Text color={pal.dim} bold>
+        AGENTS
+      </Text>
+      <Text color={pal.dim}>{d.agents.length > 0 ? `  ${sum.cost} · ${sum.tokens} tokens · ${sum.time}` : '  none yet'}</Text>
     </Text>,
-    working > 0 ? <Text color={pal.info}>{`${working} running`}</Text> : null,
+    null,
   )
+  row += 1
 
-  const mainCard = card('main', [top, ctxRow, limitRow, footer])
-
-  // ---- subagents ----
-  const textWidth = Math.max(8, inner - (Raster || Svg ? CRITTER + 1 : 0))
-  const avatar = (a: FdAgent) => {
-    const isBobbing = !isFinished(a)
-    if (Raster) {
-      const r = rasterOf(critterPixels(a.id, isBobbing && Math.floor(tick / 2) % 2 === 1), pal.panel)
-      return <Raster key={`critter:${a.id}`} columns={r.columns} rows={r.rows} cells={r.cells} />
-    }
-    if (Svg) {
-      const c = critterOf(a.id)
-      return <Svg key={`critter:${a.id}`} source={svgOf(a.id, isBobbing)} alt={`${c.name}, a ${c.tint} critter in a ${c.hat}`} width={24} height={24} />
-    }
-    return null
+  const heading = (key: string, label: string, n: number, isLive: boolean, action?: { label: string; color: string; onPress: () => void }) => {
+    const text = `${label} · ${n} `
+    const right = action ? [` ${action.label}`] : []
+    const rule = Math.max(0, full - [...text].length - right.reduce((s, t) => s + [...t].length, 0))
+    return line(key, [
+      <Text key="t" color={isLive ? pal.text : pal.dim} bold>
+        {label}
+      </Text>,
+      <Text key="n" color={isLive ? pal.accent : pal.dim}>{` · ${n} `}</Text>,
+      <Text key="r" color={pal.sep}>
+        {'─'.repeat(rule)}
+      </Text>,
+      action ? button(`${key}-btn`, ` ${action.label}`, action.color, action.onPress) : null,
+    ])
   }
+
+  row += 1
+  const runNeed = Math.max(1, working * RUN_ROWS)
+  const doneNeed = Math.max(1, groups.finished.length)
+  const avail = Math.max(0, d.bodyRows - row - 1)
+  const rows = splitRows(avail, runNeed, doneNeed)
+  const runShown = Math.max(1, Math.floor(rows.run / RUN_ROWS))
+  const runMax = Math.max(0, working - runShown)
+  const runOffset = Math.max(0, Math.min(runMax, d.runOffset))
+  const runTop = row
+  row += working > 0 ? Math.min(working, runShown) * RUN_ROWS : 1
+  const runEnd = row
+  row += 1
+  const doneShown = Math.max(1, rows.done)
+  const doneMax = Math.max(0, groups.finished.length - doneShown)
+  const doneOffset = Math.max(0, Math.min(doneMax, d.doneOffset))
+  const doneTop = row
+  row += groups.finished.length > 0 ? Math.min(groups.finished.length, doneShown) : 1
+
+  const bar = (key: string, rowsTall: number, total: number, shown: number, offset: number) => {
+    const [a, b] = scrollThumb(rowsTall, total, shown, offset)
+    return (
+      <Box key={key} flexDirection="column" width={1} flexShrink={0}>
+        {Array.from({ length: rowsTall }, (_, i) => (
+          <Text key={i} color={i >= a && i < b ? pal.accent : pal.sep}>
+            {i >= a && i < b ? '┃' : '│'}
+          </Text>
+        ))}
+      </Box>
+    )
+  }
+
   const mark = (a: FdAgent): [string, string] =>
     a.status === 'running'
       ? ['✳', pal.accent]
@@ -210,118 +241,101 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
             ? ['✗', pal.bad]
             : ['■', pal.dim]
   const flat = (stops: string[], seed = 0): SbLook => ({ stops, track: pal.track, tint: pal.tint, tick, seed })
-  const agentBar = (a: FdAgent, i: number, ctx: number | undefined) =>
-    a.status === 'running'
-      ? sbSweep(textWidth, sbWarm(k, 10 + i))
-      : a.status === 'done'
-        ? sbMeter(textWidth, 1, sbGood(k))
-        : a.status === 'failed'
-          ? sbMeter(textWidth, 1, flat([pal.bad, pal.bad]))
-          : sbMeter(textWidth, (ctx ?? 0) / 100, flat(a.status === 'waiting' ? [pal.warn, pal.warn] : [pal.sep, pal.dim], 10 + i))
 
-  const agentCard = (a: FdAgent, i: number) => {
-    const c = critterOf(a.id)
+  const runScrolls = working > runShown
+  const cardWidth = full - (runScrolls ? 1 : 0)
+  const runCard = (a: FdAgent, i: number) => {
     const [glyph, glyphColor] = mark(a)
     const win = windowOf(a.model, main.model, usage.window)
     const ctx = win && a.ctxTokens > 0 ? Math.min(100, Math.round((a.ctxTokens / win) * 100)) : undefined
     const name = modelName(a.model)
-    const isDone = isFinished(a)
-    const body = (
-      <Box key={`body:${a.id}`} flexDirection="column" flexGrow={1} flexShrink={1}>
-        <Text wrap="truncate-end">
-          <Text color={glyphColor}>{`${glyph} `}</Text>
-          <Text color={isDone ? pal.dim : pal.text} bold={!isDone}>
-            {clip(a.description || a.type || 'Subagent', textWidth - 2)}
-          </Text>
-        </Text>
-        <Text wrap="truncate-end">
-          <Text color={pal.info}>{c.name}</Text>
-          <Text color={pal.dim}>{a.type ? ` · ${a.type}` : ''}</Text>
-        </Text>
-        <Text wrap="truncate-end">
-          <Text color={pal.text}>{name || '—'}</Text>
-          <Text color={glyphColor}>{`  ${STATUS_WORD[a.status]}`}</Text>
-        </Text>
-        <Box>{meter(`bar:${a.id}`, agentBar(a, i, ctx))}</Box>
-        <Text color={pal.dim} wrap="truncate-end">
-          {agentMetrics(a, win, now)}
-        </Text>
+    const metrics = agentMetrics(a, win, now).split('  ')
+    const time = metrics.pop() ?? ''
+    const stop: SbSeg = { text: '■ stop', color: pal.bad, onPress: () => d.onStop(a.id), key: `stop:${a.id}` }
+    return sbFramedBar(k, `agent:${a.id}`, {
+      width: cardWidth,
+      color: a.status === 'waiting' ? pal.warn : pal.dim,
+      bar: cells =>
+        a.status === 'running'
+          ? sbSweep(cells, sbWarm(k, 10 + i))
+          : sbMeter(cells, (ctx ?? 0) / 100, flat([pal.warn, pal.warn], 10 + i)),
+      top: [
+        { text: `${glyph} `, color: glyphColor },
+        { text: a.description || a.type || 'Subagent', color: pal.text, bold: true },
+      ],
+      topRight: [{ text: `${time} `, color: pal.dim }, stop],
+      bottom: [
+        { text: critterOf(a.id).name, color: pal.info },
+        { text: `${name ? ` · ${name}` : ''}${a.type ? ` · ${a.type}` : ''}`, color: pal.dim },
+      ],
+      bottomRight: metrics.length > 0 ? [{ text: metrics.join(' '), color: pal.dim }] : [],
+    })
+  }
+
+  const doneScrolls = groups.finished.length > doneShown
+  const doneWidth = full - (doneScrolls ? 1 : 0)
+  const doneLine = (a: FdAgent) => {
+    const [glyph, glyphColor] = mark(a)
+    const metrics = agentMetrics(a, windowOf(a.model, main.model, usage.window), now).split('  ')
+    const time = metrics.pop() ?? ''
+    return split(
+      `done:${a.id}`,
+      <Text wrap="truncate-end">
+        <Text color={glyphColor}>{`${glyph} `}</Text>
+        <Text color={pal.text}>{a.description || a.type || 'Subagent'}</Text>
+        <Text color={pal.dim}>{` · ${critterOf(a.id).name}`}</Text>
+      </Text>,
+      <Box>
+        <Text color={pal.dim}>{`${time} `}</Text>
+        {button(`clear:${a.id}`, '✕', pal.dim, () => d.onClear(a.id))}
+      </Box>,
+      doneWidth,
+    )
+  }
+
+  const runList =
+    working === 0 ? (
+      line('run-empty', <Text color={pal.dim}>{d.agents.length === 0 ? '  Subagents show here while they work.' : '  None running.'}</Text>)
+    ) : (
+      <Box key="run-list" width={full}>
+        <Box flexDirection="column" width={cardWidth} flexShrink={0}>
+          {groups.working.slice(runOffset, runOffset + runShown).map((a, i) => runCard(a, runOffset + i))}
+        </Box>
+        {runScrolls ? bar('run-scroll', Math.min(working, runShown) * RUN_ROWS, working, runShown, runOffset) : null}
       </Box>
     )
-    return card(`agent:${a.id}`, [avatar(a), body], 'row')
-  }
-
-  const sum = summaryOf(d.agents, now)
-  const tileWidth = Math.max(8, Math.floor((d.columns - 2) / 3))
-  const tile = (key: string, label: string, value: string) => (
-    <Box key={key} flexDirection="column" width={tileWidth} flexGrow={1} flexShrink={1} borderStyle="round" borderColor={pal.border} backgroundColor={pal.panel} paddingX={1}>
-      <Text color={pal.text} bold wrap="truncate-end">
-        {value}
-      </Text>
-      <Text color={pal.dim} wrap="truncate-end">
-        {label}
-      </Text>
-    </Box>
-  )
-  const tiles = (
-    <Box key="tiles" width="100%" columnGap={1}>
-      {tile('tile-cost', 'Cost', sum.cost)}
-      {tile('tile-tokens', 'Tokens', sum.tokens)}
-      {tile('tile-time', 'Time', sum.time)}
-    </Box>
-  )
-
-  const section = (key: string, label: string, n: number, isLive: boolean) => (
-    <Box key={key} marginTop={1}>
-      <Text color={isLive ? pal.text : pal.dim} bold>
-        {label}
-      </Text>
-      <Text color={isLive ? pal.accent : pal.dim}>{` · ${n}`}</Text>
-    </Box>
-  )
-
-  const connector = (key: string) => (
-    <Box key={key} marginLeft={2}>
-      <Text color={working > 0 ? pal.info : pal.sep}>╎</Text>
-    </Box>
-  )
-
-  const parts: unknown[] = [header, mainCard]
-  if (d.agents.length === 0) {
-    parts.push(
-      connector('link'),
-      card('empty', [
-        <Text key="e1" color={pal.text} bold>
-          No subagents yet
-        </Text>,
-        <Text key="e2" color={pal.dim} wrap="wrap">
-          They show here while they work, each with its own critter.
-        </Text>,
-      ]),
+  const doneList =
+    groups.finished.length === 0 ? (
+      line('done-empty', <Text color={pal.dim}>{'  Nothing finished yet.'}</Text>)
+    ) : (
+      <Box key="done-list" width={full}>
+        <Box flexDirection="column" width={doneWidth} flexShrink={0}>
+          {groups.finished.slice(doneOffset, doneOffset + doneShown).map(doneLine)}
+        </Box>
+        {doneScrolls ? bar('done-scroll', Math.min(groups.finished.length, doneShown), groups.finished.length, doneShown, doneOffset) : null}
+      </Box>
     )
-  } else {
-    parts.push(connector('link'), tiles)
-    if (groups.working.length > 0) {
-      parts.push(section('working', 'Working', groups.working.length, true))
-      groups.working.forEach((a, i) => parts.push(agentCard(a, i)))
-    }
-    if (groups.finished.length > 0) {
-      parts.push(section('finished', 'Finished', groups.finished.length + groups.more, false))
-      groups.finished.forEach((a, i) => parts.push(agentCard(a, i)))
-      if (groups.more > 0) {
-        parts.push(
-          <Text key="more" color={pal.dim}>
-            {`  +${groups.more} more finished`}
-          </Text>,
-        )
-      }
-    }
-  }
 
-  if (strip) return sbFrame(k, strip, sbActions(d.ask), parts)
-  return (
-    <Box flexDirection="column" width="100%">
-      {parts}
-    </Box>
-  )
+  const parts: unknown[] = [
+    header,
+    ctxFrame,
+    limitFrames,
+    totals,
+    heading('run-head', 'RUNNING', working, working > 0, working > 0 ? { label: '■ Stop all', color: pal.bad, onPress: d.onStopAll } : undefined),
+    runList,
+    heading('done-head', 'DONE', groups.finished.length, false, groups.finished.length > 0 ? { label: '✕ Clear', color: pal.dim, onPress: d.onClearAll } : undefined),
+    doneList,
+  ]
+
+  const layout: PaneLayout = { run: [runTop, runEnd], done: [doneTop, row], runMax, doneMax }
+  if (strip) return { el: sbFrame(k, strip, sbActions(d.ask), parts), layout }
+  return {
+    el: (
+      <Box flexDirection="column" width="100%">
+        {parts}
+      </Box>
+    ),
+    layout,
+  }
 }
+

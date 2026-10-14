@@ -5,7 +5,8 @@ A Claude Code mod that gathers your mods into one sidebar beside the transcript.
 ```
 ╭──────────────────────────────────────────────────────────╮
 │ ◆ DOOLE'S SIDEBAR                                    ⋯  ✕ │
-│ ◖ ✈ Flightdeck ◗ ✶  ✎  ▭                                  │
+│  ✈ Flightdeck       ✺ Improve       ✶ Steps     ◇ Ideas   │
+│  ⇄ Folders¹    ✎ Enhance    ◐ Design    ¶ Plain    ▭ Bar  │
 ╰──────────────────────────────────────────────────────────╯
 ```
 

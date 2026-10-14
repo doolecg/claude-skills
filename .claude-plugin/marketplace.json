@@ -105,7 +105,7 @@
     },
     {
       "name": "flightdeck",
-      "description": "A Flightdeck-style sidebar: the main session's vitals and every subagent working now, each with a pixel critter and a pixel progress bar, in the Bottom Bar's colours.",
+      "description": "A Flightdeck-style sidebar: the main session's vitals and every subagent working now, each as an outlined pixel progress bar with a stop button, in the Bottom Bar's colours.",
       "category": "productivity",
       "source": "./mods/flightdeck"
     },

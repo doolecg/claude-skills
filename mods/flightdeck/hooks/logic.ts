@@ -325,12 +325,10 @@ export function ctxPercent(a: FdAgent, window: number | undefined): number | und
 
 export const elapsedOf = (a: FdAgent, now: number): number => (a.endedAt > 0 ? a.endedAt : isFinished(a) ? a.startedAt : now) - a.startedAt
 
-export const FINISHED_SHOWN = 5
-
 export function groupAgents(agents: readonly FdAgent[]) {
   const working = agents.filter(isWorking).sort((x, y) => y.startedAt - x.startedAt)
   const finished = agents.filter(isFinished).sort((x, y) => y.endedAt - x.endedAt)
-  return { working, finished: finished.slice(0, FINISHED_SHOWN), more: Math.max(0, finished.length - FINISHED_SHOWN) }
+  return { working, finished }
 }
 
 export type Summary = { cost: string; tokens: string; time: string }

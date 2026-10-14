@@ -1,3 +1,10 @@
+# Self Improve 2.2.1
+
+## Changed
+- The Sidebar's tab strip on top shows each tab as a symbol and a word, spread across the full width, with the open tab filled in one accent colour.
+
+---
+
 # Self Improve 2.2.0
 
 ## Changed
