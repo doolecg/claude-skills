@@ -16,7 +16,7 @@ A Claude Code mod that makes Claude feel calm and friendly for people who aren't
 ## Install
 
 ```
-/plugin install clean-view --marketplace doolecg/claude-skills
+/plugin install clean-view --marketplace doolecg/dooles-tools
 ```
 
 Press `y` to add the marketplace, then pick the user scope so it loads everywhere.

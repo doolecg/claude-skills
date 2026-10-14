@@ -22,7 +22,7 @@ DONE · 1 ───────────────────────�
 ## Install
 
 ```
-/plugin install flightdeck --marketplace doolecg/claude-skills
+/plugin install flightdeck --marketplace doolecg/dooles-tools
 ```
 
 Press `y` to add the marketplace, then pick the user scope so it loads everywhere.

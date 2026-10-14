@@ -4,7 +4,7 @@ When two Claude Code sessions work in the same project folder, each one shows wh
 
 Install (in a terminal; it then loads in every session, including the desktop app's Code tab):
 
-    /plugin install folder-tracker --marketplace doolecg/claude-skills
+    /plugin install folder-tracker --marketplace doolecg/dooles-tools
 
 What you see:
 - A band above the prompt, only while another live session shares this folder: `Other session: <phase> — editing <file> (n files)`. Up to three other sessions are listed.

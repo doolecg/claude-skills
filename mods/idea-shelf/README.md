@@ -4,7 +4,7 @@ Park ideas while Claude works, without pulling it off the task. Each project has
 
 Install (in a terminal; it then loads in every session, including the desktop app's Code tab):
 
-    /plugin install idea-shelf --marketplace doolecg/claude-skills
+    /plugin install idea-shelf --marketplace doolecg/dooles-tools
 
 Commands:
 - `/idea <text>` parks an idea on the current project's shelf. It does not start a turn and is not sent to the model. It runs during a turn too.

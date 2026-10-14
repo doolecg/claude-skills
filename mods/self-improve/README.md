@@ -5,7 +5,7 @@ Self Improve learns from a Claude Code session once you mark it done, keeps `sou
 ## Install
 
 ```
-/plugin install self-improve --marketplace doolecg/claude-skills
+/plugin install self-improve --marketplace doolecg/dooles-tools
 ```
 
 Answer `y` to add the marketplace, then pick the user scope. The Code tab of the desktop app cannot run `/plugin`; install from a terminal and the mod loads in desktop sessions too. Version 2.0.0 replaces the older self-improve 1.0.0: turn the old one off (`/plugin`, or `enabledPlugins` in settings) so only one learner runs.

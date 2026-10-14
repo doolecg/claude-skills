@@ -13,7 +13,7 @@ A Claude Code mod that gathers your mods into one sidebar beside the transcript.
 ## Install
 
 ```
-/plugin install sidebar --marketplace doolecg/claude-skills
+/plugin install sidebar --marketplace doolecg/dooles-tools
 ```
 
 Press `y` to add the marketplace, then pick the user scope so it loads everywhere. Install the mods you want tabs for as well; the sidebar shows a tab for each one it finds.

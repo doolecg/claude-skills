@@ -7,7 +7,7 @@ Works in the terminal and in the Claude desktop app's Code tab.
 ## Install
 
 ```
-/plugin install prompt-enhancer --marketplace doolecg/claude-skills
+/plugin install prompt-enhancer --marketplace doolecg/dooles-tools
 ```
 
 Press `y` to add the marketplace, then pick the user scope so it loads in every session (the desktop app's Code tab included).

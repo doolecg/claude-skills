@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "doole-skills",
+  "name": "dooles-tools",
   "description": "doolecg's Claude Code plugins: BlockDesigner, Claude Agent Viewer and Operant releases, Minecraft modding, and the Bottom Bar, Clean View, Flightdeck, Prompt Enhancer, Self Improve, Design Picker, Folder Tracker, Idea Shelf, Plain English, Sidebar, Context and Rule Guard mods.",
   "owner": {
     "name": "doolecg",

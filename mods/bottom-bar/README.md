@@ -11,7 +11,7 @@ A Claude Code mod that puts one compact, rounded bar at the bottom of the termin
 ## Install
 
 ```
-/plugin install bottom-bar --marketplace doolecg/claude-skills
+/plugin install bottom-bar --marketplace doolecg/dooles-tools
 ```
 
 Press `y` to add the marketplace, then pick the user scope so it loads everywhere.

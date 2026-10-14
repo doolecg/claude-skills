@@ -28,7 +28,7 @@ on unchanged. Pick in Claude's question as usual.
 
 ## Install
 
-    /plugin install design-picker --marketplace doolecg/claude-skills
+    /plugin install design-picker --marketplace doolecg/dooles-tools
 
 Run that in a terminal; it then loads in every session, including the desktop app's Code tab. While developing, use `claude --plugin-dir <this folder>`.
 

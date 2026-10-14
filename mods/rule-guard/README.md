@@ -4,7 +4,7 @@ Stops tool calls that break your standing rules. Claude is told which rule it br
 
 ## Install
 
-    /plugin install rule-guard --marketplace doolecg/claude-skills
+    /plugin install rule-guard --marketplace doolecg/dooles-tools
 
 Run that in a terminal; it then loads in every session, including the desktop app's Code tab. While developing, use `claude --plugin-dir <this folder>`.
 

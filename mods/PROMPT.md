@@ -5,8 +5,8 @@ Target: the Claude desktop app (Code tab)
   - Draw every band and pane for the `desktop` surface (and still for `terminal`); check `e.surface` and use `$.ui.resolve(e)` elements only.
   - Don't rely on `$.ui.notify` (it has no surface in the desktop app). Use toasts and the band.
   - Every command must work when typed in the Code tab prompt.
-- Ship all eight mods in one marketplace (`.claude-plugin/marketplace.json`) in my skills repo doolecg/claude-skills (marketplace `doole-skills`), so each installs at user scope from a terminal and then loads in every desktop session:
-  `/plugin install <mod> --marketplace doolecg/claude-skills`
+- Ship all eight mods in one marketplace (`.claude-plugin/marketplace.json`) in my skills repo doolecg/dooles-tools (marketplace `dooles-tools`), so each installs at user scope from a terminal and then loads in every desktop session:
+  `/plugin install <mod> --marketplace doolecg/dooles-tools`
   The README install section gives that line (the Code tab can't run /plugin itself). Use `--plugin-dir` only while developing.
 
 Shared services (read their config, never hard-code hosts or keys)

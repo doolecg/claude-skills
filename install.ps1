@@ -1,12 +1,12 @@
-# Adds the doole-skills marketplace to Claude Code and installs its plugins.
+# Adds the dooles-tools marketplace to Claude Code and installs its plugins.
 #   .\install.ps1                          everything
 #   .\install.ps1 blockdesigner,minecraft-modding   just those
 # Safe to run again: it refreshes the marketplace and updates what's installed.
 param([string[]] $Plugins)
 
 $ErrorActionPreference = 'Stop'
-$Market = 'doole-skills'
-$Repo = 'doolecg/claude-skills'
+$Market = 'dooles-tools'
+$Repo = 'doolecg/dooles-tools'
 
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Write-Host 'Claude Code (claude) is not on PATH. Install it first: https://claude.com/claude-code' -ForegroundColor Red

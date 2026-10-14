@@ -1,4 +1,4 @@
-# doole-skills
+# dooles-tools
 
 My Claude Code skills as a plugin marketplace: install them on any PC in one go, and browse, update or turn them off from Claude Code's `/plugin` screen like any other plugin.
 
@@ -7,17 +7,17 @@ My Claude Code skills as a plugin marketplace: install them on any PC in one go,
 
 **From inside Claude Code:**
 ```
-/plugin marketplace add doolecg/claude-skills
-/plugin install minecraft-modding@doole-skills
+/plugin marketplace add doolecg/dooles-tools
+/plugin install minecraft-modding@dooles-tools
 ```
-**From a terminal:** `claude plugin marketplace add doolecg/claude-skills`, then `claude plugin install <name>@doole-skills`.
+**From a terminal:** `claude plugin marketplace add doolecg/dooles-tools`, then `claude plugin install <name>@dooles-tools`.
 
 The repo is private, so git on that PC has to be signed in to GitHub (Git Credential Manager handles it the first time).
 
 ## Check and manage them
 - `/plugin` in Claude Code lists the marketplace and its plugins. From there you can install, enable, disable, uninstall and update them.
-- `claude plugin list` shows what's installed. `claude plugin details <name>@doole-skills` shows a plugin's skills and how many tokens they cost.
-- `claude plugin marketplace update doole-skills` pulls the latest from this repo. Turn on auto-update for the marketplace in `/plugin` › Marketplaces to have it happen at startup.
+- `claude plugin list` shows what's installed. `claude plugin details <name>@dooles-tools` shows a plugin's skills and how many tokens they cost.
+- `claude plugin marketplace update dooles-tools` pulls the latest from this repo. Turn on auto-update for the marketplace in `/plugin` › Marketplaces to have it happen at startup.
 
 Plugin skills are namespaced, like `/blockdesigner:blockdesigner-release`.
 

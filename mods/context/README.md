@@ -27,7 +27,7 @@ The mod only counts and shows. It never blocks or changes a tool call or a reply
 
 ## Install
 
-    /plugin install context --marketplace doolecg/claude-skills
+    /plugin install context --marketplace doolecg/dooles-tools
 
 Run that in a terminal; it then loads in every session. While developing, use `claude --plugin-dir <this folder>`.
 

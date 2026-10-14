@@ -28,7 +28,7 @@ Makes Claude's replies plainer, and shows what the session is doing.
 
 ## Install
 
-    /plugin install plain-english --marketplace doolecg/claude-skills
+    /plugin install plain-english --marketplace doolecg/dooles-tools
 
 Run that in a terminal; it then loads in every session, including the desktop app's Code tab. While developing, use `claude --plugin-dir <this folder>`.
 
