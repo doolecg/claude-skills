@@ -193,11 +193,11 @@ describe('kit strip asks', () => {
 
 // ---------------------------------------------------------------- wiring
 
-type World = { opened: any[]; closed: string[]; panes: string[]; ran: string[]; registered: string[]; sets: { key: string; value: unknown }[]; rows: any[]; clock: any }
+type World = { opened: any[]; closed: string[]; panes: string[]; ran: string[]; registered: string[]; writes: any[]; saved: any; clock: any }
 
-// `rows` are extra `/config` rows, such as `<mod>.enabled` set to false for a mod that is switched off.
+// `rows` are saved mod options, such as `<mod>.enabled` set to false for a mod that is switched off: they live in the user's settings.json under pluginConfigs.
 function world(on: any, rows: any[] = []): World {
-  const w: World = { opened: [], closed: [], panes: [], ran: [], registered: [], sets: [], rows: [], clock: null }
+  const w: World = { opened: [], closed: [], panes: [], ran: [], registered: [], writes: [], saved: { theme: 'dark', pluginConfigs: {} }, clock: null }
   w.clock = mock.clock(on, { now: 1_800_000_000_000 })
   mock.store(on)
   on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
@@ -206,7 +206,21 @@ function world(on: any, rows: any[] = []): World {
     w.registered.push(e.name)
     return { value: { command: e.name } }
   })
-  on('settings.read', () => ({ value: { theme: 'dark' } }))
+  for (const r of rows) {
+    const [mod, option] = String(r.key).split('.')
+    w.saved.pluginConfigs[`${mod}@doole-skills`] = { options: { ...(w.saved.pluginConfigs[`${mod}@doole-skills`]?.options ?? {}), [option!]: r.value } }
+  }
+  const SETTINGS = 'C:/cfg/settings.json'
+  on('settings.read', () => ({ value: JSON.parse(JSON.stringify(w.saved)) }))
+  on('env.get', (_$: any, e: any) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? 'C:/cfg' : undefined }))
+  on('fs.exists', () => ({ value: true }))
+  on('fs.read', () => ({ value: JSON.stringify(w.saved) }))
+  on('fs.write', (_$: any, e: any) => {
+    expect(String(e.path).split(String.fromCharCode(92)).join('/')).toBe(SETTINGS)
+    w.saved = JSON.parse(e.text)
+    w.writes.push(w.saved)
+    return { value: undefined }
+  })
   on('command.list', () => ({
     value: [
       { name: 'flightdeck', description: '' },
@@ -214,17 +228,7 @@ function world(on: any, rows: any[] = []): World {
       { name: 'doole_settings', description: '' },
     ],
   }))
-  w.rows = [
-    { key: 'prompt-enhancer.mode', label: 'Mode', description: 'How', kind: 'boolean', value: true, options: [], isLocked: false, provider: { plugin: 'prompt-enhancer' } },
-    ...rows.map(r => ({ label: 'Enabled', description: '', kind: 'boolean', options: [], isLocked: false, provider: { plugin: String(r.key).split('.')[0] }, ...r })),
-  ]
-  on('config.list', () => ({ value: w.rows }))
-  on('config.set', (_$: any, e: any) => {
-    w.sets.push({ key: e.key, value: e.value })
-    const r = w.rows.find(x => x.key === e.key)
-    if (r) r.value = e.value
-    return { value: e.value }
-  })
+  on('config.list', () => ({ value: [{ key: 'prompt-enhancer.mode', label: 'Mode', description: '', kind: 'boolean', value: true, options: [], isLocked: false, provider: { plugin: 'prompt-enhancer' } }] }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: JSON.stringify([{ id: 'bottom-bar@doole-skills', enabled: true }]), stderr: '' } }))
   // Every command that reaches the bottom: the sidebar answers `/sidebar` itself, so a tab switch must leave this empty.
   on('command.run', (_$: any, e: any) => {
@@ -279,17 +283,6 @@ const FLIGHTDECK = {
       if (shows(e.value) && !shows(e.previous)) await $.ui.open({ id: 'flightdeck', title: 'Flightdeck' })
       else if (shows(e.previous) && !shows(e.value)) await $.ui.close({ id: 'flightdeck' })
       return ran
-    })
-  }) as any,
-}
-
-// A stand-in for Mod Settings: `/ms-set <mod>` switches that mod off, as a plugin's own `$.config.set` does (the Main Menu's hook sees it).
-const MOD_SETTINGS = {
-  name: 'mod-settings',
-  register: ((on: any) => {
-    on('command.run', { command: 'ms-set' }, async ($: any, e: any) => {
-      await $.config.set({ key: `${e.args}.enabled`, value: false })
-      return {}
     })
   }) as any,
 }
@@ -487,7 +480,7 @@ describe('wiring', () => {
     await ui.unmount()
   })
 
-  test('an off mod’s tab says it is off and Turn on switches it on', async ($, on) => {
+  test('an off mod (saved enabled: false) says it is off; Turn on saves enabled: true and asks for /reload-plugins', async ($, on) => {
     const w = world(on, [{ key: 'clean-view.enabled', value: false }])
     await $.session.start(SESSION)
     await settle()
@@ -498,11 +491,12 @@ describe('wiring', () => {
     expect(all).not.toContain('No job running')
     await ui.press({ key: 'sb-turn-on:clean-view' })
     await settle()
-    expect(w.sets).toEqual([{ key: 'clean-view.enabled', value: true }])
+    expect(w.writes.map(x => x.pluginConfigs['clean-view@doole-skills'])).toEqual([{ options: { enabled: true } }])
+    expect(w.writes[0].theme).toBe('dark')
     await ui.unmount()
     ;({ ui, all } = await texts($))
-    expect(all).not.toContain('is off')
-    expect(all).toContain('No job running')
+    expect(all).toContain('Turned on. Run /reload-plugins to load it.')
+    expect(all).toContain('Task View is off')
     await ui.unmount()
   })
 
@@ -515,22 +509,6 @@ describe('wiring', () => {
     const { ui, all } = await texts($)
     expect(all).toContain('Flightdeck is off')
     expect(all).toContain('Turn on')
-    await ui.unmount()
-  })
-
-  test('another mod switching a mod off (a config change) dims its tab', { plugins: [MOD_SETTINGS] }, async ($, on) => {
-    const w = world(on, [{ key: 'clean-view.enabled', value: true }])
-    await $.session.start(SESSION)
-    await settle()
-    await $.command.run(command('tab clean-view'))
-    const first = await texts($)
-    expect(first.all).toContain('No job running')
-    await first.ui.unmount()
-    await $.command.run({ ...command('clean-view'), command: 'ms-set' })
-    await settle()
-    const { ui, all } = await texts($)
-    expect(all).toContain('Task View is off')
-    expect(w.sets).toEqual([{ key: 'clean-view.enabled', value: false }])
     await ui.unmount()
   })
 

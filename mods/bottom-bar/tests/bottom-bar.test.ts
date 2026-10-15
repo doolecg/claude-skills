@@ -54,7 +54,7 @@ const ALL = [CLEAN, PROMPT, BRAIN, COMPACT]
 
 const BAR_PROPS = { modes: [] as string[] } as any
 const PANE_PROPS = {
-  title: "Doole's Tools",
+  title: "Tools",
   isFocused: true,
   bodyColumns: 60,
   placement: 'inline',
@@ -86,6 +86,8 @@ function world(on: any, saved: Record<string, unknown> = {}, commands: any[] = A
     closed: [] as string[],
     toasts: [] as string[],
     unknownCommands: false,
+    // The Main Menu mod's `sidebar` command: absent unless a test switches it on.
+    mainMenu: false,
   }
   // Registered before mock.store so it sees the write, then passes it down to the store.
   on('store.set', { key: 'tools' }, async (_$: any, e: any, next: any) => {
@@ -109,6 +111,11 @@ function world(on: any, saved: Record<string, unknown> = {}, commands: any[] = A
     return { value: undefined }
   })
   on('command.run', (_$: any, e: any) => {
+    if (e.command === 'sidebar') {
+      if (!seen.mainMenu) throw new Error('unknown command')
+      seen.runs.push({ command: e.command, args: e.args })
+      return { text: '' }
+    }
     seen.ran.push(e.command)
     seen.runs.push({ command: e.command, args: e.args })
     // The engine rejects a command nothing serves; a hook that fails stands in for that.
@@ -349,7 +356,7 @@ test('terminal: the bar draws a pill and the pill opens the tools box', async ($
   const bar = await mountBar($)
 
   expect(await bar.find({ key: 'pill' })).toBeDefined()
-  expect(await bar.find({ type: 'Text', text: /Doole's Tools/ })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: /Tools/ })).toBeDefined()
   expect(await bar.find({ type: 'Text', text: '0 agents' })).toBeDefined()
   expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
 
@@ -759,8 +766,8 @@ test('the pill shows the default name when no name is configured', async ($, on)
   registerCommands(on)
   await startSession($)
   const bar = await mountBar($)
-  expect((await bar.find({ key: 'pill' }))?.text).toContain("Doole's Tools")
-  expect(await paneTitle($, seen)).toBe("Doole's Tools")
+  expect((await bar.find({ key: 'pill' }))?.text).toContain("Tools")
+  expect(await paneTitle($, seen)).toBe("Tools")
 })
 
 test('the pill shows the configured name and publishes it as the label', { options: { name: "Tristen's Tools" } }, async ($, on) => {
@@ -770,7 +777,7 @@ test('the pill shows the configured name and publishes it as the label', { optio
   const bar = await mountBar($)
   const pill = (await bar.find({ key: 'pill' }))?.text
   expect(pill).toContain("Tristen's Tools")
-  expect(pill).not.toContain("Doole's Tools")
+  expect(pill).not.toContain('◖ ✻ Tools')
   expect(await paneTitle($, seen)).toBe("Tristen's Tools")
 })
 
@@ -779,7 +786,7 @@ test('a blank configured name falls back to the default', { options: { name: '  
   registerCommands(on)
   await startSession($)
   const bar = await mountBar($)
-  expect((await bar.find({ key: 'pill' }))?.text).toContain("Doole's Tools")
+  expect((await bar.find({ key: 'pill' }))?.text).toContain("Tools")
 })
 
 const runCommand = ($: any, command: string) =>
@@ -835,7 +842,7 @@ test('toolbox: the header spells the name out and the rows are labelled', async 
   const bar = await mountBar($)
   await bar.press({ key: 'pill' })
 
-  expect(await bar.find({ type: 'Text', text: "◆ D O O L E ' S   T O O L S" })).toBeDefined()
+  expect(await bar.find({ type: 'Text', text: "◆ T O O L S" })).toBeDefined()
   expect(await bar.find({ type: 'Text', text: 'Opus 5.5 · High' })).toBeUndefined()
   expect(await bar.find({ type: 'Text', text: 'Model     ' })).toBeDefined()
   expect(await bar.find({ type: 'Text', text: 'Effort    ' })).toBeDefined()
@@ -1034,10 +1041,10 @@ test('toolboxWidth stays between 40 and 68 columns and clear of the edge', () =>
 // ------------------------------------------------------------ toolbox-logic
 
 test('spaced spells a name out in capitals, or falls back to plain capitals', () => {
-  expect(spaced("Doole's Tools", 60)).toBe("D O O L E ' S   T O O L S")
+  expect(spaced("Tools", 60)).toBe('T O O L S')
   expect(spaced('ab', 3)).toBe('A B')
   expect(spaced('ab', 2)).toBe('AB')
-  expect(spaced("Doole's Tools", 10)).toBe("DOOLE'S TOOLS")
+  expect(spaced("Tools", 4)).toBe('TOOLS')
   expect(spaced('', 5)).toBe('')
 })
 
@@ -1627,7 +1634,7 @@ test('enabled false: the bar draws nothing of its own and its commands say it is
   expect(await bar.find({ key: 'pill' })).toBeUndefined()
   expect(await bar.find({ type: 'Text', text: 'footer' })).toBeDefined()
   const reply = await runCommand($, 'doole_bottom-bar')
-  expect(reply.text).toContain("Doole's Tools bar is off. Turn it on in Mod Settings (/doole_settings)")
+  expect(reply.text).toContain("The Tools bar is off. Turn it on in Mod Settings (/doole_settings)")
   expect((await runCommand($, 'choose-pills')).text).toContain('is off')
   expect(seen.opened).toEqual([])
 })
@@ -1636,4 +1643,53 @@ test('showUsage and showAgents false leave those figures off the bar', () => {
   const f = { model: 'Opus 5.5', window: 1_000_000, effort: 'high', ctx: 42, fiveHour: 30, sevenDay: 12, agents: 2 }
   expect(segments(f as any, DARK, { usage: false, agents: false }).map(s => s.key)).toEqual(['model', 'effort', 'ctx'])
   expect(segments(f as any, DARK).map(s => s.key)).toEqual(['model', 'effort', 'ctx', 'fiveHour', 'sevenDay', 'agents'])
+})
+
+// ------------------------------------------------------- Tools opens the Main Menu
+
+test('the Tools pill runs sidebar open and draws no toolbox', async ($, on) => {
+  const seen = world(on)
+  seen.mainMenu = true
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  expect(seen.runs).toEqual([{ command: 'sidebar', args: 'open' }])
+  expect(seen.opened).toEqual([])
+  expect(await bar.find({ key: 'tb-choose' })).toBeUndefined()
+})
+
+test('the Tools pill opens the toolbox when the Main Menu command is missing', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountBar($)
+  await bar.press({ key: 'pill' })
+  expect(await bar.find({ key: 'tb-choose' })).toBeDefined()
+})
+
+test('the app Tools button runs sidebar open, or opens the toolbox pane when it is missing', async ($, on) => {
+  const seen = world(on)
+  seen.mainMenu = true
+  registerCommands(on)
+  await startSession($)
+  const bar = await mountAppBar($)
+  await bar.press({ key: 'pill' })
+  expect(seen.runs).toEqual([{ command: 'sidebar', args: 'open' }])
+  expect(seen.opened).toEqual([])
+  seen.mainMenu = false
+  await bar.press({ key: 'pill' })
+  expect(seen.opened).toEqual(['bottom-bar-toolbox'])
+})
+
+test('/doole_bottom-bar opens the toolbox pane before its lists have loaded', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  on('process.run', () => new Promise(() => {}))
+  await startSession($)
+  await Promise.race([
+    $.command.run({ command: 'doole_bottom-bar', args: '' }),
+    new Promise((_, no) => setTimeout(() => no(new Error('toolbox waited on its lists')), 1500)),
+  ])
+  expect(seen.opened).toEqual(['bottom-bar-toolbox'])
 })

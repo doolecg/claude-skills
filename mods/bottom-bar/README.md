@@ -1,10 +1,10 @@
 # Bottom Bar
 
-A Claude Code mod that puts one compact, rounded bar at the bottom of the terminal and the desktop app, with a Doole's Tools button locked to its right end.
+A Claude Code mod that puts one compact, rounded bar at the bottom of the terminal and the desktop app, with a Tools button locked to its right end.
 
 ```
 ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ ✦ Enhance Prompt │ ◆ Opus 5.5 · 1M │ effort xhigh │ ctx ▰▱▱▱▱▱▱▱▱▱ 5% · 50K/1M │ 5h 7% │ ◇ 0 agents   ◖ ✻ Doole's Tools ▲ ◗ │
+│ ✦ Enhance Prompt │ ◆ Opus 5.5 · 1M │ effort xhigh │ ctx ▰▱▱▱▱▱▱▱▱▱ 5% · 50K/1M │ 5h 7% │ ◇ 0 agents   ◖ ✻ Tools ▲ ◗ │
 ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -21,22 +21,22 @@ The bar replaces a `statusLine` script. If you have one in `~/.claude/settings.j
 ## What the bar shows
 
 - The model and its context size, the effort level, a 10-cell context meter with the tokens used (`5% · 50K/1M`), your 5-hour and 7-day usage and how many agents are running.
-- The only buttons are other mods' segments (like Prompt Enhancer's Enhance Prompt), first on the left, and Doole's Tools on the right.
+- The only buttons are other mods' segments (like Prompt Enhancer's Enhance Prompt), first on the left, and Tools on the right.
 - Click the model name or the effort level to open a small picker above it and switch. It floats over the prompt; while Claude is working it sits above the bar instead, so the spinner can't draw over it. Both are saved, the same as `/model` and `/effort`.
-- On a narrow terminal the items on the right drop off first. The Doole's Tools pill always stays.
-- In the desktop app the bar sits just above the prompt (the app's footer below it only has room for two items): Enhance Prompt first, then the context meter with tokens used, 5h and 7d usage and agents, and Doole's Tools at the right end. The model and effort stay in the app's own footer. The app shows that band only while Claude is working; the rest of the time a mod with its own fallback button (Prompt Enhancer) draws it in the footer.
+- On a narrow terminal the items on the right drop off first. The Tools pill always stays.
+- In the desktop app the bar sits just above the prompt (the app's footer below it only has room for two items): Enhance Prompt first, then the context meter with tokens used, 5h and 7d usage and agents, and Tools at the right end. The model and effort stay in the app's own footer. The app shows that band only while Claude is working; the rest of the time a mod with its own fallback button (Prompt Enhancer) draws it in the footer.
 
-## Doole's Tools
+## Tools
 
 - The commands you pick go at the front of the toolbox's Quick Launch. They are no longer pills in the bar.
 - `/doole_bottom-bar` opens the toolbox.
 - `✎ Choose pills` in the toolbox (or `/choose-pills`) picks them. Mods' own commands are listed first; type in the search box to find any other command.
 - Your picks are saved and come back in every session.
-- The pill's name is the `Pill name` option ("Doole's Tools" by default). Change it in `/plugin` > Installed > Bottom Bar > Configure.
+- The pill's name is the `Pill name` option ("Tools" by default). Change it in `/plugin` > Installed > Bottom Bar > Configure.
 
 ## The toolbox
 
-The Doole's Tools pill opens the toolbox, one panel with Model, Effort, Mods and Quick Launch. In fullscreen it opens as a panel down the right of the screen, so the prompt and the bar stay where they are; on the main screen (no fullscreen) it opens right above the pill. Click the pill again, press Esc or click ✕ to close it.
+The Tools pill opens the Main Menu (the Main Menu mod, `/sidebar open`). If that mod is not installed or is switched off, it opens the toolbox instead, and `/doole_bottom-bar` always opens the toolbox: one panel with Model, Effort, Mods and Quick Launch. In fullscreen it opens as a panel down the right of the screen, so the prompt and the bar stay where they are; on the main screen (no fullscreen) it opens right above the pill. Click the pill again, press Esc or click ✕ to close it.
 
 ```
 ╭──────────────────────────────────────────────────────────────╮
@@ -59,7 +59,7 @@ The bar's options are not in the toolbox. Set them in Mod Settings (`/doole_sett
 | Setting | Default | What it does |
 | --- | --- | --- |
 | Enabled (`enabled`) | on | Off removes the bar, the pill and the toolbox; the commands say the bar is off. |
-| Pill name (`name`) | Doole's Tools | The name on the pill and at the top of the toolbox. |
+| Pill name (`name`) | Tools | The name on the pill and at the top of the toolbox. |
 | Colour (`colour`) | Coral | The accent colour, a drop-down: Coral, Amber, Sage, Sky, Lilac or Rose. |
 | Refresh every (`refreshSeconds`) | `4` | How often the bar re-reads the model, usage and agents, 1 to 60 seconds. |
 | Show 5-hour and 7-day usage (`showUsage`) | on | The 5h and 7d figures on the bar. |
@@ -105,7 +105,7 @@ Declare it in your mod's `types/index.d.ts` (`segments: Record<string, { label: 
 - Each mod gets up to 4 segments. Anything malformed is left out.
 - Segments are ordered by mod name, then by the order of your ids, so a rewrite never moves one.
 - Writing the value again replaces all of your mod's segments. Write `{}` to remove them.
-- On a narrow terminal, segments from other mods give way first: they are cut off from the right, before the bar's own segments. The Doole's Tools pill always stays.
+- On a narrow terminal, segments from other mods give way first: they are cut off from the right, before the bar's own segments. The Tools pill always stays.
 - The bar draws each segment as a button keyed `seg:<your mod>:<id>`, and each action as `seg:<your mod>:<id>:<n>`, counting from 0.
 - The bar's row carries the key `bottom-bar-segments`. A mod that draws its own fallback button in that row can look for it and stay out of the way. In the desktop app the footer carries it only while Claude works, when the bar above the prompt shows.
 - A command the bar runs writes its state under the bar's own call, where the bar cannot see it. The bar picks up those writes when the command returns. To show progress while the command runs (say, "working"), handle the click yourself: hook `ui.press` on your segment's key and answer `{ element }` without calling `next`. Your writes then reach the bar as they happen.

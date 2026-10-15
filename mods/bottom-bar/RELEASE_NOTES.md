@@ -1,8 +1,11 @@
-# Bottom Bar 1.10.0
+# Bottom Bar 1.11.0
 
-## New
-- An Enabled setting, first in its list, turns the mod off without uninstalling it. Find it in Mod Settings (`/doole_settings`) in the desktop app or `/config` in the terminal.
-- Settings for how often the bar refreshes (seconds), and whether it shows usage, agents and the to-do bar.
+## Changed
+- The "Doole's Tools" button is now called Tools, and it opens the Main Menu. If the Main Menu is off or not installed, it opens the toolbox as before. A name you set yourself is kept.
+- `/doole_bottom-bar` still opens the toolbox.
+
+## Fixed
+- Buttons act on the first press: the toolbox and Choose pills open straight away and fill in their lists afterwards.
 
 ---
 

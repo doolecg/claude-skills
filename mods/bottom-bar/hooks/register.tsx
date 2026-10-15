@@ -34,7 +34,7 @@ import { toolboxRows, toolboxWidth } from './toolbox'
 import { pickInstalls } from './toolbox-logic'
 import type { Install } from './toolbox-logic'
 
-const LABEL = "Doole's Tools"
+const LABEL = 'Tools'
 const PICKER = 'bottom-bar-tools'
 const TOOLBOX = 'bottom-bar-toolbox'
 const CHOOSE = 'choose-pills'
@@ -227,19 +227,28 @@ async function runCommand($: Dollar, text: string): Promise<void> {
 }
 
 async function openPicker($: Dollar): Promise<void> {
+  void loadChoices($).catch(() => {})
   await update($, menu, () => '')
   await update($, filter, () => '')
-  await loadChoices($)
   await $.ui.open({ id: PICKER, title: await read($, label), focus: true, closeOnEscape: true })
 }
 
+/** The pane opens first; its lists fill in as they load. */
 async function openToolbox($: Dollar): Promise<void> {
-  void loadMods($).catch(() => {})
-  try {
-    await loadChoices($)
-  } catch {}
   await update($, menu, () => 'tools')
-  await $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
+  const opened = $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
+  void loadMods($).catch(() => {})
+  void loadChoices($).catch(() => {})
+  await opened
+}
+
+/** The Tools button: the Main Menu (the sidebar mod's `open`), or the toolbox when that is not there. */
+async function openMainMenu($: Dollar, fallback: () => Promise<void> = () => openToolbox($)): Promise<void> {
+  try {
+    await $.command.run({ command: 'sidebar', args: 'open' })
+  } catch {
+    await fallback()
+  }
 }
 
 async function closeTools($: Dollar): Promise<void> {
@@ -291,7 +300,7 @@ export const register: Register = (on, options) => {
   const showTodoList = options.showTodo !== false
 
   const isOn = options.enabled !== false
-  const OFF = "Doole's Tools bar is off. Turn it on in Mod Settings (/doole_settings) or /config."
+  const OFF = "The Tools bar is off. Turn it on in Mod Settings (/doole_settings) or /config."
 
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
@@ -430,7 +439,7 @@ export const register: Register = (on, options) => {
       figures: await read($, figures),
       published: publishedSegments(await read($, published), pal),
       runCommand: command => void runCommand($, command),
-      openToolbox: () => void openToolbox($),
+      openToolbox: () => void openMainMenu($),
       todo: showTodoList && showsTodo(list, await $.clock.now()) ? list : undefined,
       showUsage,
       showAgents,
@@ -530,15 +539,14 @@ export const register: Register = (on, options) => {
       await runCommand($, name)
     }
     const openTools = async () => {
-      if ((await read($, menu)) !== 'tools') {
-        void loadMods($).catch(() => {})
-        try {
-          await loadChoices($)
-        } catch {}
-      }
       if ((await read($, menu)) === 'tools') return closeTools($)
-      await update($, menu, () => 'tools')
-      if (docks) await $.ui.open({ id: TOOLBOX, title: await read($, label), closeOnEscape: true, columns: 66 })
+      return openMainMenu($, async () => {
+        await update($, menu, () => 'tools')
+        const opened = docks ? $.ui.open({ id: TOOLBOX, title: await read($, label), closeOnEscape: true, columns: 66 }) : undefined
+        void loadMods($).catch(() => {})
+        void loadChoices($).catch(() => {})
+        await opened
+      })
     }
     const title = await read($, label)
 

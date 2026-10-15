@@ -4,6 +4,7 @@ import type { EngineInterface, Register, StateWrite, Timer } from 'claude-code'
 import type { SbJob } from '../types'
 import { CATALOG, SIDEBAR_TAB, blocksOf, entryOf, footerOf, installedFrom, jobOf, move, orderedIds, parseArg, pickTab, tabsFor } from './logic'
 import { EMPTY_STRIP, SIDEBAR_COLUMNS, sbActions, sbFrame, sbKit, sbPalette, sbRows } from './sidebar-kit'
+import { configIdsOf, offNames, optionsOf, settingsPath, withOption } from './plugin-config'
 import { viewRows } from './tabs'
 
 type Dollar = EngineInterface
@@ -22,6 +23,7 @@ const hiddenAtom = atom({ plugin: 'sidebar', key: 'hidden' } as const, [])
 const orderAtom = atom({ plugin: 'sidebar', key: 'order' } as const, [])
 const installedAtom = atom({ plugin: 'sidebar', key: 'installed' } as const, [])
 const offAtom = atom({ plugin: 'sidebar', key: 'off' } as const, [])
+const turnedOnAtom = atom({ plugin: 'sidebar', key: 'turnedOn' } as const, [])
 const blocksAtom = atom({ plugin: 'sidebar', key: 'blocks' } as const, [])
 
 /** The commands each mod registers, so a mod loaded with --plugin-dir counts as installed too. */
@@ -87,23 +89,24 @@ async function syncTicker($: Dollar): Promise<void> {
 async function loadLook($: Dollar): Promise<void> {
   const s = (await $.settings.read()) as Record<string, unknown>
   const theme = typeof s.theme === 'string' ? s.theme : 'dark'
-  const rows = await $.config.list().catch(() => [])
-  const colourRow = rows.find(r => r.key === 'bottom-bar.colour')
-  const colour = typeof colourRow?.value === 'string' ? colourRow.value : 'Coral'
+  const saved = await $.settings.read({ source: 'user' }).catch(() => ({}))
+  const barId = configIdsOf(saved, 'bottom-bar')[0]
+  const savedColour = barId ? optionsOf(saved, barId).colour : undefined
+  const colour = typeof savedColour === 'string' ? savedColour : 'Coral'
   const strip = await read($, stripAtom)
   if (strip.theme !== theme || strip.colour !== colour) await update($, stripAtom, st => ({ ...st, theme, colour }))
 }
 
-/** The mods switched off: those whose `<id>.enabled` setting is false. Returns whether the list changed. */
+/** The mods switched off: those whose saved `enabled` option is false in settings.json. Returns whether the list changed. */
 async function loadOff($: Dollar): Promise<boolean> {
-  const rows = await $.config.list().catch(() => [])
-  const off = CATALOG.map(c => c.id).filter(id => rows.some(r => r.key === `${id}.enabled` && (r.value === false || r.value === 'false')))
+  const saved = await $.settings.read({ source: 'user' }).catch(() => ({}))
+  const names = offNames(saved)
+  const off = CATALOG.map(c => c.id).filter(id => names.includes(id))
   const before = await read($, offAtom)
   if (before.length === off.length && before.every(id => off.includes(id))) return false
   await update($, offAtom, () => off)
   return true
 }
-
 
 /** The installed mods: `claude plugin list`, plus any whose commands or options are loaded here. */
 async function loadInstalled($: Dollar): Promise<void> {
@@ -169,20 +172,14 @@ async function showTab($: Dollar, id: string): Promise<void> {
   await syncTicker($)
 }
 
-/** A mod was switched on or off: redraws the tabs, and the open tab follows (an off page gives way to the mod's own tab, and back). */
-async function refreshOff($: Dollar): Promise<void> {
-  const before = await read($, offAtom)
-  if (!(await loadOff($))) return
-  await syncStrip($)
-  const strip = await read($, stripAtom)
-  const after = await read($, offAtom)
-  if (strip.isOn && strip.active !== SIDEBAR_TAB && before.includes(strip.active) !== after.includes(strip.active)) await showTab($, strip.active)
-}
-
-/** Switches a mod on from its off page. A plugin's own hooks do not see its `$.config.set`, so this redraws the tabs itself. */
+/** Switches a mod on from its off page: saves `enabled: true` in settings.json. The mod itself loads after /reload-plugins. */
 async function turnOn($: Dollar, id: string): Promise<void> {
-  await $.config.set({ key: `${id}.enabled`, value: true })
-  await refreshOff($)
+  const saved = await $.settings.read({ source: 'user' })
+  const isWindows = (await $.env.get('OS')) === 'Windows_NT'
+  const home = (isWindows ? await $.env.get('USERPROFILE') : await $.env.get('HOME')) ?? (await $.env.get('HOME')) ?? ''
+  const path = settingsPath(await $.env.get('CLAUDE_CONFIG_DIR'), home)
+  for (const pid of configIdsOf(saved, id)) await $.fs.write(path, withOption((await $.fs.exists(path)) ? await $.fs.read(path) : '', pid, 'enabled', true))
+  await update($, turnedOnAtom, list => [...list.filter(t => t !== id), id])
 }
 
 async function closeAll($: Dollar): Promise<void> {
@@ -366,14 +363,6 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
-  // A setting changed: a mod switched on or off redraws the tabs, and the open tab follows (an off page gives way to the mod's own tab).
-  on('config.set', async ($, e, next) => {
-    const ran = await next(e)
-    if (!cfg.isEnabled || !String((e as unknown as { key?: unknown }).key).endsWith('.enabled')) return ran
-    await quiet(() => refreshOff($))
-    return ran
-  }).catch(($, e, next) => next(e))
-
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
     if (!cfg.isEnabled) return next(e)
     const els = $.ui.resolve(e) as unknown as Record<string, any>
@@ -389,6 +378,7 @@ export const register: Register = (on, options) => {
       blocks: await read($, blocksAtom),
       installed,
       off: await read($, offAtom),
+      turnedOn: await read($, turnedOnAtom),
       all: orderedIds(installed, await read($, orderAtom), await read($, offAtom)),
       hidden: await read($, hiddenAtom),
       tabs: strip.tabs,

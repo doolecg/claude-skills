@@ -6,6 +6,8 @@ import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
 import type { MsRow } from '../types'
 import { groupRows, parseValue, pluginRows, shown } from './logic'
+import { manifestPath, optionsOf, pluginEntries, settingsPath, userConfigFields, withOption } from './plugin-config'
+import type { PluginField } from './plugin-config'
 import { SIDEBAR_COLUMNS, isSidebarTab, sbActions, sbAsker, sbButton, sbFrame, sbKit, sbPaneMove, sbPalette, sbRows, sbTitle } from './sidebar-kit'
 import type { SbStrip } from './sidebar-kit'
 
@@ -40,23 +42,45 @@ async function readStrip($: EngineInterface): Promise<SbStrip | undefined> {
   }
 }
 
+/** The user's settings.json: `$CLAUDE_CONFIG_DIR`, else `.claude` in the home folder. */
+async function settingsFile($: EngineInterface): Promise<string> {
+  const isWindows = (await $.env.get('OS')) === 'Windows_NT'
+  const home = (isWindows ? await $.env.get('USERPROFILE') : await $.env.get('HOME')) ?? (await $.env.get('HOME')) ?? ''
+  return settingsPath(await $.env.get('CLAUDE_CONFIG_DIR'), home)
+}
+
+/** Every enabled plugin's `userConfig` fields (from its manifest) with the values saved in settings.json. */
 async function loadRows($: EngineInterface): Promise<void> {
   try {
-    const rows = pluginRows(await $.config.list())
+    const ran = await $.process.run(['claude', 'plugin', 'list', '--json'], { timeoutMs: 30000 })
+    if (ran.exitCode !== 0) throw new Error('claude plugin list failed')
+    const settings = await $.settings.read({ source: 'user' })
+    const rows: MsRow[] = []
+    for (const entry of pluginEntries(JSON.parse(ran.stdout))) {
+      if (!entry.hasUserConfig || !entry.installPath) continue
+      let fields: PluginField[] = []
+      try {
+        fields = userConfigFields(await $.fs.read(manifestPath(entry.installPath)))
+      } catch {}
+      rows.push(...pluginRows(entry, fields, optionsOf(settings, entry.id)))
+    }
     await update($, rowsAtom, () => rows)
   } catch (err) {
     await update($, noteAtom, () => `Could not read the settings: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
+/** Saves one option into settings.json (read fresh, only that option changed). A running mod picks it up after /reload-plugins. */
 async function change($: EngineInterface, row: MsRow, value: string | number | boolean): Promise<void> {
   try {
-    const r = (await $.config.set({ key: row.key, value })) as { deny?: string }
-    await update($, noteAtom, () => (r.deny ? `${row.label}: not changed (${r.deny})` : `${row.label} is now ${shown(value)}`))
+    const path = await settingsFile($)
+    const text = (await $.fs.exists(path)) ? await $.fs.read(path) : ''
+    await $.fs.write(path, withOption(text, row.id, row.field, value))
+    await update($, rowsAtom, rows => rows.map(r => (r.key === row.key ? { ...r, value } : r)))
+    await update($, noteAtom, () => `${row.label} saved. Run /reload-plugins to apply it.`)
   } catch (err) {
     await update($, noteAtom, () => `${row.label}: not changed (${err instanceof Error ? err.message : String(err)})`)
   }
-  await loadRows($)
 }
 
 async function openPane($: EngineInterface, columns = COLUMNS): Promise<void> {

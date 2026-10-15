@@ -1,7 +1,10 @@
-/** One mod setting as the pane keeps it: a `/config` row a plugin owns. */
+/** One mod setting as the pane keeps it: a field of a plugin's `userConfig`. */
 export type MsRow = {
-  /** `<plugin>.<field>`, what `$.config.set` takes. */
+  /** `<plugin>.<field>`: the row's identity. */
   key: string
+  /** The plugin id the value is saved under in settings.json (`<name>@<marketplace>`), and the field's name in its options. */
+  id: string
+  field: string
   plugin: string
   label: string
   description: string

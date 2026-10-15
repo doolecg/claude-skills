@@ -1,6 +1,6 @@
 {
   "name": "mod-settings",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Every installed mod's settings in one side panel in the desktop app, changed in place.",
   "author": { "name": "doolecg" },
   "license": "MIT",

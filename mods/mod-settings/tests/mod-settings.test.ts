@@ -1,40 +1,71 @@
 import { expect, test } from 'claude-code/testing'
 
 import { groupRows, parseValue, pluginRows, shown, titleOf } from '../hooks/logic'
+import { optionsOf, pluginEntries, userConfigFields, withOption } from '../hooks/plugin-config'
 
-const row = (key: string, kind: string, value: unknown, extra: Record<string, unknown> = {}) => ({
-  key,
-  label: key.split('.').pop(),
-  kind,
-  value,
-  provider: { plugin: key.includes('.') ? key.slice(0, key.indexOf('.')) : 'engine', tier: key.includes('.') ? 'user' : 'core' },
-  isLocked: false,
-  ...extra,
-})
+const field = (type: string, title: string, def: unknown, extra: Record<string, unknown> = {}) => ({ type, title, description: `${title} help`, default: def, ...extra })
 
-const ROWS = [
-  row('theme', 'choice', 'dark', { options: ['dark', 'light'] }),
-  row('bottom-bar.colour', 'choice', 'Coral', { options: ['Coral', 'Sky'], description: 'The accent colour' }),
-  row('bottom-bar.name', 'text', "Doole's Tools"),
-  row('self-improve.maxCalls', 'number', 4),
-  row('clean-view.enabled', 'boolean', true),
+// Manifests by plugin name, fields in the order the mod declares them.
+const MANIFESTS: Record<string, unknown> = {
+  'bottom-bar': {
+    name: 'bottom-bar',
+    userConfig: {
+      enabled: field('boolean', 'Enabled', true),
+      name: field('string', 'Pill name', "Doole's Tools"),
+      colour: field('string', 'Colour', 'Coral', { options: ['Coral', 'Sky'], description: 'The accent colour' }),
+    },
+  },
+  'self-improve': { name: 'self-improve', userConfig: { maxCalls: field('number', 'Max calls', 4) } },
+  'clean-view': { name: 'clean-view', userConfig: { enabled: field('boolean', 'Enabled', true) } },
+}
+
+const LIST = [
+  { id: 'bottom-bar@dooles-tools', version: '1.10.0', scope: 'project', enabled: true, installPath: 'C:\\p\\cache\\bottom-bar-old', hasUserConfig: true },
+  { id: 'bottom-bar@dooles-tools', version: '1.10.0', scope: 'user', enabled: true, installPath: 'C:\\p\\cache\\bottom-bar', hasUserConfig: true },
+  { id: 'self-improve@dooles-tools', scope: 'user', enabled: true, installPath: 'C:\\p\\cache\\self-improve', hasUserConfig: true },
+  { id: 'clean-view@dooles-tools', scope: 'user', enabled: true, installPath: 'C:\\p\\cache\\clean-view', hasUserConfig: true },
+  { id: 'off-plugin@dooles-tools', scope: 'user', enabled: false, installPath: 'C:\\p\\cache\\off-plugin', hasUserConfig: true },
+  { id: 'plain@dooles-tools', scope: 'user', enabled: true, installPath: 'C:\\p\\cache\\plain', hasUserConfig: false },
 ]
 
-// A world whose /config holds ROWS and records each change.
-function world(on: any, hasOpen = true) {
-  const rows = ROWS.map(r => ({ ...r }))
-  const sets: { key: string; value: unknown }[] = []
+const SETTINGS_PATH = 'C:/cfg/settings.json'
+const SAVED = {
+  theme: 'dark',
+  permissions: { allow: ['Bash(ls)'] },
+  pluginConfigs: {
+    'bottom-bar@dooles-tools': { options: { colour: 'Sky', showUsage: false } },
+    'other@elsewhere': { options: { keep: 'me' }, mcpServers: { a: 1 } },
+  },
+}
+
+const norm = (path: unknown) => String(path).split(String.fromCharCode(92)).join('/')
+
+// A world with `claude plugin list`, the manifests, and a settings.json held in `files`; every write is recorded.
+function world(on: any, hasOpen = true, saved: unknown = SAVED) {
+  const files: Record<string, string> = { [SETTINGS_PATH]: JSON.stringify(saved, null, 2) }
+  for (const entry of LIST) {
+    const name = entry.id.split('@')[0]!
+    if (MANIFESTS[name]) files[`${entry.installPath.replace(/\\/g, '/')}/.claude-plugin/plugin.json`] = JSON.stringify(MANIFESTS[name])
+  }
+  const writes: { path: string; text: string }[] = []
   on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
   on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }))
   if (hasOpen) on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('config.list', () => ({ value: rows }))
-  on('config.set', (_$: any, e: any) => {
-    sets.push({ key: e.key, value: e.value })
-    const r = rows.find(x => x.key === e.key)
-    if (r) r.value = e.value
-    return { value: e.value }
+  on('process.run', () => ({ value: { exitCode: 0, stdout: JSON.stringify(LIST), stderr: '' } }))
+  on('settings.read', () => ({ value: JSON.parse(files[SETTINGS_PATH]!) }))
+  on('env.get', (_$: any, e: any) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? 'C:/cfg' : undefined }))
+  on('fs.exists', (_$: any, e: any) => ({ value: norm(e.path) in files }))
+  on('fs.read', (_$: any, e: any) => {
+    const key = norm(e.path)
+    if (!(key in files)) throw new Error(`no file ${key}`)
+    return { value: files[key] }
   })
-  return sets
+  on('fs.write', (_$: any, e: any) => {
+    writes.push({ path: norm(e.path), text: e.text })
+    files[norm(e.path)] = e.text
+    return { value: undefined }
+  })
+  return { writes, files }
 }
 
 const PANE = (surface: string) =>
@@ -48,11 +79,32 @@ const PANE = (surface: string) =>
 
 const texts = async (ui: any) => ((await ui.findAll({ type: 'Text' })) as any[]).map(t => String(t.text)).join(' | ')
 
-test('only plugin rows are kept, grouped by mod in name order, with friendly names', () => {
-  const groups = groupRows(pluginRows(ROWS as any))
-  expect(groups.map(g => g.title)).toEqual(['Bottom Bar', 'Self Improve', 'Task View'])
-  expect(groups[0]!.rows.map(r => r.key)).toEqual(['bottom-bar.colour', 'bottom-bar.name'])
+test('cards are built from the manifests in manifest order, saved values over defaults, one per plugin, enabled ones only', () => {
+  const entries = pluginEntries(LIST)
+  expect(entries.map(e => e.id)).toEqual(['bottom-bar@dooles-tools', 'self-improve@dooles-tools', 'clean-view@dooles-tools', 'plain@dooles-tools'])
+  expect(entries[0]!.installPath).toBe('C:\\p\\cache\\bottom-bar')
+  const bar = entries[0]!
+  const fields = userConfigFields(JSON.stringify(MANIFESTS['bottom-bar']))
+  expect(fields.map(f => f.key)).toEqual(['enabled', 'name', 'colour'])
+  expect(fields.map(f => f.kind)).toEqual(['boolean', 'text', 'choice'])
+  const rows = pluginRows(bar, fields, optionsOf(SAVED, bar.id))
+  expect(rows.map(r => [r.key, r.value])).toEqual([
+    ['bottom-bar.enabled', true],
+    ['bottom-bar.name', "Doole's Tools"],
+    ['bottom-bar.colour', 'Sky'],
+  ])
+  expect(rows[2]!.options).toEqual(['Coral', 'Sky'])
+  const groups = groupRows([...pluginRows(entries[1]!, userConfigFields(JSON.stringify(MANIFESTS['self-improve'])), {}), ...rows])
+  expect(groups.map(g => g.title)).toEqual(['Bottom Bar', 'Self Improve'])
   expect(titleOf('prompt-enhancer')).toBe('Prompt Enhancer')
+})
+
+test('a change sets only that option and keeps every other key', () => {
+  const next = JSON.parse(withOption(JSON.stringify(SAVED), 'bottom-bar@dooles-tools', 'enabled', false))
+  expect(next).toEqual({ ...SAVED, pluginConfigs: { ...SAVED.pluginConfigs, 'bottom-bar@dooles-tools': { options: { colour: 'Sky', showUsage: false, enabled: false } } } })
+  const fresh = withOption('', 'a@b', 'x', 1)
+  expect(JSON.parse(fresh)).toEqual({ pluginConfigs: { 'a@b': { options: { x: 1 } } } })
+  expect(fresh.split('\n')[1]).toBe('  "pluginConfigs": {')
 })
 
 test('number fields are checked; values read plainly', () => {
@@ -63,25 +115,28 @@ test('number fields are checked; values read plainly', () => {
   expect(shown('')).toBe('(empty)')
 })
 
-test('in the app /doole_settings opens a side panel listing each mod; opening one shows its settings, and a change goes through /config', async ($, on) => {
-  const sets = world(on)
+test('in the app /doole_settings opens a side panel listing each mod; opening one shows its settings, and a change is saved into settings.json', async ($, on) => {
+  const w = world(on)
   await $.session.start({ cwd: 'F:/proj', surface: 'desktop', isInteractive: true } as any)
   await $.command.run({ command: 'doole_settings', args: '' } as any)
   const ui = await $.ui.mount(PANE('desktop'))
   const all = await texts(ui)
   expect(all).toContain('Mod Settings')
-  expect(all).toContain('3 mods · 4 settings')
+  expect(all).toContain('3 mods · 5 settings')
   expect(all).toContain('Bottom Bar')
   expect(all).not.toContain('The accent colour')
   await ui.press({ key: 'mod:bottom-bar:toggle' })
   expect(await texts(ui)).toContain('The accent colour')
   expect(await ui.find({ type: 'Select', key: 'bottom-bar.colour:select' })).toBeDefined()
+  expect(await texts(ui)).toContain('Pill name')
   expect(await ui.find({ type: 'Input', key: 'bottom-bar.name:input' })).toBeDefined()
   await ui.press({ key: 'mod:clean-view:toggle' })
   expect(await texts(ui)).not.toContain('The accent colour')
   await ui.press({ key: 'clean-view.enabled:off' })
-  expect(sets).toEqual([{ key: 'clean-view.enabled', value: false }])
-  expect(await texts(ui)).toContain('enabled is now Off')
+  expect(w.writes).toHaveLength(1)
+  expect(w.writes[0]!.path).toBe(SETTINGS_PATH)
+  expect(JSON.parse(w.writes[0]!.text)).toEqual({ ...SAVED, pluginConfigs: { ...SAVED.pluginConfigs, 'clean-view@dooles-tools': { options: { enabled: false } } } })
+  expect(await texts(ui)).toContain('Enabled saved. Run /reload-plugins to apply it.')
   await ui.unmount()
 })
 
@@ -94,8 +149,10 @@ test('in the terminal the pane points to /config instead', async ($, on) => {
 })
 
 test('a long value, label and description with no spaces are cut to the narrow panel', async ($, on) => {
-  const long = row('bottom-bar.folder', 'text', 'C:/' + 'x'.repeat(200), { isLocked: true, label: 'F' + 'y'.repeat(100), description: 'D' + 'z'.repeat(100) })
-  ROWS.push(long as any)
+  const long = { ...MANIFESTS['bottom-bar'] as any }
+  long.userConfig = { ...long.userConfig, folder: field('string', 'F' + 'y'.repeat(100), 'C:/' + 'x'.repeat(200), { description: 'D' + 'z'.repeat(100) }) }
+  const saved = MANIFESTS['bottom-bar']
+  MANIFESTS['bottom-bar'] = long
   try {
     world(on)
     await $.session.start({ cwd: 'F:/proj', surface: 'desktop', isInteractive: true } as any)
@@ -104,11 +161,11 @@ test('a long value, label and description with no spaces are cut to the narrow p
     await ui.press({ key: 'mod:bottom-bar:toggle' })
     const all = ((await ui.findAll({ type: 'Text' })) as any[]).map(t => String(t.text))
     const words = all.flatMap(t => t.split(/\s+/))
-    expect(words.some(w => w.includes('xxxx') && w.endsWith('…'))).toBe(true)
+    expect(words.some(w => w.includes('yyyy') && w.endsWith('…')) && words.some(w => w.includes('zzzz') && w.endsWith('…'))).toBe(true)
     for (const w of words) expect(w.length, w).toBeLessThanOrEqual(44 - 10)
     await ui.unmount()
   } finally {
-    ROWS.pop()
+    MANIFESTS['bottom-bar'] = saved
   }
 })
 
@@ -142,7 +199,7 @@ function tabWorld(on: any) {
   const opened: any[] = []
   const closed: string[] = []
   let panes: string[] = []
-  const sets = world(on, false)
+  const sets = world(on, false).writes
   on('ui.open', (_$: any, e: any) => {
     opened.push(e)
     panes.push(e.id)
@@ -166,13 +223,13 @@ test('as the Main Menu’s last tab, the pane follows the strip at the menu’s 
   const all = await texts(ui)
   expect(all).toContain('MAIN MENU')
   expect(all).toContain('MOD SETTINGS')
-  expect(all).toContain('3 mods · 4 settings')
+  expect(all).toContain('3 mods · 5 settings')
   expect(await ui.find({ type: 'Button', key: 'sb-tab:flightdeck' })).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'sb-close' })).toBeDefined()
   // A mod’s settings still open and change in place under the strip.
   await ui.press({ key: 'mod:clean-view:toggle' })
   await ui.press({ key: 'clean-view.enabled:off' })
-  expect(w.sets).toEqual([{ key: 'clean-view.enabled', value: false }])
+  expect(w.sets.map(x => JSON.parse(x.text).pluginConfigs['clean-view@dooles-tools'].options)).toEqual([{ enabled: false }])
   // A strip press asks the Main Menu for that tab, through state and not a command.
   await ui.press({ key: 'sb-tab:flightdeck' })
   await new Promise(r => (globalThis as any).setTimeout(r, 0))

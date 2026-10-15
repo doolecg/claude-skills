@@ -48,8 +48,12 @@ declare module 'claude-code' {
       order: string[]
       /** The mods installed and enabled here, by plugin name. */
       installed: string[]
-      /** Mods switched off (their `<id>.enabled` setting is false): their tabs are dimmed. */
+      /** Mods switched off (their saved `enabled` option is false): their tabs are dimmed. */
       off: string[]
+      /** Off mods switched on from their page, waiting for /reload-plugins. */
+      turnedOn: string[]
+      /** Off mods switched on from their page, waiting for /reload-plugins. */
+      turnedOn: string[]
       /** Rule Guard's stops this session, newest first. */
       blocks: SbBlock[]
     }

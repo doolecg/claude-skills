@@ -5,7 +5,7 @@ import { isModCommand, type Palette } from './bar-logic'
 export const effortName = (level: string): string =>
   level === 'xhigh' ? 'XHigh' : level ? level[0]!.toUpperCase() + level.slice(1) : ''
 
-/** `Doole's Tools` → `D O O L E ' S   T O O L S`, or plain capitals when that will not fit `room`. */
+/** `Tools` → `T O O L S`, or plain capitals when that will not fit `room`. */
 export function spaced(name: string, room: number): string {
   const upper = name.toUpperCase()
   const wide = [...upper].join(' ')

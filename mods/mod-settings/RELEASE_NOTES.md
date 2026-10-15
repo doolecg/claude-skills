@@ -1,7 +1,8 @@
-# Mod Settings 0.2.0
+# Mod Settings 0.3.0
 
-## New
-- With the Main Menu on, Mod Settings is its last tab, with the menu's tabs above it. `/doole_settings` opens that tab. With the menu off it is the same side panel as before.
+## Fixed
+- Mod Settings showed no settings. It now reads each installed mod's settings from the mod itself, with the values you saved, and lists them in the mod's own order.
+- A change is saved to your settings.json, keeping everything else there. Run /reload-plugins (or restart) for the mod to use it.
 
 ---
 

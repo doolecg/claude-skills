@@ -1,6 +1,6 @@
-import type { ConfigRow } from 'claude-code'
-
 import type { MsRow } from '../types'
+import type { PluginEntry, PluginField } from './plugin-config'
+import { valueOf } from './plugin-config'
 
 /** One mod's card: its name and its settings, in the order `/config` lists them. */
 export type ModGroup = { plugin: string; title: string; rows: MsRow[] }
@@ -15,20 +15,20 @@ export function titleOf(plugin: string): string {
     .join(' ')
 }
 
-/** The settings rows plugins own, as plain values the pane keeps; the engine's own rows are left out. */
-export function pluginRows(rows: readonly ConfigRow[]): MsRow[] {
-  return rows
-    .filter(r => r.provider.plugin !== 'engine' && r.provider.tier !== 'core' && r.key.includes('.'))
-    .map(r => ({
-      key: r.key,
-      plugin: r.key.slice(0, r.key.indexOf('.')),
-      label: r.label,
-      description: r.description ?? '',
-      kind: r.kind,
-      value: Array.isArray(r.value) ? r.value.join(', ') : (r.value as string | number | boolean),
-      options: r.options ? [...r.options] : [],
-      isLocked: r.isLocked,
-    }))
+/** One plugin's rows: its manifest fields in order, each with its saved value or its default. */
+export function pluginRows(entry: PluginEntry, fields: readonly PluginField[], options: Record<string, unknown>): MsRow[] {
+  return fields.map(f => ({
+    key: `${entry.name}.${f.key}`,
+    id: entry.id,
+    field: f.key,
+    plugin: entry.name,
+    label: f.label,
+    description: f.description,
+    kind: f.kind,
+    value: valueOf(f, options),
+    options: [...f.options],
+    isLocked: false,
+  }))
 }
 
 /** The rows grouped by mod, mods in name order. */

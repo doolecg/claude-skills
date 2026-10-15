@@ -1,7 +1,7 @@
 {
   "name": "bottom-bar",
-  "version": "1.10.0",
-  "description": "A compact rounded bar at the bottom of the terminal and the desktop app (model, effort, context and tokens used, 5-hour and 7-day usage, agents) with a Doole's Tools button that opens a toolbox.",
+  "version": "1.11.0",
+  "description": "A compact rounded bar at the bottom of the terminal and the desktop app (model, effort, context and tokens used, 5-hour and 7-day usage, agents) with a Tools button that opens the Main Menu.",
   "author": { "name": "doolecg" },
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -14,8 +14,8 @@
     "name": {
       "type": "string",
       "title": "Pill name",
-      "description": "The name shown on the pill and at the top of the toolbox. Default: Doole's Tools.",
-      "default": "Doole's Tools"
+      "description": "The name shown on the pill and at the top of the toolbox. Default: Tools.",
+      "default": "Tools"
     },
     "colour": {
       "type": "string",

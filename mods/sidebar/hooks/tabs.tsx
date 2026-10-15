@@ -32,10 +32,12 @@ export type ViewData = {
   hidden: string[]
   /** The mods switched off: their tab shows an off page. */
   off: string[]
+  /** Off mods just switched on in settings: their page asks for /reload-plugins instead of offering the button. */
+  turnedOn: string[]
   tabs: SbTab[]
   now: number
   openTab: (id: string) => void
-  /** Switches a mod on (its `<id>.enabled` setting). */
+  /** Switches a mod on (saves its `enabled` option). */
   turnOn: (id: string) => void
   setHidden: (id: string, isHidden: boolean) => void
   moveTab: (id: string, by: -1 | 1) => void
@@ -222,7 +224,13 @@ function offTab(k: SbKit, d: ViewData, id: string) {
       <Text key="off-about" color={k.pal.dim} wrap="wrap">
         {entry.about}
       </Text>,
-      sbButton(k, `sb-turn-on:${id}`, 'Turn on', () => d.turnOn(id), true),
+      d.turnedOn.includes(id) ? (
+        <Text key="off-reload" color={k.pal.good} wrap="wrap">
+          Turned on. Run /reload-plugins to load it.
+        </Text>
+      ) : (
+        sbButton(k, `sb-turn-on:${id}`, 'Turn on', () => d.turnOn(id), true)
+      ),
     ]),
   ]
 }
