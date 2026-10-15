@@ -17,9 +17,21 @@ Commands:
 In the Sidebar:
 - With the Sidebar mod installed, `/ideas` opens as the Idea Shelf tab: a field to add an idea, and each idea with its age and Send, Edit and ✕ buttons. `/ideas close` closes it. The tab's badge shows how many ideas this project has.
 
+Settings (Mod Settings, `/doole_settings`, or `/config`):
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Enabled | On | Off stops the commands, the pane and the Sidebar badge. Saved ideas are kept. |
+| Order of ideas | Oldest first | Oldest first or Newest first. The numbers used by `/idea edit` follow this order. |
+| Remove an idea when sent | On | Off keeps an idea on the shelf after you send it. |
+| Show how old each idea is | On | The age beside each idea in the Sidebar tab. |
+| Show the idea count on the Sidebar tab | On | The badge on the Sidebar tab. |
+| Longest idea | 2000 | Ideas longer than this are cut (20 to 10000). |
+
 Limits:
 - Ideas are kept per project folder, matched case-insensitively, and a subfolder has its own shelf.
 - Ideas are stored in the plugin store, which is shared by all sessions on this machine. The pane refreshes when this session draws it.
 - The edit field is not available on mobile surfaces; there Edit is replaced by a note.
 - `/idea edit ...` is read as an edit, so an idea whose text begins with "edit <number>" must be parked another way.
-- Each idea is up to 2000 characters.
+- Each idea is up to 2000 characters unless you change the Longest idea setting.
+- The age and the badge settings apply to the Sidebar tab only; the plain pane shows no ages.

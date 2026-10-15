@@ -41,6 +41,8 @@ const uiAtom = atom({ plugin: 'self-improve', key: 'ui' } as const, {
   message: '',
 } as PaneUi)
 
+const OFF_TEXT = 'Self Improve is off. Turn it on in Mod Settings (/doole_settings) or /config.'
+
 const EDIT_TOOLS = /^(Edit|MultiEdit|Write|NotebookEdit)$/
 // The app stopped or archived the session; `clear` and `resume` go on in the same process and learn nothing.
 const LEARN_ON_END = new Set(['prompt_input_exit', 'logout', 'other'])
@@ -85,7 +87,7 @@ async function refreshBand($: EngineInterface, io: Io, isRunning = false): Promi
   const waiting = state.lessons.filter(l => l.status === 'pending').length + state.drafts.filter(d => d.status === 'pending').length
   if ((await read($, badgeAtom)) !== waiting) await update($, badgeAtom, () => waiting)
   const hs = rt.lastHindsight ? (rt.lastHindsight.on ? { on: true, reason: '' } : { on: false, reason: rt.lastHindsight.reason }) : null
-  const line = rt.s.mode === 'off' ? '' : bandLine(state, session?.cwd ?? '', hs)
+  const line = rt.s.mode === 'off' || !rt.s.enabled ? '' : bandLine(state, session?.cwd ?? '', hs)
   await update($, bandAtom, () => ({ line, isRunning }))
 }
 
@@ -103,6 +105,7 @@ async function buildBrief($: EngineInterface, io: Io, cwd: string): Promise<stri
 
 // One learn run, in this session, in the background. The job file is written first so a crash leaves it for later.
 async function learnNow($: EngineInterface, trigger: string): Promise<string> {
+  if (!rt.s.enabled) return OFF_TEXT
   if (rt.s.mode === 'off') return 'Self Improve is off (mode: off in its settings).'
   const session = await read($, sessionAtom)
   if (!session) return 'Self Improve has no session record yet; try again in a moment.'
@@ -192,6 +195,7 @@ export const register: Register = (on, options) => {
           description: 'Search what past sessions learned about this project and about the user: lessons, decisions, preferences. Searches Hindsight (when set up), then soul.md and the local lessons. Set why=true to ask Hindsight to reflect on why something was decided.',
           inputSchema: { type: 'object', properties: { query: { type: 'string' }, why: { type: 'boolean' } }, required: ['query'] },
         })
+        if (!s.enabled) return next(e)
         const io = await engineIo($)
         const id = await $.session.id()
         let startHead = ''
@@ -221,7 +225,7 @@ export const register: Register = (on, options) => {
   // The brief goes in as SessionStart context: at start, and again after /clear and compaction.
   on('classic.SessionStart', async ($, e, next) => {
     const r = await next(e)
-    if (rt.isWorker || s.mode === 'off') return r
+    if (rt.isWorker || s.mode === 'off' || !s.enabled) return r
     try {
       const io = await engineIo($)
       const session = await read($, sessionAtom)
@@ -242,6 +246,7 @@ export const register: Register = (on, options) => {
   // Edits are counted, never changed: a session with none learns nothing when it is closed.
   on('tool.call', { tool: EDIT_TOOLS }, async ($, e, next) => {
     const r = await next(e)
+    if (!s.enabled) return r
     if (!('deny' in r && r.deny) && !e.agentId) await update($, sessionAtom, x => (x ? { ...x, edits: x.edits + 1 } : x))
     return r
   }).catch(($, e, next) => next(e))
@@ -249,6 +254,7 @@ export const register: Register = (on, options) => {
   // Each Skill load is counted in the plugin store (the scorecard's "times loaded").
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
     const r = await next(e)
+    if (!s.enabled) return r
     try {
       const name = String((e as unknown as { skill?: unknown }).skill ?? '').replace(/^\//, '')
       if (name && !('deny' in r && r.deny)) {
@@ -265,7 +271,7 @@ export const register: Register = (on, options) => {
   // Claude marked the session completed in the app's sidebar because the person asked: learn once it succeeded.
   on('tool.call', { tool: /^mcp__ccd_sidebar__mark_completed$/ }, async ($, e, next) => {
     const r = await next(e)
-    if (!rt.isWorker && !('deny' in r && r.deny) && !('isError' in r && r.isError)) {
+    if (s.enabled && !rt.isWorker && !('deny' in r && r.deny) && !('isError' in r && r.isError)) {
       const session = await read($, sessionAtom)
       if (session && !session.isOff) void learnNow($, 'marked completed')
     }
@@ -273,6 +279,7 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'mcp__self-improve__recall' }, async ($, ev) => {
+    if (!s.enabled) return { result: OFF_TEXT }
     const e = ev as unknown as { query?: unknown; why?: unknown }
     const query = typeof e.query === 'string' ? clean(e.query).slice(0, 400) : ''
     if (!query) return { result: 'Give a query.' }
@@ -300,6 +307,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'done' }, async ($, e) => {
+    if (!s.enabled) return { text: OFF_TEXT }
     const note = clean(e.args ?? '').slice(0, 500)
     await update($, sessionAtom, x => (x ? { ...x, note: note || x.note } : x))
     const session = await read($, sessionAtom)
@@ -310,11 +318,13 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'learn-now' }, async $ => ({ text: await learnNow($, '/learn-now') }))
 
   on('command.run', { command: 'learn-off' }, async $ => {
+    if (!s.enabled) return { text: OFF_TEXT }
     await update($, sessionAtom, x => (x ? { ...x, isOff: true } : x))
     return { text: 'Self Improve is off for this session: closing it learns nothing. /learn-now still runs by hand.' }
   })
 
   on('command.run', { command: 'learn' }, async ($, e) => {
+    if (!s.enabled) return { text: OFF_TEXT }
     const io = await engineIo($)
     const [verb = '', arg = ''] = (e.args ?? '').trim().split(/\s+/)
     const id = Number(arg)
@@ -342,7 +352,7 @@ export const register: Register = (on, options) => {
     return openLearn($)
   })
 
-  on('command.run', { command: 'doole_self-improve' }, $ => openLearn($))
+  on('command.run', { command: 'doole_self-improve' }, $ => (s.enabled ? openLearn($) : { text: OFF_TEXT }))
 
   // The Sidebar's strip names this tab, or moves on from it: the pane opens or closes with it.
   on('state.set', { key: 'strip' } as never, async ($, e, next) => {
@@ -350,6 +360,7 @@ export const register: Register = (on, options) => {
     const w = e as unknown as StateWrite
     const move = w.plugin === 'sidebar' ? sbPaneMove(PLUGIN, w.value, w.previous) : undefined
     try {
+      if (!s.enabled) return ran
       if (move === 'open') await openPane($)
       else if (move === 'close') await closePane($)
     } catch {}
@@ -389,7 +400,7 @@ export const register: Register = (on, options) => {
   // session.end has 1.5 s: write the job and start the detached learner; the real work happens there.
   on('session.end', async ($, e, next) => {
     try {
-      if (rt.isWorker || s.mode === 'off' || !LEARN_ON_END.has(e.reason)) return await next(e)
+      if (rt.isWorker || s.mode === 'off' || !s.enabled || !LEARN_ON_END.has(e.reason)) return await next(e)
       const session = await read($, sessionAtom)
       if (!session || session.isOff || rt.isLearning) return await next(e)
       // Closing a chat that did nothing learns nothing: it needs an edit since the last learn, or a /done note not yet learned.

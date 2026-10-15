@@ -115,6 +115,10 @@ export type DesktopBarArgs = {
   todoTick?: number
   /** The band's width in columns, so the list's bar spans it. */
   columns?: number
+  /** False hides the 5-hour and 7-day usage figures. */
+  showUsage?: boolean
+  /** False hides the running-agents count. */
+  showAgents?: boolean
 }
 
 /**
@@ -154,9 +158,11 @@ export function desktopBar(a: DesktopBarArgs): JSX.Element {
           <Text color={level(pct, pal)}>{`${Math.round(pct)}%`}</Text>
           {used ? <Text color={pal.dim}>{used}</Text> : null}
         </Box>
-        {f.fiveHour !== null ? figure('fiveHour', '5h', `${Math.round(f.fiveHour)}%`, level(f.fiveHour, pal)) : null}
-        {f.sevenDay !== null ? figure('sevenDay', '7d', `${Math.round(f.sevenDay)}%`, level(f.sevenDay, pal)) : null}
-        <Text key="agents" color={f.agents > 0 ? pal.text : pal.dim}>{`${f.agents} agent${f.agents === 1 ? '' : 's'}`}</Text>
+        {a.showUsage !== false && f.fiveHour !== null ? figure('fiveHour', '5h', `${Math.round(f.fiveHour)}%`, level(f.fiveHour, pal)) : null}
+        {a.showUsage !== false && f.sevenDay !== null ? figure('sevenDay', '7d', `${Math.round(f.sevenDay)}%`, level(f.sevenDay, pal)) : null}
+        {a.showAgents !== false ? (
+          <Text key="agents" color={f.agents > 0 ? pal.text : pal.dim}>{`${f.agents} agent${f.agents === 1 ? '' : 's'}`}</Text>
+        ) : null}
       </Box>
       <Button key="pill" label={a.title} variant="primary" onPress={a.openToolbox} />
     </Box>

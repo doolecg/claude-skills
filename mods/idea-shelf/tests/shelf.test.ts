@@ -161,3 +161,67 @@ test('a long idea with no spaces is cut to the narrow pane on the desktop', { pl
   for (const t of texts) expect(t.length, t).toBeLessThanOrEqual(44 - 10)
   await ui.unmount()
 })
+
+function basics(on: any) {
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  mock.store(on)
+  on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: 'F:/repo' }))
+  on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }))
+  on('ui.toast', () => ({ value: undefined }))
+  return clock
+}
+const run = ($: any, command: string, args = '') => $.command.run({ command, args, origin: { kind: 'composer' as const } } as any)
+const PANE = { title: 'Idea Shelf', isFocused: false, bodyColumns: 56, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} }
+const mountPane = ($: any) => $.ui.mount({ plugin: 'idea-shelf', surface: 'desktop', component: 'Pane', requestId: 'ideas', props: PANE } as any)
+const textsOf = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join(String.fromCharCode(10))
+
+test('enabled off: the commands say it is off, nothing is saved and the pane is left alone', { options: { enabled: false } }, async ($, on) => {
+  const opened: any[] = []
+  basics(on)
+  on('ui.open', (_$: any, e: any) => {
+    opened.push(e)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.render', { component: 'Pane', requestId: 'ideas' }, (($: any, e: any) => {
+    const { Text } = $.ui.resolve(e)
+    return (globalThis as any).h(Text, {}, 'vanilla pane')
+  }) as any)
+  await $.session.start({ cwd: 'F:/repo', surface: 'terminal', isInteractive: true } as any)
+  const off = 'Idea Shelf is off. Turn it on in Mod Settings (/doole_settings) or /config.'
+  expect(((await run($, 'idea', 'add dark mode')) as any).text).toBe(off)
+  expect(((await run($, 'ideas')) as any).text).toBe(off)
+  expect(((await run($, 'doole_idea-shelf')) as any).text).toBe(off)
+  expect(opened).toHaveLength(0)
+  const ui = await mountPane($)
+  expect(await textsOf(ui)).toBe('vanilla pane')
+  await ui.unmount()
+})
+
+test('order, age, the length limit and keeping a sent idea come from the settings', { options: { order: 'Newest first', showAge: false, maxLength: 30, removeOnSend: false }, plugins: [SIDEBAR] }, async ($, on) => {
+  const sent: string[] = []
+  const clock = basics(on)
+  on('prompt.submit', (_$: any, e: any) => {
+    sent.push(e.text)
+    return { drop: 'test' } as any
+  })
+  await $.session.start({ cwd: 'F:/repo', surface: 'terminal', isInteractive: true } as any)
+  await run($, 'idea', 'first idea')
+  await clock.advance(5 * 60_000)
+  await run($, 'idea', 'second idea')
+  await run($, 'idea', 'z'.repeat(80))
+  await run($, 'sb-strip', JSON.stringify({ isOn: true, active: 'idea-shelf', tabs: [], theme: 'dark', colour: 'Coral' }))
+  const ui = await mountPane($)
+  const all = await textsOf(ui)
+  expect(all.indexOf('second idea')).toBeLessThan(all.indexOf('first idea'))
+  expect(all).not.toMatch(/[0-9]+[mhd]$|^now$/m)
+  expect(all).toContain('z'.repeat(30))
+  expect(all).not.toContain('z'.repeat(31))
+  const key = (await ui.findAll({ type: 'Button' })).map((b: any) => String(b.key)).find((k: string) => k.startsWith('send:'))
+  await ui.press({ key })
+  expect(sent).toHaveLength(1)
+  await ui.unmount()
+  const again = await mountPane($)
+  expect(await textsOf(again)).toContain('first idea')
+  await again.unmount()
+})

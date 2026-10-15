@@ -228,3 +228,10 @@ describe('brief and jobs', () => {
     expect(u[2]).toBe(`cd '/code' && nohup claude '-p' '/self-improve-run s1' '--output-format' 'text' >/dev/null 2>&1 &`)
   })
 })
+
+test('settingsFrom reads enabled and the session gate', () => {
+  expect(settingsFrom({}).enabled).toBe(true)
+  expect(settingsFrom({ enabled: false }).enabled).toBe(false)
+  const s = settingsFrom({ minUserTurns: 6, minTokens: 0 })
+  expect([s.minUserTurns, s.minTokens]).toEqual([6, 0])
+})

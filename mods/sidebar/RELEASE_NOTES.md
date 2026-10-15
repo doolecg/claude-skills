@@ -1,10 +1,8 @@
-# Sidebar 1.5.3
+# Sidebar 1.6.0
 
 ## New
-- `/doole_sidebar` opens it, the same as the old command, which still works.
-
-## Fixed
-- Long text with no spaces (file paths, commands, names) is cut with "…" so it stays inside a narrow panel in the desktop app.
+- An Enabled setting, first in its list, turns the mod off without uninstalling it. Find it in Mod Settings (`/doole_settings`) in the desktop app or `/config` in the terminal.
+- Settings for the starting tab, reopening on start, and showing the footer and the tab badges.
 
 ---
 

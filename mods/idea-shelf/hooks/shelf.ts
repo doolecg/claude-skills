@@ -18,10 +18,28 @@ export function newId(now: number, random: number): string {
   return `${now.toString(36)}${Math.floor(random * 36 ** 4).toString(36).padStart(4, '0')}`
 }
 
-export function cleanIdea(text: string): string | null {
+export function cleanIdea(text: string, max: number = IDEA_MAX): string | null {
   const trimmed = text.trim()
-  return trimmed === '' ? null : trimmed.slice(0, IDEA_MAX)
+  return trimmed === '' ? null : trimmed.slice(0, max)
 }
+
+/** The mod's settings, read from its userConfig. */
+export type ShelfConfig = { isOn: boolean; max: number; isNewestFirst: boolean; removeOnSend: boolean; showAge: boolean; showBadge: boolean }
+
+export function readConfig(options: Record<string, unknown> | undefined): ShelfConfig {
+  const o = options ?? {}
+  const max = typeof o.maxLength === 'number' && Number.isFinite(o.maxLength) ? Math.max(20, Math.min(10000, Math.round(o.maxLength))) : IDEA_MAX
+  return {
+    isOn: o.enabled !== false,
+    max,
+    isNewestFirst: o.order === 'Newest first',
+    removeOnSend: o.removeOnSend !== false,
+    showAge: o.showAge !== false,
+    showBadge: o.showBadge !== false,
+  }
+}
+
+export const OFF_TEXT = 'Idea Shelf is off. Turn it on in Mod Settings (/doole_settings) or /config.'
 
 export function parseEdit(args: string): { n: number; text: string } | null {
   const match = /^edit\s+(\d+)\s*([\s\S]*)$/.exec(args.trim())

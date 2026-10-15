@@ -8,6 +8,7 @@ export type Mode = 'off' | 'suggest' | 'controlled' | 'advanced'
 export const MODES: Mode[] = ['off', 'suggest', 'controlled', 'advanced']
 
 export type Settings = {
+  enabled: boolean
   mode: Mode
   learnModel: string
   rewriteModel: string
@@ -24,6 +25,7 @@ export type Settings = {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  enabled: true,
   mode: 'suggest',
   learnModel: 'haiku',
   rewriteModel: 'sonnet',
@@ -51,6 +53,7 @@ export function settingsFrom(options: Record<string, unknown> | undefined): Sett
   const o = options ?? {}
   const d = DEFAULT_SETTINGS
   return {
+    enabled: o.enabled !== false,
     mode: MODES.includes(o.mode as Mode) ? (o.mode as Mode) : d.mode,
     learnModel: text(o.learnModel, d.learnModel),
     rewriteModel: text(o.rewriteModel, d.rewriteModel),
@@ -62,8 +65,8 @@ export function settingsFrom(options: Record<string, unknown> | undefined): Sett
     hindsightUrl: text(o.hindsightUrl, d.hindsightUrl),
     extraSkillDirs: typeof o.extraSkillDirs === 'string' ? o.extraSkillDirs : d.extraSkillDirs,
     soulCap: num(o.soulCap, d.soulCap, 200, 6000),
-    minUserTurns: d.minUserTurns,
-    minTokens: d.minTokens,
+    minUserTurns: num(o.minUserTurns, d.minUserTurns, 1, 50),
+    minTokens: num(o.minTokens, d.minTokens, 0, 100_000),
   }
 }
 

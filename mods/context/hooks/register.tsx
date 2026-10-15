@@ -14,6 +14,8 @@ import {
   parseExtra,
   parseHindsightConfig,
   parseLimit,
+  parseMinutes,
+  parseSeconds,
   passesText,
   resetPasses,
 } from './logic'
@@ -86,6 +88,7 @@ async function healthStatus($: $, cfg: HindsightConfig): Promise<number | null> 
 
 let limit = 3
 let extra: string[] = []
+let gitGapMs: number = THROTTLE.gitMs
 
 /** Writes the footer, the pass limit and extra words always the options' current ones. */
 const setFooter = ($: $, fn: (f: CtxFooter) => CtxFooter) =>
@@ -134,7 +137,7 @@ let lastGit = 0
 /** Runs `fn` when the throttle gap has passed since the last run it allowed. */
 async function throttled($: $, fn: () => Promise<void>): Promise<void> {
   const now = await $.clock.now()
-  if (!isDue(lastGit, now, THROTTLE.gitMs)) return
+  if (!isDue(lastGit, now, gitGapMs)) return
   lastGit = now
   await fn()
 }
@@ -143,26 +146,32 @@ const SHELL_OR_EDIT = new Set(['Bash', 'PowerShell', 'Edit', 'Write', 'MultiEdit
 
 let timer: Timer | undefined
 
+const OFF_TEXT = 'Context is off. Turn it on in Mod Settings (/doole_settings) or /config.'
+
 export const register: Register = (on, options: PluginOptions) => {
+  const enabled = options.enabled !== false
   limit = parseLimit(options.passLimit)
   extra = parseExtra(options.extraChecks)
+  const hindsightMs = parseMinutes(options.hindsightMinutes) * 60 * 1000
+  gitGapMs = parseSeconds(options.gitSeconds) * 1000
 
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
     await quiet(() => $.command.register({ name: 'passes', description: 'Show how many test and fix passes this problem has had, or reset the count', argumentHint: '[reset]', immediate: true }))
     await quiet(() => $.command.register({ name: 'doole_context', description: 'Show the test and fix pass count', immediate: true }))
+    if (!enabled) return ran
     await quiet(() => setFooter($, f => f))
     await quiet(() => refreshCodegraph($))
     await quiet(() => refreshGit($))
     timer?.cancel()
-    timer = $.clock.every(HINDSIGHT.everyMs, () => void quiet(() => refreshHindsight($)))
+    timer = $.clock.every(hindsightMs, () => void quiet(() => refreshHindsight($)))
     await quiet(() => refreshHindsight($))
     return ran
   })
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    if (e.agentId === undefined) {
+    if (enabled && e.agentId === undefined) {
         await quiet(() => refreshCodegraph($))
       await quiet(() => refreshGit($))
     }
@@ -172,6 +181,7 @@ export const register: Register = (on, options: PluginOptions) => {
   // Counts check runs and edits once the tool has answered; the call itself is never held back or changed.
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
+    if (!enabled) return ran
     if (ran && 'deny' in ran && ran.deny) return ran
     await quiet(async () => {
       const tool = String(e.tool)
@@ -185,11 +195,12 @@ export const register: Register = (on, options: PluginOptions) => {
 
   // A prompt the person types starts a new problem.
   on('prompt.submit', async ($, e, next) => {
-    if (isPersonPrompt(e.origin, e.command !== undefined, e.isMeta === true)) await quiet(() => setPasses($, resetPasses))
+    if (enabled && isPersonPrompt(e.origin, e.command !== undefined, e.isMeta === true)) await quiet(() => setPasses($, resetPasses))
     return next(e)
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: ['passes', 'doole_context'] }, async ($, e) => {
+    if (!enabled) return { text: OFF_TEXT }
     if (/^\s*reset\b/i.test(e.args)) {
       await quiet(() => setPasses($, resetPasses))
       return { text: 'Passes reset.' }

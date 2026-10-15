@@ -153,7 +153,7 @@ const level = (pct: number, pal: Palette): string =>
   pct >= 80 ? pal.bad : pct >= 60 ? pal.warn : pal.good
 
 /** The bar's segments, left to right; a narrow bar drops them from the right. */
-export function segments(f: BarFigures, pal: Palette): Segment[] {
+export function segments(f: BarFigures, pal: Palette, show: { usage?: boolean; agents?: boolean } = {}): Segment[] {
   const out: Segment[] = []
   if (f.model) {
     const parts: Part[] = [
@@ -187,7 +187,7 @@ export function segments(f: BarFigures, pal: Palette): Segment[] {
     if (used) parts.push({ text: ` · ${used}`, color: pal.dim })
     out.push({ key: 'ctx', parts })
   }
-  if (f.fiveHour !== null) {
+  if (show.usage !== false && f.fiveHour !== null) {
     out.push({
       key: 'fiveHour',
       parts: [
@@ -196,7 +196,7 @@ export function segments(f: BarFigures, pal: Palette): Segment[] {
       ],
     })
   }
-  if (f.sevenDay !== null) {
+  if (show.usage !== false && f.sevenDay !== null) {
     out.push({
       key: 'sevenDay',
       parts: [
@@ -205,13 +205,15 @@ export function segments(f: BarFigures, pal: Palette): Segment[] {
       ],
     })
   }
-  out.push({
-    key: 'agents',
-    parts: [
-      { text: f.agents > 0 ? '◆ ' : '◇ ', color: f.agents > 0 ? pal.info : pal.dim },
-      { text: `${f.agents} agent${f.agents === 1 ? '' : 's'}`, color: f.agents > 0 ? pal.text : pal.dim },
-    ],
-  })
+  if (show.agents !== false) {
+    out.push({
+      key: 'agents',
+      parts: [
+        { text: f.agents > 0 ? '◆ ' : '◇ ', color: f.agents > 0 ? pal.info : pal.dim },
+        { text: `${f.agents} agent${f.agents === 1 ? '' : 's'}`, color: f.agents > 0 ? pal.text : pal.dim },
+      ],
+    })
+  }
   return out
 }
 

@@ -146,3 +146,22 @@ test('/passes reports and /passes reset resets', async ($, on) => {
   expect(reset.text).toBe('Passes reset.')
   expect((seen.footer).passes).toEqual({ count: 0, limit: 3, editedSince: false, extra: [] })
 })
+
+test('enabled false counts nothing, publishes nothing and the command says it is off', { options: { enabled: false } }, async ($, on) => {
+  const seen = engine(on)
+  await start($)
+  await call($, 'Bash', 'npm test')
+  expect(seen.footer).toBeUndefined()
+  expect(seen.fetched).toEqual([])
+  const said = await $.command.run({ command: 'passes', args: '' } as any)
+  expect(said.text).toBe('Context is off. Turn it on in Mod Settings (/doole_settings) or /config.')
+})
+
+test('the git refresh gap comes from the options', { options: { gitSeconds: 0 } }, async ($, on) => {
+  const seen = engine(on)
+  await start($)
+  const before = seen.ran.filter(a => a.includes('status')).length
+  await call($, 'Write')
+  await call($, 'Write')
+  expect(seen.ran.filter(a => a.includes('status')).length).toBe(before + 2)
+})

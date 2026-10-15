@@ -2,11 +2,29 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Timer } from 'claude-code'
 
 import type { CvChecklist, CvTask } from '../types'
-import { APP_PLAN_TOOL, APP_WRAP_TOOL, allDone, EMPTY_CHECKLIST, TODO_TOOLS, addTask, isAnimated, tasksFromList, tasksFromTodos, planStep, updateTask, withTasks } from './clean-logic'
+import { APP_PLAN_TOOL, APP_WRAP_TOOL, allDone, EMPTY_CHECKLIST, TODO_TOOLS, addTask, isAnimated, setLimits, tasksFromList, tasksFromTodos, planStep, updateTask, withTasks } from './clean-logic'
 import { drawTodoDesktop, drawTodoTerminal } from './clean-draw'
 import { sbPalette } from './sidebar-kit'
 
 type Dollar = EngineInterface
+
+/** The mod's settings, read from its userConfig. */
+export type CvConfig = { isMaster: boolean; colour: string | undefined; showMain: boolean; showItems: boolean; scale: number }
+
+const COLOURS = ['Coral', 'Amber', 'Sage', 'Sky', 'Lilac', 'Rose']
+const SCALES: Record<string, number> = { Small: 0.6, Medium: 1, Large: 1.5 }
+const OFF_TEXT = 'Task View is off. Turn it on in Mod Settings (/doole_settings) or /config.'
+
+export function readConfig(options: Record<string, unknown> | undefined): CvConfig {
+  const o = options ?? {}
+  return {
+    isMaster: o.enabled !== false,
+    colour: typeof o.colour === 'string' && COLOURS.includes(o.colour) ? o.colour : undefined,
+    showMain: o.showMainBar !== false,
+    showItems: o.showItemBars !== false,
+    scale: typeof o.barSize === 'string' ? (SCALES[o.barSize] ?? 1) : 1,
+  }
+}
 
 const enabledAtom = atom({ plugin: 'clean-view', key: 'cleanViewEnabled' } as const, true)
 const checklistAtom = atom({ plugin: 'clean-view', key: 'checklist' } as const, EMPTY_CHECKLIST)
@@ -81,7 +99,7 @@ function listFor(tool: string, input: unknown, output: unknown, cl: CvChecklist)
 }
 
 /** Draws one to-do row. Top level because it takes `$`. */
-async function drawTodo($: Dollar, e: any, next: (e: any) => Promise<any>): Promise<any> {
+async function drawTodo($: Dollar, cfg: CvConfig, e: any, next: (e: any) => Promise<any>): Promise<any> {
   const els = $.ui.resolve(e)
   const { Box } = els
   const tool = String(e.props.tool)
@@ -92,19 +110,31 @@ async function drawTodo($: Dollar, e: any, next: (e: any) => Promise<any>): Prom
   if (tool !== 'TodoWrite' && id !== latest) return <Box display="none" />
   const tasks = listFor(tool, e.props.input, e.props.output, cl)
   if (tasks.length === 0) return next(e)
-  const pal = sbPalette(await read($, themeAtom), await read($, colourAtom))
-  const d = { pal, isLive: id === latest && cl.phase === 'working', tick: await read($, tickAtom), columns: e.props.bodyColumns }
+  const pal = sbPalette(await read($, themeAtom), cfg.colour ?? (await read($, colourAtom)))
+  const d = { pal, isLive: id === latest && cl.phase === 'working', tick: await read($, tickAtom), columns: e.props.bodyColumns, scale: cfg.scale, showMain: cfg.showMain, showItems: cfg.showItems }
   return e.surface === 'desktop' ? drawTodoDesktop(els, d, tasks) : drawTodoTerminal(els, d, tasks)
 }
 
-export function registerCleanView(on: On): void {
+/** Task View draws when the master setting is on and the per-session switch (/simple) is on. */
+async function isOn($: Dollar, cfg: CvConfig): Promise<boolean> {
+  return cfg.isMaster && (await read($, enabledAtom))
+}
+
+export function registerCleanView(on: On, options?: Record<string, unknown>): void {
+  const cfg = readConfig(options)
+  setLimits(options?.maxItems, options?.maxNameLength)
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
     try {
       const saved = await $.store.get('cleanViewEnabled')
       if (typeof saved === 'boolean') await update($, enabledAtom, () => saved)
     } catch {}
-    await publishMode($, await read($, enabledAtom))
+    await publishMode($, await isOn($, cfg))
+    if (!cfg.isMaster) {
+      await $.command.register({ name: 'simple', description: 'Turn Task View on or off (no argument flips it)', argumentHint: '[on|off]' })
+      await $.command.register({ name: 'doole_task-view', description: 'Turn Task View on or off' })
+      return ran
+    }
     await readTheme($)
     await $.command.register({
       name: 'simple',
@@ -117,6 +147,7 @@ export function registerCleanView(on: On): void {
   })
 
   on('command.run', { command: ['simple', 'doole_task-view'] }, async ($, e) => {
+    if (!cfg.isMaster) return { text: OFF_TEXT }
     const arg = e.args.trim().toLowerCase()
     const target = arg === 'on' ? true : arg === 'off' ? false : !(await read($, enabledAtom))
     await setEnabled($, target)
@@ -130,7 +161,7 @@ export function registerCleanView(on: On): void {
   }).catch(($, e, next) => next(e))
 
   on('turn.start', async ($, e, next) => {
-    if ((e as { agentId?: string }).agentId !== undefined) return next(e)
+    if (!cfg.isMaster || (e as { agentId?: string }).agentId !== undefined) return next(e)
     await readTheme($)
     // A list that was paused or stopped moves again when the next turn starts.
     await change($, cl => (cl.phase === 'needs-you' || cl.phase === 'stopped' ? { ...cl, phase: 'working' } : cl))
@@ -139,6 +170,7 @@ export function registerCleanView(on: On): void {
 
   on('tool.call', async ($, e, next) => {
     const tool = String(e.tool)
+    if (!cfg.isMaster) return next(e)
     if (tool === APP_WRAP_TOOL && e.agentId === undefined && (await read($, enabledAtom))) {
       const now = await $.clock.now()
       await change($, cl => (cl.phase === 'working' ? withTasks(cl, allDone(cl.tasks), now) : cl))
@@ -174,7 +206,7 @@ export function registerCleanView(on: On): void {
   }).catch(($, e, next) => next(e))
 
   on('turn.complete', async ($, e, next) => {
-    if (e.agentId !== undefined) return next(e)
+    if (!cfg.isMaster || e.agentId !== undefined) return next(e)
     const cl = await read($, checklistAtom)
     if (cl.phase === 'working') {
       const now = await $.clock.now()
@@ -187,11 +219,11 @@ export function registerCleanView(on: On): void {
   })
 
   on('ui.render', { component: ['ToolUse', 'ToolResult'] }, async ($, e, next) => {
-    if (!(await read($, enabledAtom)) || !TODO_TOOLS.has(String(e.props.tool))) return next(e)
+    if (!(await isOn($, cfg)) || !TODO_TOOLS.has(String(e.props.tool))) return next(e)
     if (e.component === 'ToolResult') {
       const { Box } = $.ui.resolve(e)
       return <Box display="none" />
     }
-    return drawTodo($, e, next)
+    return drawTodo($, cfg, e, next)
   })
 }

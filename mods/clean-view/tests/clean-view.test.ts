@@ -3,6 +3,8 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import { addTask, allDone, planStep, summary, tasksFromList, tasksFromTodos, updateTask, withTasks, EMPTY_CHECKLIST } from '../hooks/clean-logic'
 
+import { sbPalette } from '../hooks/sidebar-kit'
+
 const SURFACES = ['terminal', 'desktop'] as const
 
 const TODOS = [
@@ -268,4 +270,50 @@ test("the desktop app's update_plan list is read: items set it, advance, done an
 test("the app's wrap_up checks off the whole list", () => {
   const tasks = planStep([], { items: [{ content: 'A', status: 'completed' }, { content: 'B', status: 'in_progress' }] })
   expect(summary(allDone(tasks)).isAllDone).toBe(true)
+})
+
+test('enabled off: the vanilla rows stay, nothing is published or ticking, and the commands say it is off', { options: { enabled: false } }, async ($, on) => {
+  world(on)
+  let ticks = 0
+  on('state.set', { plugin: 'clean-view', key: 'tick' } as any, (async (_$: any, e: any, next: any) => {
+    ticks += 1
+    return next(e)
+  }) as any)
+  await start($)
+  await todoCall($, 'u1', TODOS)
+  for (const surface of SURFACES) {
+    const { ui, all } = await row($, surface, 'u1', TODOS)
+    expect(all).toBe('vanilla row')
+    await ui.unmount()
+  }
+  const blank = await row($, 'terminal', 'u1', TODOS, 'TodoWrite', 'ToolResult')
+  expect(blank.all).toBe('vanilla row')
+  await blank.ui.unmount()
+  expect(ticks).toBe(0)
+  for (const command of ['simple', 'doole_task-view']) {
+    const ran = await $.command.run({ command, args: 'on' } as any)
+    expect((ran as any).text).toBe('Task View is off. Turn it on in Mod Settings (/doole_settings) or /config.')
+  }
+})
+
+test('bar size, hidden bars and the item limit change what is drawn', { options: { barSize: 'Large', showItemBars: false, maxItems: 2, maxNameLength: 12 } }, async ($, on) => {
+  world(on)
+  await start($)
+  await todoCall($, 'u1', TODOS)
+  const { ui, all } = await row($, 'desktop', 'u1', TODOS)
+  const widths = (await ui.findAll({ type: 'Svg' })).map((s: any) => s.props.width)
+  expect(widths).toEqual([540])
+  expect(all).toContain('Read your b…')
+  expect(all).not.toContain('Add the contact form')
+  await ui.unmount()
+})
+
+test('the colour setting overrides the Bottom Bar colour', { options: { colour: 'Sky' } }, async ($, on) => {
+  world(on)
+  await start($)
+  await todoCall($, 'u1', TODOS)
+  const { ui } = await row($, 'desktop', 'u1', TODOS)
+  const src = String((await ui.findAll({ type: 'Svg' }))[0].props.source)
+  expect(src).toContain(sbPalette('dark', 'Sky').accent)
+  await ui.unmount()
 })

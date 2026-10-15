@@ -1,11 +1,8 @@
-# Flightdeck 1.6.3
+# Flightdeck 1.7.0
 
 ## New
-- `/doole_flightdeck` opens it, the same as the old command, which still works.
-
-## Fixed
-- Flightdeck fits a narrow panel: bars shrink to the panel's width, and long actions, agent names and "Now:" lines are cut with "…" while times and buttons stay in place.
-- The Memory row says "Memory" once.
+- An Enabled setting, first in its list, turns the mod off without uninstalling it. Find it in Mod Settings (`/doole_settings`) in the desktop app or `/config` in the terminal.
+- Settings for how many recent actions and files are shown, showing the repository, how often git and agents are checked, and reopening on start.
 
 ---
 

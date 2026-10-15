@@ -1,11 +1,17 @@
 {
   "name": "context",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Context: publishes the facts for the Sidebar footer (Hindsight, CodeGraph, git, test and fix passes) and counts test and fix passes against a limit.",
   "author": { "name": "doolecg" },
   "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn off to stop counting passes and publishing the footer facts; the commands then say Context is off.",
+      "default": true
+    },
     "passLimit": {
       "type": "number",
       "title": "Pass limit",
@@ -17,6 +23,18 @@
       "title": "Extra check commands",
       "description": "Extra command words to count as a test run, separated by commas (for example: make, just); the default is none.",
       "default": ""
+    },
+    "hindsightMinutes": {
+      "type": "number",
+      "title": "Hindsight check interval (minutes)",
+      "description": "How often to check that the Hindsight server answers, from 1 to 1440; the default is 5.",
+      "default": 5
+    },
+    "gitSeconds": {
+      "type": "number",
+      "title": "Git refresh gap (seconds)",
+      "description": "The shortest wait between git refreshes after tool calls; the default is 3, and 0 refreshes after every call.",
+      "default": 3
     }
   }
 }

@@ -1,16 +1,23 @@
 {
   "name": "prompt-enhancer",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Enhance Prompt: a button under the prompt that rewrites what you typed, in place, with the files, memories, conversation and skills the task needs. Nothing is sent until you press Enter.",
   "author": {
     "name": "doolecg"
   },
   "types": "./types/index.d.ts",
   "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn off to hide the Enhance Prompt button and stop the command rewriting prompts.",
+      "default": true
+    },
     "model": {
       "type": "string",
       "title": "Model",
-      "description": "Which model rewrites your prompt: haiku, sonnet, opus, a full model id, or session to use this session's model. Default: haiku (fast and cheap).",
+      "description": "Which model rewrites your prompt: haiku is fast and cheap, or session uses this session's model. Default: haiku.",
+      "options": ["haiku", "sonnet", "opus", "session"],
       "default": "haiku"
     },
     "effort": {
@@ -45,6 +52,18 @@
       "title": "Extra skill folders",
       "description": "More folders of skills to offer, each skill a folder with a SKILL.md; separate folders with commas or semicolons. Default: empty, so only the usual places are searched.",
       "default": ""
+    },
+    "maxSkills": {
+      "type": "number",
+      "title": "Skills offered",
+      "description": "The most skills listed to the model, those matching your prompt first, from 1 to 60. Default: 60.",
+      "default": 60
+    },
+    "conversationMessages": {
+      "type": "number",
+      "title": "Recent messages shown",
+      "description": "How many recent conversation messages the model sees, from 1 to 20. Default: 8.",
+      "default": 8
     }
   }
 }

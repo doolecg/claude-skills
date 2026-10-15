@@ -60,6 +60,22 @@ With the Sidebar mod installed, Flightdeck can be one of its tabs. It then draws
 
 Works in the terminal and in the desktop app.
 
+## Settings
+
+Set in Mod Settings (`/doole_settings`) in the desktop app, or in `/config` in the terminal.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Enabled | on | Off stops Flightdeck drawing or watching anything; `/flightdeck` then says it is off. |
+| Recent actions shown | 5 | How many of Claude's latest tool calls to list (0 to 12; 0 hides the list). |
+| Files shown | 5 | How many recent files to list (0 to 50; 0 hides the list and its key). |
+| Show branch and memory lines | on | The git branch line and Self Improve's memory line. |
+| Git check interval (seconds) | 4 | At most how often git is asked (1 to 120). |
+| Agent check interval (seconds) | 2 | How often running subagents are checked while the sidebar is open (1 to 30). |
+| Reopen at session start | on | Reopen the sidebar in a new session if it was left open. |
+
+Limits: in the terminal the branch line and the memory line are separate rows; in the desktop app they share a Repository card. The settings apply the same on both.
+
 ## Credits
 
 The idea and layout come from [Flightdeck](https://github.com/scasella/claude-flightdeck) by Stephen Casella (MIT). This is a smaller rewrite focused on subagents. The critters come from my older Agents Panel mod, and the pixel bars from Clean View.

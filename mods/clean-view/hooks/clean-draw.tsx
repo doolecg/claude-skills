@@ -92,6 +92,12 @@ export type TodoDraw = {
   tick: number
   /** Cells across the terminal; the bars take what fits. */
   columns?: number
+  /** Bar size: 1 is the usual size. */
+  scale?: number
+  /** Draw the bar for the whole list (default true). */
+  showMain?: boolean
+  /** Draw a small bar on each item (default true). */
+  showItems?: boolean
 }
 
 /** The header: "To-do" and how far along, or "All done" when every item is. */
@@ -123,8 +129,9 @@ export function drawTodoTerminal(els: Els, d: TodoDraw, tasks: readonly CvTask[]
   const still = sbKit(els, 'terminal', pal, d.columns ?? 80, 0)
   const s = summary(tasks)
   const room = Math.max(8, (d.columns ?? 80) - 2)
-  const main = Math.min(MAIN_CELLS, room)
-  const item = Math.max(6, Math.min(ITEM_CELLS, Math.floor(room / 3)))
+  const scale = d.scale ?? 1
+  const main = Math.min(Math.round(MAIN_CELLS * scale), room)
+  const item = Math.max(6, Math.min(Math.round(ITEM_CELLS * scale), Math.floor(room / 3)))
   const rows = tasks.map((t, i) => {
     const look = t.status === 'done' ? sbGood(still, i + 1) : t.status === 'active' ? accentLook(k, i + 1) : accentLook(still, i + 1)
     const pixels =
@@ -141,16 +148,18 @@ export function drawTodoTerminal(els: Els, d: TodoDraw, tasks: readonly CvTask[]
             {t.name}
           </Text>
         </Box>
-        <Box flexShrink={0}>{sbBar(k, `${t.id}-bar`, pixels)}</Box>
+        {d.showItems !== false && <Box flexShrink={0}>{sbBar(k, `${t.id}-bar`, pixels)}</Box>}
       </Box>
     )
   })
   return (
     <Box key="todo" flexDirection="column" flexShrink={0}>
       {header(els, pal, tasks)}
-      <Box key="main-bar" height={1}>
-        {sbBar(k, 'main-bar', sbMeter(main, s.done / Math.max(1, s.total), s.isAllDone ? sbGood(still) : accentLook(k)))}
-      </Box>
+      {d.showMain !== false && (
+        <Box key="main-bar" height={1}>
+          {sbBar(k, 'main-bar', sbMeter(main, s.done / Math.max(1, s.total), s.isAllDone ? sbGood(still) : accentLook(k)))}
+        </Box>
+      )}
       {rows}
     </Box>
   )
@@ -162,6 +171,9 @@ export function drawTodoDesktop(els: Els, d: TodoDraw, tasks: readonly CvTask[])
   const { pal } = d
   const s = summary(tasks)
   const tick = d.isLive ? d.tick : 0
+  const scale = d.scale ?? 1
+  const mainPx = Math.round(MAIN_PX * scale)
+  const itemPx = Math.round(ITEM_PX * scale)
   const warm = { from: sbMix(pal.track, pal.accent, 0.55), to: pal.accent }
   const good = { from: sbMix(pal.track, pal.good, 0.55), to: pal.good }
   const svg = (key: string, width: number, fraction: number, c: { from: string; to: string }, isSweep: boolean, t: number, alt: string) => (
@@ -170,12 +182,12 @@ export function drawTodoDesktop(els: Els, d: TodoDraw, tasks: readonly CvTask[])
   const rows = tasks.map(t => {
     const bar =
       t.status === 'done'
-        ? svg(`${t.id}-bar`, ITEM_PX, 1, good, false, 0, `${t.name}: done`)
+        ? svg(`${t.id}-bar`, itemPx, 1, good, false, 0, `${t.name}: done`)
         : t.status === 'active'
           ? d.isLive
-            ? svg(`${t.id}-bar`, ITEM_PX, 0, warm, true, tick, `${t.name}: in progress`)
-            : svg(`${t.id}-bar`, ITEM_PX, 0.5, warm, false, 0, `${t.name}: in progress`)
-          : svg(`${t.id}-bar`, ITEM_PX, 0, warm, false, 0, `${t.name}: not started`)
+            ? svg(`${t.id}-bar`, itemPx, 0, warm, true, tick, `${t.name}: in progress`)
+            : svg(`${t.id}-bar`, itemPx, 0.5, warm, false, 0, `${t.name}: in progress`)
+          : svg(`${t.id}-bar`, itemPx, 0, warm, false, 0, `${t.name}: not started`)
     return (
       <Box key={t.id} alignItems="center" columnGap={1}>
         <Text color={markColor(pal, t)}>{markerOf(t.status)}</Text>
@@ -184,16 +196,18 @@ export function drawTodoDesktop(els: Els, d: TodoDraw, tasks: readonly CvTask[])
             {t.name}
           </Text>
         </Box>
-        <Box flexShrink={0}>{bar}</Box>
+        {d.showItems !== false && <Box flexShrink={0}>{bar}</Box>}
       </Box>
     )
   })
   return (
     <Box key="todo" flexDirection="column" flexShrink={0} borderStyle="round" borderColor={pal.sep} paddingX={1} gap={1}>
       {header(els, pal, tasks)}
-      <Box key="main-bar" flexShrink={0}>
-        {svg('main-bar', MAIN_PX, s.done / Math.max(1, s.total), s.isAllDone ? good : warm, false, s.isAllDone ? 0 : tick, `${s.done} of ${s.total} done, ${s.percent}%`)}
-      </Box>
+      {d.showMain !== false && (
+        <Box key="main-bar" flexShrink={0}>
+          {svg('main-bar', mainPx, s.done / Math.max(1, s.total), s.isAllDone ? good : warm, false, s.isAllDone ? 0 : tick, `${s.done} of ${s.total} done, ${s.percent}%`)}
+        </Box>
+      )}
       <Box flexDirection="column">{rows}</Box>
     </Box>
   )

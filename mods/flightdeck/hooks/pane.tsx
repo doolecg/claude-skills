@@ -50,6 +50,10 @@ export type PaneData = {
   git: FdGit | null
   /** Self Improve's one-line summary; undefined without that mod. */
   lessons?: string
+  /** How many recent actions and files to list (0 hides the list), and whether the branch and memory lines show. */
+  recentCount?: number
+  fileCount?: number
+  showRepo?: boolean
   right: Headline
   tick: number
   now: number
@@ -262,8 +266,10 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
       </Box>
     )
   }
-  const acts = recentActions(d.calls)
-  const files = fileRows(d.files, d.git)
+  const recentCount = d.recentCount ?? 5
+  const showRepo = d.showRepo !== false
+  const acts = recentActions(d.calls, recentCount)
+  const files = fileRows(d.files, d.git, d.fileCount ?? 5)
   const isEditingNow = rn.title.startsWith('Claude is editing')
   const rightNow = (
     <Box key="right-now" flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1} rowGap={1}>
@@ -291,11 +297,13 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
         ) : null}
         {rn.step ? <Text color={pal.dim}>{`Task View: ${rn.step}`}</Text> : null}
       </Box>
-      <Box flexDirection="column">
-        {section('ra-h', '↻', 'Recent actions')}
-        {acts.length > 0 ? acts.map(actionRow) : <Text color={pal.dim}>Nothing yet.</Text>}
-      </Box>
-      {d.git || d.lessons ? (
+      {recentCount > 0 ? (
+        <Box flexDirection="column">
+          {section('ra-h', '↻', 'Recent actions')}
+          {acts.length > 0 ? acts.map(actionRow) : <Text color={pal.dim}>Nothing yet.</Text>}
+        </Box>
+      ) : null}
+      {showRepo && (d.git || d.lessons) ? (
         <Box flexDirection="column">
           {section('repo-h', '⎇', 'Repository')}
           {d.git
@@ -519,8 +527,11 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
 
   // ---- Right now: what Claude is doing, its last few actions, the branch and the files ----
   const rn = d.right
-  const acts = recentActions(d.calls)
-  const files = fileRows(d.files, d.git)
+  const recentCount = d.recentCount ?? 5
+  const fileCount = d.fileCount ?? 5
+  const showRepo = d.showRepo !== false
+  const acts = recentActions(d.calls, recentCount)
+  const files = fileRows(d.files, d.git, fileCount)
   const nowRows: unknown[] = [
     line('rn-cap', <Text color={pal.dim} bold>{'✶ RIGHT NOW'}</Text>),
     line('rn-title', <Text color={rn.isWaiting ? pal.warn : pal.text} bold wrap="truncate-end">{rn.title}</Text>),
@@ -538,8 +549,8 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       ),
     )
   }
-  nowRows.push(line('rn-acts', <Text color={pal.dim} bold>{'↻ RECENT ACTIONS'}</Text>))
-  if (acts.length === 0) nowRows.push(line('rn-none', <Text color={pal.dim}>{'  Nothing yet.'}</Text>))
+  if (recentCount > 0) nowRows.push(line('rn-acts', <Text color={pal.dim} bold>{'↻ RECENT ACTIONS'}</Text>))
+  if (recentCount > 0 && acts.length === 0) nowRows.push(line('rn-none', <Text color={pal.dim}>{'  Nothing yet.'}</Text>))
   for (const c of acts) {
     const a = actionOf(c)
     const color = a.kind === 'edit' ? fx.edit : a.kind === 'read' ? fx.read : a.kind === 'agent' ? pal.accent : pal.dim
@@ -556,7 +567,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
     )
   }
   nowRows.push(line('rn-rule', <Text color={pal.sep}>{'─'.repeat(full)}</Text>))
-  if (d.git) {
+  if (showRepo && d.git) {
     nowRows.push(
       line(
         'rn-git',
@@ -569,7 +580,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       ),
     )
   }
-  if (d.lessons) {
+  if (showRepo && d.lessons) {
     nowRows.push(
       line(
         'rn-lessons',
@@ -580,7 +591,7 @@ export function drawPane(els: Record<string, any>, surface: string, d: PaneData)
       ),
     )
   }
-  nowRows.push(
+  if (fileCount > 0) nowRows.push(
     line(
       'rn-legend',
       <Text wrap="truncate-end">

@@ -62,21 +62,24 @@ The `mcp__self-improve__recall` tool lets Claude search Hindsight, soul.md and t
 
 ## Settings
 
-Set these in `/plugin` (Self Improve, then configure options). The sidebar has no settings page.
+Set these in Mod Settings (`/doole_settings`) or `/plugin` (Self Improve, then configure options). The sidebar has no settings page.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
+| `enabled` | on | Master switch; off stops all learning, the session brief and the pane, and the commands say Self Improve is off |
 | `mode` | suggest | off, suggest, controlled, advanced |
 | `soulBank` | soul | Hindsight bank for soul.md |
 | `hindsightUrl` | empty | Hindsight server; empty uses `apiUrl` from `~/.hindsight/coding-agent.json` |
-| `learnModel` | haiku | Model that reads a finished session |
-| `rewriteModel` | sonnet | Model that drafts skill rewrites |
+| `learnModel` | haiku | (haiku, sonnet or opus) Model that reads a finished session |
+| `rewriteModel` | sonnet | (haiku, sonnet or opus) Model that drafts skill rewrites |
 | `maxCalls` | 4 | Model calls per run (0 = no limit) |
 | `maxTokens` | 60000 | Tokens per run (0 = no limit) |
 | `maxChanges` | 5 | Changes applied on their own per run (0 = no limit) |
 | `dailyUsd` | 0.5 | Estimated daily spend cap (0 = no cap) |
 | `soulCap` | 1500 | soul.md characters each session starts with |
 | `extraSkillDirs` | empty | More skill folders, separated by semicolons |
+| `minUserTurns` | 3 | Sessions with fewer of your messages are skipped (1 to 50) |
+| `minTokens` | 500 | Sessions with a shorter transcript are skipped (0 = no minimum) |
 
 Hitting a budget stops the run and says which.
 

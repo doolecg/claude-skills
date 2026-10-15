@@ -511,3 +511,43 @@ describe('wiring', () => {
     }
   })
 })
+
+// ---------------------------------------------------------------- settings
+
+describe('settings', () => {
+  test('enabled: false opens nothing, draws nothing and the command says it is off', { options: { enabled: false } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
+    const ran = await $.command.run(command('open'))
+    expect(ran.text).toBe('Flightdeck is off. Turn it on in Mod Settings (/doole_settings) or /config.')
+    expect(w.opened).toEqual([])
+    const again = await $.command.run({ ...command(), command: 'doole_flightdeck' })
+    expect(again.text).toContain('Flightdeck is off.')
+    // The render hook passes straight through: with nothing beneath it, there is nothing to draw.
+    await expect($.ui.mount({ ...pane(60), surface: 'terminal' })).rejects.toThrow('ui.render')
+  })
+
+  test('the lists and lines follow the settings', { options: { recentActions: 0, recentFiles: 0, showRepository: false } }, async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await $.command.run(command('open'))
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const { ui, all } = await texts($, surface)
+      expect(all.toLowerCase()).not.toContain('recent actions')
+      expect(all.toLowerCase()).not.toContain('files this session')
+      expect(all).not.toContain('Claude read')
+      expect(all).not.toContain('dev-1.8.0')
+      await ui.unmount()
+    }
+  })
+
+  test('by default the recent actions list and the branch show', async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await $.command.run(command('open'))
+    const { ui, all } = await texts($)
+    expect(all).toContain('RECENT ACTIONS')
+    expect(all).toContain('dev-1.8.0')
+    await ui.unmount()
+  })
+})

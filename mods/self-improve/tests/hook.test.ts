@@ -176,3 +176,16 @@ test('a long fact with no spaces is cut to the narrow sidebar pane on the deskto
   for (const w of words) expect([...w].length, w).toBeLessThanOrEqual(44 - 10)
   await pane.unmount()
 })
+
+test('enabled false: no brief, commands say it is off, the recall tool answers off', { options: { enabled: false } }, async ($, on) => {
+  const h = host(on, { [SOUL]: SOUL_TEXT })
+  on('tool.call', { tool: 'mcp__self-improve__recall' } as never, () => ({ result: 'x' }) as never)
+  await start($)
+  const r = await $.classic.SessionStart({ source: 'startup' })
+  expect((r.additionalContext ?? []).join('\n')).toBe('')
+  const off = 'Self Improve is off. Turn it on in Mod Settings (/doole_settings) or /config.'
+  for (const command of ['learn', 'done', 'doole_self-improve', 'learn-off']) {
+    expect(((await $.command.run({ command, args: '' } as never)) as { text: string }).text).toBe(off)
+  }
+  expect([...h.files.keys()].some(k => /state\.json$/.test(k))).toBe(false)
+})

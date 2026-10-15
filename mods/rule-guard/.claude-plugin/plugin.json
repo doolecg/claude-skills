@@ -1,11 +1,17 @@
 {
   "name": "rule-guard",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Rule Guard: stops tool calls that break your standing rules (no AI credit in commits, plain version tags, ask before push or release, no killing by name, no skipped git hooks, stop at the pass limit) and tells Claude what to do instead.",
   "author": { "name": "doolecg" },
   "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn off and Rule Guard stops nothing: every tool call goes through, whatever the rules below say.",
+      "default": true
+    },
     "noAttribution": {
       "type": "boolean",
       "title": "No AI credit in commits",
@@ -41,6 +47,24 @@
       "title": "Stop at the pass limit",
       "description": "Stop a new test or build run once the Context mod says the pass limit is reached and files changed since the last pass. On by default.",
       "default": true
+    },
+    "publishWords": {
+      "type": "string",
+      "title": "Words that allow a push or release",
+      "description": "Words in your latest message that let a push, tag, release or merge through, separated by commas. Default (empty): push, publish, release, tag, ship, deploy, merge.",
+      "default": ""
+    },
+    "showToast": {
+      "type": "boolean",
+      "title": "Show a message when it stops something",
+      "description": "Show a short \"Rule Guard stopped\" message each time a call is stopped. Claude is told either way. On by default.",
+      "default": true
+    },
+    "keepStops": {
+      "type": "number",
+      "title": "Stops to remember",
+      "description": "How many recent stops are kept for the Sidebar, from 1 to 100; the default is 10.",
+      "default": 10
     }
   }
 }

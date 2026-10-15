@@ -1,10 +1,16 @@
 {
   "name": "bottom-bar",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "A compact rounded bar at the bottom of the terminal and the desktop app (model, effort, context and tokens used, 5-hour and 7-day usage, agents) with a Doole's Tools button that opens a toolbox.",
   "author": { "name": "doolecg" },
   "types": "./types/index.d.ts",
   "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn off to remove the bar, the pill and the toolbox; the commands then say the bar is off.",
+      "default": true
+    },
     "name": {
       "type": "string",
       "title": "Pill name",
@@ -17,6 +23,30 @@
       "description": "The accent colour of the bar, the pill and the toolbox: Coral, Amber, Sage, Sky, Lilac or Rose. Default: Coral.",
       "options": ["Coral", "Amber", "Sage", "Sky", "Lilac", "Rose"],
       "default": "Coral"
+    },
+    "refreshSeconds": {
+      "type": "number",
+      "title": "Refresh every (seconds)",
+      "description": "How often the bar re-reads the model, usage and agents, from 1 to 60. Default: 4 seconds.",
+      "default": 4
+    },
+    "showUsage": {
+      "type": "boolean",
+      "title": "Show 5-hour and 7-day usage",
+      "description": "Show your 5-hour and 7-day usage figures on the bar. Default: on.",
+      "default": true
+    },
+    "showAgents": {
+      "type": "boolean",
+      "title": "Show agent count",
+      "description": "Show how many agents are running on the bar. Default: on.",
+      "default": true
+    },
+    "showTodo": {
+      "type": "boolean",
+      "title": "Show the to-do list",
+      "description": "Draw Claude's to-do list above the bar in the desktop app while Claude works. Default: on.",
+      "default": true
     }
   }
 }

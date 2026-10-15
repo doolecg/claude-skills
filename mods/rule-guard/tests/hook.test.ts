@@ -140,3 +140,27 @@ test('the pass cap does nothing when it is turned off', { options: { passCap: fa
 
   expect((await bash($, 'npm test')).deny).toBeUndefined()
 })
+
+test('enabled false blocks nothing', { options: { enabled: false } }, async ($, on) => {
+  const w = world(on)
+  allow(on)
+
+  expect((await bash($, 'pkill node')).deny).toBeUndefined()
+  expect((await bash($, 'git push')).deny).toBeUndefined()
+  expect(w.toasts).toEqual([])
+})
+
+test('the publish words, toast and stops kept come from the options', { options: { publishWords: 'launch', showToast: false, keepStops: 1 } }, async ($, on) => {
+  const w = world(on)
+  allow(on)
+
+  expect((await bash($, 'git push')).deny).toContain('Ask the person first')
+  await $.prompt.submit({ text: 'please push it', origin: { kind: 'composer' } } as any)
+  expect((await bash($, 'git push')).deny).toContain('Ask the person first')
+  await $.prompt.submit({ text: 'time to launch', origin: { kind: 'composer' } } as any)
+  expect((await bash($, 'git push')).deny).toBeUndefined()
+  await bash($, 'pkill a')
+  await bash($, 'pkill b')
+  expect(w.toasts).toEqual([])
+  expect(w.state.blocks).toHaveLength(1)
+})

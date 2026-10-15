@@ -1,10 +1,9 @@
-# Self Improve 2.4.3
+# Self Improve 2.5.0
 
 ## New
-- `/doole_self-improve` opens the review pane, the same as the old command, which still works.
-
-## Fixed
-- Long text with no spaces (file paths, commands, names) is cut with "…" so it stays inside the Sidebar tab in the desktop app.
+- An Enabled setting, first in its list, turns the mod off without uninstalling it. Find it in Mod Settings (`/doole_settings`) in the desktop app or `/config` in the terminal.
+- The learn and rewrite models are now drop-downs (Haiku, Sonnet, Opus).
+- Settings for the fewest messages and shortest transcript a session needs before it is learned from.
 
 ---
 

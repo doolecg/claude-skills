@@ -1,8 +1,54 @@
 {
   "name": "flightdeck",
-  "version": "1.6.3",
+  "version": "1.7.0",
   "description": "A Flightdeck-style sidebar with the main session's vitals and every subagent working now, each as an outlined pixel progress bar with a stop button.",
-  "author": { "name": "doolecg" },
+  "author": {
+    "name": "doolecg"
+  },
   "license": "MIT",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn off to stop Flightdeck drawing its sidebar and watching the session; /flightdeck then only says it is off.",
+      "default": true
+    },
+    "recentActions": {
+      "type": "number",
+      "title": "Recent actions shown",
+      "description": "How many of Claude's latest tool calls the Recent actions list shows, from 0 to 12. 0 hides the list. Default: 5.",
+      "default": 5
+    },
+    "recentFiles": {
+      "type": "number",
+      "title": "Files shown",
+      "description": "How many recently read or edited files the file list shows, from 0 to 50. 0 hides the list. Default: 5.",
+      "default": 5
+    },
+    "showRepository": {
+      "type": "boolean",
+      "title": "Show branch and memory lines",
+      "description": "Show the git branch line and Self Improve's memory line. Default: on.",
+      "default": true
+    },
+    "gitSeconds": {
+      "type": "number",
+      "title": "Git check interval (seconds)",
+      "description": "At most how often Flightdeck asks git for the branch and changed files, from 1 to 120. Default: 4.",
+      "default": 4
+    },
+    "agentCheckSeconds": {
+      "type": "number",
+      "title": "Agent check interval (seconds)",
+      "description": "How often the list of running subagents is checked against Claude Code while the sidebar is open, from 1 to 30. Default: 2.",
+      "default": 2
+    },
+    "reopenOnStart": {
+      "type": "boolean",
+      "title": "Reopen at session start",
+      "description": "Reopen the sidebar in a new session if it was left open last time. Default: on.",
+      "default": true
+    }
+  }
 }

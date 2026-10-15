@@ -606,3 +606,41 @@ describe('narrow desktop pane', () => {
     await ui.unmount()
   })
 })
+
+describe('settings', () => {
+  test('enabled: false opens nothing and the command says it is off', { options: { enabled: false } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
+    await settle()
+    expect(w.registered).toContain('sidebar')
+    const ran = await $.command.run(command('open'))
+    expect(ran.text).toBe('Sidebar is off. Turn it on in Mod Settings (/doole_settings) or /config.')
+    const again = await $.command.run({ ...command('tab clean-view'), command: 'doole_sidebar' })
+    expect(again.text).toContain('Sidebar is off.')
+    expect(w.opened).toEqual([])
+    // The render hook passes straight through: with nothing beneath it, there is nothing to draw.
+    await expect($.ui.mount({ ...pane(), surface: 'terminal' })).rejects.toThrow('ui.render')
+  })
+
+  test('startTab picks the tab /sidebar opens on', { options: { startTab: 'sidebar' } }, async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('open'))
+    const { ui, all } = await texts($)
+    expect(all).toContain('TABS')
+    await ui.unmount()
+  })
+
+  test('showFooter: false leaves Context’s footer out', { plugins: [CONTEXT], options: { showFooter: false } }, async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('tab clean-view'))
+    await $.command.run({ ...command(''), command: 'ctx-publish' })
+    const { ui, all } = await texts($)
+    expect(all).not.toContain('Hindsight')
+    expect(all).not.toContain(' 2 of 3')
+    await ui.unmount()
+  })
+})

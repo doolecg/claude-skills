@@ -34,6 +34,27 @@ const COMMAND_OF: Record<string, string> = {
 
 let ticker: Timer | undefined
 
+/** The mod's settings, read from `userConfig` each time the module loads. */
+type Config = { isEnabled: boolean; reopen: boolean; startTab: string; showFooter: boolean; showBadges: boolean }
+let cfg: Config = { isEnabled: true, reopen: true, startTab: 'last', showFooter: true, showBadges: true }
+
+const flag = (v: unknown, fallback: boolean): boolean => (v === true || v === 'true' ? true : v === false || v === 'false' ? false : fallback)
+
+function configFrom(options: Record<string, unknown> | undefined): Config {
+  const o = options ?? {}
+  const tab = typeof o.startTab === 'string' ? o.startTab : 'last'
+  return {
+    isEnabled: flag(o.enabled, true),
+    reopen: flag(o.reopenOnStart, true),
+    startTab: tab === SIDEBAR_TAB || CATALOG.some(c => c.id === tab && !c.footer) ? tab : 'last',
+    showFooter: flag(o.showFooter, true),
+    showBadges: flag(o.showBadges, true),
+  }
+}
+
+const OFF_TEXT = 'Sidebar is off. Turn it on in Mod Settings (/doole_settings) or /config.'
+const footerFor = (value: unknown) => (cfg.showFooter ? footerOf(value) : null)
+
 async function quiet(fn: () => Promise<unknown>): Promise<void> {
   try {
     await fn()
@@ -42,7 +63,7 @@ async function quiet(fn: () => Promise<unknown>): Promise<void> {
 
 /** Rebuilds the strip every tab draws from: the tabs, their badges, the open one, the look. */
 async function syncStrip($: Dollar, patch: { isOn?: boolean; active?: string } = {}): Promise<void> {
-  const tabs = tabsFor(await read($, installedAtom), await read($, orderAtom), await read($, hiddenAtom), await read($, badgesAtom))
+  const tabs = tabsFor(await read($, installedAtom), await read($, orderAtom), await read($, hiddenAtom), cfg.showBadges ? await read($, badgesAtom) : {})
   await update($, stripAtom, s => ({ ...(s ?? EMPTY_STRIP), ...patch, tabs }))
   // Tells the bottom bar (and any mod that reads it) whether the sidebar is open.
   const isOn = (await read($, stripAtom)).isOn
@@ -143,7 +164,8 @@ async function openSidebar($: Dollar): Promise<void> {
   await quiet(() => $.store.set('isOn', true))
   const strip = await read($, stripAtom)
   const saved = await $.store.get('active').catch(() => undefined)
-  await showTab($, pickTab(typeof saved === 'string' ? saved : strip.active, strip.tabs))
+  const last = typeof saved === 'string' ? saved : strip.active
+  await showTab($, pickTab(cfg.startTab === 'last' ? last : cfg.startTab, strip.tabs))
 }
 
 async function setLayout($: Dollar, hidden: string[], order: string[]): Promise<void> {
@@ -183,7 +205,9 @@ async function sidebarCommand($: Dollar, args: string): Promise<{ text?: string 
 /** Another mod's write of a key the sidebar follows; read untyped, as the contract does not declare it. */
 const writeOf = (e: unknown) => e as unknown as StateWrite
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  cfg = configFrom(options as Record<string, unknown> | undefined)
+
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
     await $.command.register({
@@ -192,6 +216,10 @@ export const register: Register = on => {
       argumentHint: '[open|close|<mod>]',
     })
     await $.command.register({ name: 'doole_sidebar', description: 'Open the Sidebar' })
+    if (!cfg.isEnabled) {
+      await quiet(() => closeOwnPane($))
+      return ran
+    }
     await quiet(async () => {
       const hidden = await $.store.get('hidden')
       const order = await $.store.get('order')
@@ -204,7 +232,7 @@ export const register: Register = on => {
       await update($, jobAtom, () => job)
     })
     await quiet(async () => {
-      const footer = footerOf((await $.state.get({ plugin: 'context', key: 'footer' })).value)
+      const footer = footerFor((await $.state.get({ plugin: 'context', key: 'footer' })).value)
       await update($, stripAtom, s => ({ ...(s ?? EMPTY_STRIP), footer }))
     })
     await quiet(async () => {
@@ -219,22 +247,22 @@ export const register: Register = on => {
     // The mod list takes a moment (`claude plugin list`); the sidebar reopens once it is in.
     void (async () => {
       await loadInstalled($)
-      if ((await $.store.get('isOn').catch(() => false)) === true) await openSidebar($)
+      if (cfg.reopen && (await $.store.get('isOn').catch(() => false)) === true) await openSidebar($)
     })().catch(() => {})
     return ran
   })
 
-  on('command.run', { command: ['sidebar', 'doole_sidebar'] }, ($, e) => sidebarCommand($, e.args))
+  on('command.run', { command: ['sidebar', 'doole_sidebar'] }, ($, e) => (cfg.isEnabled ? sidebarCommand($, e.args) : { text: OFF_TEXT }))
 
   on('command.run', async ($, e, next) => {
     const ran = await next(e)
-    if (e.command === 'theme' || e.command === 'config') await quiet(() => loadLook($))
+    if (cfg.isEnabled && (e.command === 'theme' || e.command === 'config')) await quiet(() => loadLook($))
     return ran
   }).catch(($, e, next) => next(e))
 
   on('ui.close', async ($, e, next) => {
     const ran = await next(e)
-    if (e.id === PANE && e.origin.kind === 'person') {
+    if (cfg.isEnabled && e.id === PANE && e.origin.kind === 'person') {
       await quiet(async () => {
         await syncStrip($, { isOn: false })
         await $.store.set('isOn', false)
@@ -248,6 +276,7 @@ export const register: Register = on => {
   on('state.set', { key: 'sidebarAsk' } as never, async ($, e, next) => {
     const ran = await next(e)
     const w = writeOf(e)
+    if (!cfg.isEnabled) return ran
     const args = (w.value as { args?: unknown } | null)?.args
     if (w.plugin !== 'sidebar' && typeof args === 'string') await quiet(() => sidebarCommand($, args))
     return ran
@@ -257,7 +286,7 @@ export const register: Register = on => {
   on('state.set', { key: 'sidebarBadge' } as never, async ($, e, next) => {
     const ran = await next(e)
     const w = writeOf(e)
-    if (typeof w.value === 'number') {
+    if (cfg.isEnabled && typeof w.value === 'number') {
       await quiet(async () => {
         await update($, badgesAtom, all => ({ ...(all ?? {}), [w.plugin]: w.value as number }))
         await syncStrip($)
@@ -269,7 +298,7 @@ export const register: Register = on => {
   on('state.set', { key: 'checklist' } as never, async ($, e, next) => {
     const ran = await next(e)
     const w = writeOf(e)
-    if (w.plugin === 'clean-view') {
+    if (cfg.isEnabled && w.plugin === 'clean-view') {
       await quiet(async () => {
         await update($, jobAtom, () => jobOf(w.value))
         await syncTicker($)
@@ -282,7 +311,7 @@ export const register: Register = on => {
     const ran = await next(e)
     const w = writeOf(e)
     const v = w.value as { counts?: unknown; ok?: unknown } | null
-    if (w.plugin === 'prompt-enhancer' && v) await quiet(() => update($, enhanceAtom, () => ({ counts: String(v.counts ?? ''), ok: v.ok === true })))
+    if (cfg.isEnabled && w.plugin === 'prompt-enhancer' && v) await quiet(() => update($, enhanceAtom, () => ({ counts: String(v.counts ?? ''), ok: v.ok === true })))
     return ran
   }).catch(($, e, next) => next(e))
 
@@ -290,18 +319,19 @@ export const register: Register = on => {
   on('state.set', { key: 'footer' } as never, async ($, e, next) => {
     const ran = await next(e)
     const w = writeOf(e)
-    if (w.plugin === 'context') await quiet(() => update($, stripAtom, s => ({ ...(s ?? EMPTY_STRIP), footer: footerOf(w.value) })))
+    if (cfg.isEnabled && w.plugin === 'context') await quiet(() => update($, stripAtom, s => ({ ...(s ?? EMPTY_STRIP), footer: footerFor(w.value) })))
     return ran
   }).catch(($, e, next) => next(e))
 
   on('state.set', { key: 'blocks' } as never, async ($, e, next) => {
     const ran = await next(e)
     const w = writeOf(e)
-    if (w.plugin === 'rule-guard') await quiet(() => update($, blocksAtom, () => blocksOf(w.value)))
+    if (cfg.isEnabled && w.plugin === 'rule-guard') await quiet(() => update($, blocksAtom, () => blocksOf(w.value)))
     return ran
   }).catch(($, e, next) => next(e))
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
+    if (!cfg.isEnabled) return next(e)
     const els = $.ui.resolve(e) as unknown as Record<string, any>
     const strip = await read($, stripAtom)
     const view = await read($, viewAtom)

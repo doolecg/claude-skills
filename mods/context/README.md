@@ -40,8 +40,11 @@ Both work while Claude is busy.
 
 ## Settings
 
+- **Enabled** (default on): off stops all counting and publishing; the commands reply that Context is off.
 - **Pass limit** (default 3): test and fix rounds before Claude stops to ask you.
 - **Extra check commands** (default empty): more command words that count as a test run, separated by commas.
+- **Hindsight check interval** (default 5 minutes, 1 to 1440): how often the server is checked.
+- **Git refresh gap** (default 3 seconds): the shortest wait between git refreshes after tool calls; 0 means after every call.
 
 ## Limits
 

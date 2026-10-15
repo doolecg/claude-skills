@@ -394,3 +394,22 @@ test("with a host bar the own button is not drawn, and the bar's segment and Und
   expect(barPresses).toEqual([])
 })
 
+
+test('enabled false: no button is drawn, no segment is published and the command says it is off', { options: { enabled: false } }, async ($, on) => {
+  const seen = engine(on, baseWorld())
+  await start($)
+  const row = await mountRow($, 'terminal')
+  expect(await row.find({ key: 'pe-enhance' })).toBeUndefined()
+  expect(await row.find({ type: 'Text', text: 'status row' })).toBeDefined()
+  await ($ as any).command.run({ command: 'enhance-prompt', args: 'make login faster' })
+  expect(seen.prompts).toHaveLength(0)
+  expect(seen.toasts.at(-1)).toContain('Enhance Prompt is off. Turn it on in Mod Settings (/doole_settings)')
+})
+
+test('maxSkills limits the skills offered to the model', { options: { maxSkills: 1 } }, async ($, on) => {
+  const seen = engine(on, baseWorld())
+  await start($)
+  await (await mountRow($, 'terminal')).press({ key: 'pe-enhance' })
+  const listed = String(seen.prompts[0].prompt).split('Installed skills:' + String.fromCharCode(10))[1]!.split(String.fromCharCode(10, 10))[0]!.split(String.fromCharCode(10))
+  expect(listed).toHaveLength(1)
+})

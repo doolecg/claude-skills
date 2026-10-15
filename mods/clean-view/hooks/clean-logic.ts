@@ -26,8 +26,16 @@ export const APP_WRAP_TOOL = 'mcp__ccd_turn__wrap_up'
 /** Every task checked off. */
 export const allDone = (tasks: readonly CvTask[]): CvTask[] => tasks.map(t => ({ ...t, status: 'done' as const, percent: 100 }))
 
-const MAX_ITEMS = 24
-const MAX_TEXT = 120
+let MAX_ITEMS = 24
+let MAX_TEXT = 120
+
+/** Sets how many items a list keeps and how long an item name may be (the Max items and Max name length settings). */
+export function setLimits(items: unknown, text: unknown): void {
+  const whole = (v: unknown, lo: number, hi: number, fallback: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : fallback
+  MAX_ITEMS = whole(items, 1, 100, 24)
+  MAX_TEXT = whole(text, 10, 300, 120)
+}
 
 export type TodoItem = { content?: unknown; subject?: unknown; status?: unknown }
 

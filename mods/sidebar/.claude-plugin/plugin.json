@@ -1,8 +1,53 @@
 {
   "name": "sidebar",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "One sidebar with a tab for each of your mods (Flightdeck, Self Improve, Task View, Idea Shelf and the rest), in the Bottom Bar's colours.",
-  "author": { "name": "doolecg" },
+  "author": {
+    "name": "doolecg"
+  },
   "license": "MIT",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn off to stop the Sidebar opening or drawing anything; /sidebar then only says it is off.",
+      "default": true
+    },
+    "startTab": {
+      "type": "string",
+      "title": "Tab it opens on",
+      "description": "Which tab the Sidebar shows when it opens: the one you used last, its own Sidebar tab, or a particular mod. Default: last used.",
+      "options": [
+        "last",
+        "sidebar",
+        "flightdeck",
+        "self-improve",
+        "clean-view",
+        "idea-shelf",
+        "prompt-enhancer",
+        "bottom-bar",
+        "rule-guard"
+      ],
+      "default": "last"
+    },
+    "reopenOnStart": {
+      "type": "boolean",
+      "title": "Reopen at session start",
+      "description": "Reopen the Sidebar in a new session if it was left open last time. Default: on.",
+      "default": true
+    },
+    "showFooter": {
+      "type": "boolean",
+      "title": "Show the footer",
+      "description": "Show Context's footer (Hindsight, CodeGraph, git, test passes) at the bottom of every tab. Default: on.",
+      "default": true
+    },
+    "showBadges": {
+      "type": "boolean",
+      "title": "Show tab badges",
+      "description": "Show the number badges other mods put on their tabs. Default: on.",
+      "default": true
+    }
+  }
 }

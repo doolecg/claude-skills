@@ -1,11 +1,17 @@
 {
   "name": "self-improve",
-  "version": "2.4.3",
+  "version": "2.5.0",
   "description": "Self Improve: learns from a session when you mark it done, keeps soul.md (facts about you and how Claude should respond) in step with Hindsight, and tunes skills over time with your approval.",
   "author": { "name": "doolecg" },
   "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn off and Self Improve does nothing: no learning, no brief at session start, no pane; its commands say it is off.",
+      "default": true
+    },
     "mode": {
       "type": "string",
       "title": "Review mode",
@@ -29,13 +35,15 @@
       "type": "string",
       "title": "Learn model",
       "description": "The model that reads a finished session, one call per run. Default: haiku.",
-      "default": "haiku"
+      "default": "haiku",
+      "options": ["haiku", "sonnet", "opus"]
     },
     "rewriteModel": {
       "type": "string",
       "title": "Rewrite model",
       "description": "The model that drafts a rewrite of a skill that keeps getting corrected. Default: sonnet.",
-      "default": "sonnet"
+      "default": "sonnet",
+      "options": ["haiku", "sonnet", "opus"]
     },
     "maxCalls": {
       "type": "number",
@@ -72,6 +80,18 @@
       "title": "Extra skill folders",
       "description": "Extra folders that hold <skill>/SKILL.md for Self Improve to tune, separated by semicolons. Default: none.",
       "default": ""
+    },
+    "minUserTurns": {
+      "type": "number",
+      "title": "Fewest turns worth learning from",
+      "description": "A session with fewer of your messages than this is skipped, from 1 to 50. Default: 3.",
+      "default": 3
+    },
+    "minTokens": {
+      "type": "number",
+      "title": "Smallest session worth learning from",
+      "description": "A session whose transcript is under this many tokens is skipped. Default: 500. 0 means no minimum.",
+      "default": 500
     }
   }
 }

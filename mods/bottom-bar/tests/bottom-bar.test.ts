@@ -1615,3 +1615,25 @@ test('app: a long mod label and launcher name with no spaces are cut to the narr
   expect(words.filter(w => w.endsWith('…')).length).toBeGreaterThanOrEqual(2)
   for (const w of words) expect([...w].length, w).toBeLessThanOrEqual(44 - 10)
 })
+
+// ------------------------------------------------- settings
+
+test('enabled false: the bar draws nothing of its own and its commands say it is off', { options: { enabled: false } }, async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  on('ui.render', { component: 'SessionMode' }, ($: any, e: any) => (globalThis as any).h($.ui.resolve(e).Text, {}, 'footer'))
+  await startSession($)
+  const bar = await mountBar($)
+  expect(await bar.find({ key: 'pill' })).toBeUndefined()
+  expect(await bar.find({ type: 'Text', text: 'footer' })).toBeDefined()
+  const reply = await runCommand($, 'doole_bottom-bar')
+  expect(reply.text).toContain("Doole's Tools bar is off. Turn it on in Mod Settings (/doole_settings)")
+  expect((await runCommand($, 'choose-pills')).text).toContain('is off')
+  expect(seen.opened).toEqual([])
+})
+
+test('showUsage and showAgents false leave those figures off the bar', () => {
+  const f = { model: 'Opus 5.5', window: 1_000_000, effort: 'high', ctx: 42, fiveHour: 30, sevenDay: 12, agents: 2 }
+  expect(segments(f as any, DARK, { usage: false, agents: false }).map(s => s.key)).toEqual(['model', 'effort', 'ctx'])
+  expect(segments(f as any, DARK).map(s => s.key)).toEqual(['model', 'effort', 'ctx', 'fiveHour', 'sevenDay', 'agents'])
+})

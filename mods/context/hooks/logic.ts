@@ -27,6 +27,16 @@ export function parseLimit(value: unknown): number {
   return Number.isFinite(n) && n >= 1 ? Math.floor(n) : DEFAULT_LIMIT
 }
 
+export function parseMinutes(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n >= 1 ? Math.min(Math.floor(n), 1440) : HINDSIGHT.everyMs / 60000
+}
+
+export function parseSeconds(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n >= 0 ? Math.min(Math.floor(n), 3600) : THROTTLE.gitMs / 1000
+}
+
 export function parseExtra(value: unknown): string[] {
   if (typeof value !== 'string') return []
   return value

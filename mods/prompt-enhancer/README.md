@@ -56,11 +56,16 @@ Change them in `/config` or `/plugin`.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| Model (`model`) | `haiku` | The model that rewrites: an alias (`haiku`, `sonnet`, `opus`), a full model id, or `session` for this session's model. |
+| Enabled (`enabled`) | on | Off hides the button and makes the command do nothing. |
+| Model (`model`) | `haiku` | The model that rewrites, a drop-down: `haiku`, `sonnet`, `opus`, or `session` for this session's model. |
 | Effort (`effort`) | `default` | `default` lets the model decide; `low` to `max` set it; `session` follows this session's effort. |
 | Hindsight time limit (`hindsightSeconds`) | `5` | Seconds to wait for Hindsight before going on without it. |
 | About-you memory bank (`soulBank`) | empty | Name of a Hindsight bank with facts about you. Empty skips it; `soul.md` is still read. |
 | Extra skill folders (`skillFolders`) | empty | More skill folders, separated by commas or semicolons. |
+| Skills offered (`maxSkills`) | `60` | The most skills listed to the model, 1 to 60. |
+| Recent messages shown (`conversationMessages`) | `8` | How many recent conversation messages the model sees, 1 to 20. |
+
+Settings also appear as cards in Mod Settings (`/doole_settings`) in the desktop app.
 
 ## Where the button is
 

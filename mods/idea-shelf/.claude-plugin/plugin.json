@@ -1,6 +1,48 @@
 {
   "name": "idea-shelf",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Idea Shelf: park ideas while Claude works, without pulling it off the task. Each project gets its own shelf, ideas stay saved after you close Claude Code, and you send them to Claude as prompts later.",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn Idea Shelf off to stop the /idea and /ideas commands, the shelf pane and the Sidebar badge; saved ideas are kept.",
+      "default": true
+    },
+    "order": {
+      "type": "string",
+      "title": "Order of ideas",
+      "description": "Whether the shelf lists the oldest idea first or the newest first. The numbers used by /idea edit follow this order.",
+      "options": [
+        "Oldest first",
+        "Newest first"
+      ],
+      "default": "Oldest first"
+    },
+    "removeOnSend": {
+      "type": "boolean",
+      "title": "Remove an idea when sent",
+      "description": "Take an idea off the shelf once you send it to Claude. Turn off to keep it there.",
+      "default": true
+    },
+    "showAge": {
+      "type": "boolean",
+      "title": "Show how old each idea is",
+      "description": "Show the age (5m, 2h, 3d) beside each idea in the Sidebar tab.",
+      "default": true
+    },
+    "showBadge": {
+      "type": "boolean",
+      "title": "Show the idea count on the Sidebar tab",
+      "description": "Show how many ideas this project has as a badge on the Sidebar tab.",
+      "default": true
+    },
+    "maxLength": {
+      "type": "number",
+      "title": "Longest idea",
+      "description": "Ideas longer than this many characters are cut, from 20 to 10000. Default: 2000.",
+      "default": 2000
+    }
+  }
 }

@@ -22,6 +22,8 @@ export type Context = {
   prompt: string
   // The Context mod's pass counter, or null when it is not there.
   passes: Passes | null
+  // Words in the person's message that unlock a push or release. Left out means the built-in list.
+  publishWords?: readonly string[]
 }
 
 export type Call = { tool: string; command?: string; message?: string }
@@ -175,8 +177,16 @@ function positionals(args: string[]): string[] {
 const TAG_WORDS = /\b(push|publish|release|tag|ship|deploy|merge)\b/i
 
 // True when the person's prompt asks for a push, release or the like.
-export function promptAllowsPublish(prompt: string): boolean {
-  return TAG_WORDS.test(prompt)
+export function promptAllowsPublish(prompt: string, words?: readonly string[]): boolean {
+  if (words === undefined) return TAG_WORDS.test(prompt)
+  return words.some(w => w !== '' && new RegExp('\\b' + w.replace(/\W/g, '\\$&') + '\\b', 'i').test(prompt))
+}
+
+// Splits the publish words setting at commas and semicolons; an empty setting gives the built-in list.
+export function parsePublishWords(value: unknown): string[] | undefined {
+  if (typeof value !== 'string') return undefined
+  const list = value.split(/[,;]/).map(w => w.trim()).filter(Boolean)
+  return list.length > 0 ? list : undefined
 }
 
 function violation(rule: RuleId, reason: string): Violation {
@@ -208,7 +218,7 @@ function checkSegment(seg: Segment, ctx: Context, isOn: (rule: RuleId) => boolea
     if (tag !== undefined) return violation('plainTags', `Rule Guard: version tags are plain, like ${unV(tag)}, not ${tag}. Use ${unV(tag)} instead.`)
   }
 
-  if (isOn('askBeforePublish') && !promptAllowsPublish(ctx.prompt)) {
+  if (isOn('askBeforePublish') && !promptAllowsPublish(ctx.prompt, ctx.publishWords)) {
     let what: string | null = null
     if (git?.sub === 'push') what = 'git push'
     else if (git?.sub === 'tag') {

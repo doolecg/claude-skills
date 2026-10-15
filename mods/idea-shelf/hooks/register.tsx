@@ -2,7 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
 import type { Editing } from '../types'
-import { ageOf, cleanIdea, ideaKey, isIdea, newId, parseEdit, shelfPrefix } from './shelf'
+import { OFF_TEXT, ageOf, cleanIdea, ideaKey, isIdea, newId, parseEdit, readConfig, shelfPrefix } from './shelf'
+import type { ShelfConfig } from './shelf'
 import { SIDEBAR_COLUMNS, isSidebarTab, sbActions, sbAsker, sbButton, sbCard, sbClip, sbFrame, sbKit, sbPaneMove, sbPalette, sbRows, sbSplit, sbTitle } from './sidebar-kit'
 import type { SbStrip } from './sidebar-kit'
 
@@ -18,14 +19,14 @@ const askAtom = atom({ plugin: 'idea-shelf', key: 'sidebarAsk' } as const, { arg
 /** Asks the Sidebar to do what `/sidebar <args>` does, through this mod's own state: no command is run. */
 const askSidebar = ($: EngineInterface, args: string) => update($, askAtom, v => ({ args, n: (v?.n ?? 0) + 1 }))
 
-async function listIdeas($: EngineInterface, cwd: string): Promise<Row[]> {
+async function listIdeas($: EngineInterface, cwd: string, newestFirst = false): Promise<Row[]> {
   const prefix = shelfPrefix(cwd)
   const keys = (await $.store.keys()).filter(key => key.startsWith(prefix))
   const rows = await Promise.all(keys.map(async key => {
     const value = await $.store.get(key)
     return isIdea(value) ? { id: key.slice(prefix.length), text: value.text, at: value.at } : null
   }))
-  return rows.filter((row): row is Row => row !== null).sort((a, b) => a.at - b.at)
+  return rows.filter((row): row is Row => row !== null).sort((a, b) => (newestFirst ? b.at - a.at : a.at - b.at))
 }
 
 /** The Sidebar's strip, or undefined when the Sidebar is not installed. */
@@ -38,9 +39,9 @@ async function readStrip($: EngineInterface): Promise<SbStrip | undefined> {
 }
 
 /** Tells the Sidebar how many ideas this project has, for its tab badge. */
-async function publishBadge($: EngineInterface): Promise<void> {
+async function publishBadge($: EngineInterface, cfg: ShelfConfig): Promise<void> {
   try {
-    const count = (await listIdeas($, await $.session.cwd())).length
+    const count = cfg.isOn && cfg.showBadge ? (await listIdeas($, await $.session.cwd())).length : 0
     await update($, badge, () => count)
   } catch {}
 }
@@ -51,7 +52,8 @@ async function closePane($: EngineInterface): Promise<void> {
   if ((await $.ui.panes()).some(p => p.id === 'ideas')) await $.ui.close({ id: 'ideas' })
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const cfg = readConfig(options)
   on('session.start', async ($, e, next) => {
     try {
       await $.command.register({
@@ -70,16 +72,17 @@ export const register: Register = on => {
     } catch {
       $.ui.toast('Idea Shelf: could not register its commands')
     }
-    await publishBadge($)
+    await publishBadge($, cfg)
     return next(e)
   })
 
   on('command.run', { command: 'idea' }, async ($, e) => {
+    if (!cfg.isOn) return { text: OFF_TEXT }
     const cwd = await $.session.cwd()
     const edit = parseEdit(e.args)
     if (edit !== null) {
-      const text = cleanIdea(edit.text)
-      const row = (await listIdeas($, cwd))[edit.n - 1]
+      const text = cleanIdea(edit.text, cfg.max)
+      const row = (await listIdeas($, cwd, cfg.isNewestFirst))[edit.n - 1]
       if (row === undefined) $.ui.toast(`No idea number ${edit.n} on this shelf`)
       else if (text === null) $.ui.toast('An idea cannot be empty')
       else {
@@ -89,7 +92,7 @@ export const register: Register = on => {
       }
       return {}
     }
-    const text = cleanIdea(e.args)
+    const text = cleanIdea(e.args, cfg.max)
     if (text === null) {
       $.ui.toast('Usage: /idea <text>, or /idea edit <n> <text>')
       return {}
@@ -98,7 +101,7 @@ export const register: Register = on => {
       const at = await $.clock.now()
       await $.store.set(ideaKey(cwd, newId(at, Math.random())), { text, at })
       $.ui.toast('Idea parked on this project\'s shelf (/ideas to review)')
-      await publishBadge($)
+      await publishBadge($, cfg)
       $.ui.invalidate('ui.render')
     } catch {
       $.ui.toast('Idea Shelf: could not save the idea')
@@ -107,6 +110,7 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: ['ideas', 'doole_idea-shelf'] }, async ($, e) => {
+    if (!cfg.isOn) return { text: OFF_TEXT }
     if (e.args.trim().toLowerCase() === 'close') {
       await $.ui.close({ id: 'ideas' })
       return {}
@@ -119,6 +123,7 @@ export const register: Register = on => {
   // The Sidebar's strip names this tab, or moves on from it: the pane opens or closes with it.
   on('state.set', { key: 'strip' } as never, async ($, e, next) => {
     const ran = await next(e)
+    if (!cfg.isOn) return ran
     const w = e as unknown as StateWrite
     const move = w.plugin === 'sidebar' ? sbPaneMove('idea-shelf', w.value, w.previous) : undefined
     try {
@@ -131,7 +136,7 @@ export const register: Register = on => {
   // The person closing the tab pane takes the sidebar down with it.
   on('ui.close', async ($, e, next) => {
     const ran = await next(e)
-    if (e.id === 'ideas' && e.origin.kind === 'person') {
+    if (cfg.isOn && e.id === 'ideas' && e.origin.kind === 'person') {
       const strip = await readStrip($)
       if (strip?.isOn && strip.active === 'idea-shelf') {
         try {
@@ -142,11 +147,12 @@ export const register: Register = on => {
     return ran
   }).catch(($, e, next) => next(e))
 
-  on('ui.render', { component: 'Pane', requestId: 'ideas' }, async ($, e) => {
+  on('ui.render', { component: 'Pane', requestId: 'ideas' }, async ($, e, next) => {
+    if (!cfg.isOn) return next(e)
     const els = $.ui.resolve(e) as unknown as Record<string, any>
     const { Box, Button, Text } = els
     const cwd = await $.session.cwd()
-    const ideas = await listIdeas($, cwd)
+    const ideas = await listIdeas($, cwd, cfg.isNewestFirst)
     const current = await read($, editing)
     const folder = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd
     const strip = await readStrip($)
@@ -159,13 +165,13 @@ export const register: Register = on => {
         $.ui.toast('Idea Shelf: could not send the idea; it stays on the shelf')
         return
       }
-      await $.store.delete(ideaKey(cwd, idea.id))
-      await publishBadge($)
+      if (cfg.removeOnSend) await $.store.delete(ideaKey(cwd, idea.id))
+      await publishBadge($, cfg)
       $.ui.invalidate('ui.render')
     }
 
     const add = async (value: string) => {
-      const text = cleanIdea(value)
+      const text = cleanIdea(value, cfg.max)
       if (text === null) return
       try {
         const at = await $.clock.now()
@@ -174,14 +180,14 @@ export const register: Register = on => {
         $.ui.toast('Idea Shelf: could not save the idea')
         return
       }
-      await publishBadge($)
+      await publishBadge($, cfg)
       $.ui.invalidate('ui.render')
     }
 
     const remove = async (idea: Row) => {
       await $.store.delete(ideaKey(cwd, idea.id))
       if ((await read($, editing))?.id === idea.id) await update($, editing, () => null)
-      await publishBadge($)
+      await publishBadge($, cfg)
       $.ui.invalidate('ui.render')
     }
 
@@ -191,7 +197,7 @@ export const register: Register = on => {
     }
 
     const finishEdit = async (idea: Row, value: string | undefined) => {
-      const text = cleanIdea(value ?? (await read($, editing))?.draft ?? '')
+      const text = cleanIdea(value ?? (await read($, editing))?.draft ?? '', cfg.max)
       if (text === null) {
         $.ui.toast('An idea cannot be empty; it was not saved')
         return
@@ -247,7 +253,7 @@ export const register: Register = on => {
             current?.id === idea.id
               ? editor(idea, index)
               : [
-                  sbSplit(k, `sb-text:${idea.id}`, <Text color={k.pal.text}>{e.surface === 'terminal' ? idea.text : fit(idea.text, room - 6)}</Text>, <Text color={k.pal.dim}>{ageOf(now, idea.at)}</Text>),
+                  sbSplit(k, `sb-text:${idea.id}`, <Text color={k.pal.text}>{e.surface === 'terminal' ? idea.text : fit(idea.text, room - 6)}</Text>, cfg.showAge ? <Text color={k.pal.dim}>{ageOf(now, idea.at)}</Text> : undefined),
                   <Box key={`sb-btns:${idea.id}`} columnGap={1}>
                     {sbButton(k, `send:${idea.id}`, 'Send', () => send(idea), true)}
                     {sbButton(k, `edit:${idea.id}`, 'Edit', () => startEdit(idea))}

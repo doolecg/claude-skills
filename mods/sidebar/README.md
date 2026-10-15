@@ -38,6 +38,18 @@ With the Context mod installed, every tab has a footer at the bottom: whether Hi
 
 The sidebar's own page: show or hide each tab, move them up and down, and see which mods are not installed.
 
+## Settings
+
+Set in Mod Settings (`/doole_settings`) in the desktop app, or in `/config` in the terminal.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Enabled | on | Off stops the Sidebar opening or drawing; `/sidebar` then says it is off. |
+| Tab it opens on | last used | The tab shown when the Sidebar opens: last used, the Sidebar's own tab, or a particular mod (falls back to the first tab if that mod's tab is not showing). |
+| Reopen at session start | on | Reopen the Sidebar in a new session if it was left open. |
+| Show the footer | on | Context's footer at the bottom of every tab. |
+| Show tab badges | on | The number badges other mods put on their tabs. |
+
 ## For mod authors
 
 To add a tab for your mod, add it to `CATALOG` in `hooks/logic.ts` and follow this protocol:

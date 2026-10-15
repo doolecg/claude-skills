@@ -21,7 +21,7 @@ It looks at the Bash and PowerShell tools (the command) and at any git MCP tool 
 
 ## Settings
 
-Each rule is a yes/no option, all on by default: No AI credit in commits, Plain version tags, Ask before push or release, No killing by name, Never skip git hooks, Stop at the pass limit. Change them in the plugin's settings; the mod reloads with the new values.
+**Enabled** (default on) is the master switch: off, Rule Guard stops nothing. Each rule is a yes/no option, all on by default: No AI credit in commits, Plain version tags, Ask before push or release, No killing by name, Never skip git hooks, Stop at the pass limit. Also: **Words that allow a push or release** (default empty, meaning push, publish, release, tag, ship, deploy, merge; comma separated), **Show a message when it stops something** (default on) and **Stops to remember** (default 10, 1 to 100). Change them in the plugin's settings; the mod reloads with the new values.
 
 State for other mods: `rule-guard.blocks` (the last 10 stops, newest first, with time, rule, title and the command clipped to 80 characters), `rule-guard.sidebarBadge` (stops this session) and `rule-guard.lastPrompt`.
 

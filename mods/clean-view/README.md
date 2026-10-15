@@ -28,6 +28,20 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 - Or type `/simple off`. `/simple on` turns it back on, and `/simple` on its own flips it. `/doole_task-view` does the same as `/simple`.
 - When it's off, the to-do rows are Claude Code's normal ones. Your choice is remembered after a restart.
 
+## Settings
+
+Change these in Mod Settings (`/doole_settings`) or `/config`.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Enabled | On | The master switch. Off gives Claude Code's normal to-do rows back and stops the moving bars. `/simple` still flips Task View per session, on top of this. |
+| Colour | Same as Bottom Bar | The accent colour of the bars: Same as Bottom Bar, Coral, Amber, Sage, Sky, Lilac or Rose. |
+| Bar size | Medium | Small, Medium or Large. Scales the bars (0.6, 1 or 1.5 times the sizes below). |
+| Show the list bar | On | The one bar for the whole list under the header. |
+| Show a bar on each item | On | The small bar at the end of each to-do line. |
+| Most items shown | 24 | How many to-dos are drawn from one list (1 to 100). |
+| Longest item name | 120 | Names longer than this are cut with an ellipsis (10 to 300). |
+
 ## What it draws
 
 - **Header:** "To-do" and how far along: "2 of 4 done · 50%". When every item is done it says "All done · 4 of 4".
@@ -58,7 +72,8 @@ In the Code tab Claude keeps the app's own working list (its `update_plan` tool)
 - The in-progress item has no real percent, so its bar moves instead of filling.
 - The Task tools' running list starts from the calls Task View sees, so a list made before the mod loaded shows only what changes afterwards (a `TaskList` call fills it in again).
 - Item names are Claude's own words, cut to 120 characters. On a narrow terminal long names are cut with an ellipsis.
-- The terminal bars are a fixed size (36 cells for the main bar, 16 for each item), shrunk only when the row is narrower than that.
+- At Medium, the terminal bars are 36 cells for the main bar and 16 for each item, shrunk when the row is narrower than that. Bar size applies on both surfaces; the cell counts are for the terminal and the pixel widths for the desktop app.
+- The Enabled, Most items and Longest name settings apply to lists read after the change; the list already on screen keeps what it had.
 - Restart Claude Code after updating so the new version loads.
 
 ## Development

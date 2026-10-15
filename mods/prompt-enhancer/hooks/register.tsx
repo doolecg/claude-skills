@@ -160,18 +160,18 @@ async function readSymbols($: $, roots: readonly string[], q: string): Promise<s
 
 // ---------------------------------------------------------------- session
 
-async function readSession($: $, root: string): Promise<string[]> {
+async function readSession($: $, root: string, keep = 8): Promise<string[]> {
   const lines = [`Folder: ${root}`]
   const status = await git($, root, ['status', '--porcelain=v1', '--branch'])
   if (status !== null) lines.push(...gitLines(status))
   try {
     const rows = await $.session.messages()
-    const recent: RecentMessage[] = rows.slice(-12).map(m => ({
+    const recent: RecentMessage[] = rows.slice(-Math.max(12, keep)).map(m => ({
       role: m.role,
       text: m.text,
       tools: m.toolUses.map(t => String((t as { name?: unknown }).name ?? '')).filter(Boolean),
     }))
-    const talk = conversationLines(recent)
+    const talk = conversationLines(recent, keep)
     if (talk.length) lines.push('Recent conversation:', ...talk)
   } catch {}
   return lines
@@ -179,7 +179,7 @@ async function readSession($: $, root: string): Promise<string[]> {
 
 // ---------------------------------------------------------------- all of it
 
-export type Settings = { hindsightMs: number; soulBank: string }
+export type Settings = { hindsightMs: number; soulBank: string; messages?: number }
 
 export async function contextDeps($: $, s: Settings): Promise<{ deps: GatherDeps; project: string }> {
   const root = slash(await $.session.root())
@@ -192,7 +192,7 @@ export async function contextDeps($: $, s: Settings): Promise<{ deps: GatherDeps
     soul: () => readSoul($),
     memoryFiles: () => readMemoryFiles($, top ? slash(top) : root),
     symbols: q => readSymbols($, [...new Set([root, top ? slash(top) : ''])], q),
-    session: () => readSession($, root),
+    session: () => readSession($, root, s.messages),
     hindsightMs: s.hindsightMs,
   }
   return { deps, project }
@@ -260,17 +260,36 @@ const sessionEffort = atom({ plugin: 'prompt-enhancer', key: 'sessionEffort' } a
 const lastRun = atom({ plugin: 'prompt-enhancer', key: 'lastRun' } as const, null as LastRun | null)
 const segmentsOut = atom({ plugin: 'prompt-enhancer', key: 'segments' } as const, {} as Record<string, PublishedSegment>)
 
-type Options = { model: unknown; effort: unknown; hindsightSeconds: number; soulBank: string; skillFolders: unknown }
+type Options = {
+  isEnabled: boolean
+  model: unknown
+  effort: unknown
+  hindsightSeconds: number
+  soulBank: string
+  skillFolders: unknown
+  maxSkills: number
+  messages: number
+}
+
+const clampInt = (v: unknown, min: number, max: number, fallback: number): number => {
+  const n = Number(v)
+  return Number.isFinite(n) && n >= min ? Math.min(max, Math.floor(n)) : fallback
+}
+
+const OFF = 'Enhance Prompt is off. Turn it on in Mod Settings (/doole_settings) or /config.'
 
 function readOptions(options: PluginOptions): Options {
   const seconds = Number(options.hindsightSeconds)
   const bank = typeof options.soulBank === 'string' && options.soulBank.trim() ? options.soulBank.trim() : DEFAULTS.soulBank
   return {
+    isEnabled: options.enabled !== false,
     model: options.model ?? DEFAULTS.model,
     effort: options.effort ?? DEFAULTS.effort,
     hindsightSeconds: Number.isFinite(seconds) && seconds > 0 ? Math.min(60, seconds) : DEFAULTS.hindsightSeconds,
     soulBank: bank,
     skillFolders: options.skillFolders ?? '',
+    maxSkills: clampInt(options.maxSkills, 1, LIMITS.skills, LIMITS.skills),
+    messages: clampInt(options.conversationMessages, 1, 20, 8),
   }
 }
 
@@ -342,13 +361,13 @@ export async function enhance($: $, opts: Options, typed?: string): Promise<void
     await setPhase($, 'context')
     $.ui.status('gathering context...')
     const [{ deps }, skills] = await Promise.all([
-      contextDeps($, { hindsightMs: opts.hindsightSeconds * 1000, soulBank: opts.soulBank }),
+      contextDeps($, { hindsightMs: opts.hindsightSeconds * 1000, soulBank: opts.soulBank, messages: opts.messages }),
       listSkills($, opts.skillFolders),
     ])
     const context = await gatherContext(original, deps)
     if (run !== current) return
     await update($, lastRun, () => ({ counts: recallsText(context), ok: true }))
-    const picked = mergeSkills(original, ...skills.lists)
+    const picked = mergeSkills(original, ...skills.lists).slice(0, opts.maxSkills)
 
     const model = resolveModel(opts.model, await $.session.model().catch(() => ''))
     const effort = resolveEffort(opts.effort, await sessionEffortNow($))
@@ -471,11 +490,15 @@ export const register: Register = (on, options) => {
     }
     // A reload starts with no run in flight.
     if ((await read($, phase)) !== 'idle') await update($, phase, () => 'idle' as Phase)
-    await publish($)
+    if (opts.isEnabled) await publish($)
     return ran
   })
 
   on('command.run', { command: ['enhance-prompt', 'doole_prompt-enhancer'] }, async ($, e) => {
+    if (!opts.isEnabled) {
+      say($, OFF)
+      return { text: OFF }
+    }
     await run($, opts, e.args)
     return {}
   }).catch(() => ({}))
@@ -483,6 +506,7 @@ export const register: Register = (on, options) => {
   // A status bar's click on the published segment or its actions is taken here, so the run's progress
   // writes reach the bar as they happen (a command the bar ran would write under the bar's own call).
   on('ui.press', async ($, e, next) => {
+    if (!opts.isEnabled) return next(e)
     if (e.element !== SEGMENT_KEY && !e.element.startsWith(`${SEGMENT_KEY}:`)) return next(e)
     const seg = (await read($, segmentsOut)).enhance
     const at = e.element === SEGMENT_KEY ? -1 : Number(e.element.slice(SEGMENT_KEY.length + 1))
@@ -507,6 +531,7 @@ export const register: Register = (on, options) => {
   // Once a prompt is sent, its Undo has nothing left to undo.
   on('prompt.submit', async ($, e, next) => {
     const ran = await next(e)
+    if (!opts.isEnabled) return ran
     if (!e.text.trimStart().startsWith('/') && (await read($, undo)) !== null) {
       await update($, undo, () => null)
       await publish($)
@@ -518,6 +543,7 @@ export const register: Register = (on, options) => {
   // left of the row under the prompt, before whatever draws that row.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const below = await next(e)
+    if (!opts.isEnabled) return below
     if (e.surface !== 'terminal' && e.surface !== 'desktop') return below
     if (treeHasKey(below, HOST_KEY)) return below
     const { Box, Button, Text } = $.ui.resolve(e)

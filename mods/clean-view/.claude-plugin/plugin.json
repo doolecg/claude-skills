@@ -1,9 +1,67 @@
 {
   "name": "clean-view",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "Restyles Claude's own to-do list in the transcript: a header with the count, a pixel progress bar, and a pixel bar for each item.",
   "author": {
     "name": "doolecg"
   },
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn Task View off to get Claude Code's normal to-do rows back and stop the moving bars.",
+      "default": true
+    },
+    "colour": {
+      "type": "string",
+      "title": "Colour",
+      "description": "The accent colour of the bars. Same as Bottom Bar follows the Bottom Bar's Colour setting.",
+      "options": [
+        "Same as Bottom Bar",
+        "Coral",
+        "Amber",
+        "Sage",
+        "Sky",
+        "Lilac",
+        "Rose"
+      ],
+      "default": "Same as Bottom Bar"
+    },
+    "barSize": {
+      "type": "string",
+      "title": "Bar size",
+      "description": "How long the pixel bars are: Small, Medium or Large. Default: Medium.",
+      "options": [
+        "Small",
+        "Medium",
+        "Large"
+      ],
+      "default": "Medium"
+    },
+    "showMainBar": {
+      "type": "boolean",
+      "title": "Show the list bar",
+      "description": "Show the one pixel bar for the whole list under the header.",
+      "default": true
+    },
+    "showItemBars": {
+      "type": "boolean",
+      "title": "Show a bar on each item",
+      "description": "Show a small pixel bar at the end of each to-do line.",
+      "default": true
+    },
+    "maxItems": {
+      "type": "number",
+      "title": "Most items shown",
+      "description": "How many to-dos are drawn from one list, from 1 to 100. Default: 24.",
+      "default": 24
+    },
+    "maxNameLength": {
+      "type": "number",
+      "title": "Longest item name",
+      "description": "Item names longer than this many characters are cut with an ellipsis, from 10 to 300. Default: 120.",
+      "default": 120
+    }
+  }
 }

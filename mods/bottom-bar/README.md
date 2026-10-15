@@ -54,7 +54,17 @@ The Doole's Tools pill opens the toolbox, one panel with Model, Effort, Mods and
 - **Model** and **Effort**: click one to switch. The toolbox stays open.
 - **Mods**: every mod you have installed, with an On/Off switch. For a mod with an on/off mode (below), the switch flips the mode. For any other mod it turns the mod itself on or off (`claude plugin enable` / `disable`) and reloads the plugins.
 - **Quick Launch**: `Choose pills`, then the commands you picked, then every other command a mod adds. Clicking one closes the toolbox and runs it.
-The bar's options (`Pill name` and `Colour`) are not in the toolbox. Set them in `/plugin` > Installed > Bottom Bar > Configure.
+The bar's options are not in the toolbox. Set them in Mod Settings (`/doole_settings`) in the desktop app, or in `/plugin` > Installed > Bottom Bar > Configure (or `/config`).
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Enabled (`enabled`) | on | Off removes the bar, the pill and the toolbox; the commands say the bar is off. |
+| Pill name (`name`) | Doole's Tools | The name on the pill and at the top of the toolbox. |
+| Colour (`colour`) | Coral | The accent colour, a drop-down: Coral, Amber, Sage, Sky, Lilac or Rose. |
+| Refresh every (`refreshSeconds`) | `4` | How often the bar re-reads the model, usage and agents, 1 to 60 seconds. |
+| Show 5-hour and 7-day usage (`showUsage`) | on | The 5h and 7d figures on the bar. |
+| Show agent count (`showAgents`) | on | The running-agents count on the bar. |
+| Show the to-do list (`showTodo`) | on | Claude's to-do list above the bar in the desktop app. Desktop app only. |
 
 ## On/off modes
 

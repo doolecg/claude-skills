@@ -284,9 +284,22 @@ async function toolboxTree(
 export const register: Register = (on, options) => {
   const name = typeof options.name === 'string' && options.name.trim() ? options.name.trim() : LABEL
   const colour = typeof options.colour === 'string' && ACCENTS[options.colour] ? options.colour : 'Coral'
+  const refreshSecs = Number(options.refreshSeconds)
+  const refreshMs = Number.isFinite(refreshSecs) && refreshSecs >= 1 ? Math.min(60, Math.floor(refreshSecs)) * 1000 : 4000
+  const showUsage = options.showUsage !== false
+  const showAgents = options.showAgents !== false
+  const showTodoList = options.showTodo !== false
+
+  const isOn = options.enabled !== false
+  const OFF = "Doole's Tools bar is off. Turn it on in Mod Settings (/doole_settings) or /config."
 
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
+    if (!isOn) {
+      await $.command.register({ name: CHOOSE, description: 'Choose which commands are in Quick Launch in the toolbox' })
+      await $.command.register({ name: 'doole_bottom-bar', description: 'Open the toolbox' })
+      return ran
+    }
     if ((await read($, label)) !== name) await update($, label, () => name)
     const saved = await $.store.get('tools')
     if (Array.isArray(saved)) {
@@ -297,13 +310,14 @@ export const register: Register = (on, options) => {
       await loadModels($)
     } catch {}
     void loadMods($).catch(() => {})
-    $.clock.every(4000, () => void refresh($))
+    $.clock.every(refreshMs, () => void refresh($))
     await $.command.register({ name: CHOOSE, description: 'Choose which commands are in Quick Launch in the toolbox' })
     await $.command.register({ name: 'doole_bottom-bar', description: 'Open the toolbox' })
     return ran
   })
 
   on('session.measure', async ($, e, next) => {
+    if (!isOn) return next(e)
     const five = e.rateLimits.find(r => r.kind === 'five_hour')
     const seven = e.rateLimits.find(r => r.kind === 'seven_day')
     await setFigures($, f => ({
@@ -318,6 +332,7 @@ export const register: Register = (on, options) => {
   })
 
   on('turn.step', async function* ($, e, next) {
+    if (!isOn) return yield* next(e)
     if (e.agentId === undefined && e.effort !== undefined) {
       const effort = effortLabel(e.effort)
       void setFigures($, f => ({ ...f, effort })).catch(() => {})
@@ -327,17 +342,19 @@ export const register: Register = (on, options) => {
 
   // The spinner repaints its rows every frame, over a box floated onto them.
   on('turn.start', async ($, e, next) => {
+    if (!isOn) return next(e)
     await update($, isWorking, () => true)
     return next(e)
   })
   on('turn.complete', async ($, e, next) => {
+    if (!isOn) return next(e)
     if (e.agentId === undefined) await update($, isWorking, () => false)
     return next(e)
   })
 
   on('classic.PostModelSwitch', async ($, e, next) => {
     const ran = await next(e)
-    void refresh($, { settings: true })
+    if (isOn) void refresh($, { settings: true })
     return ran
   })
 
@@ -345,6 +362,7 @@ export const register: Register = (on, options) => {
   // Another mod's key, which this contract does not declare: the write is read untyped.
   on('state.set', { key: 'modes' } as never, async ($, e, next) => {
     const ran = await next(e)
+    if (!isOn) return ran
     const write = e as unknown as StateWrite
     if (write.plugin !== 'bottom-bar') await update($, modeStates, all => mergeModes(all ?? {}, write.plugin, write.value))
     return ran
@@ -354,6 +372,7 @@ export const register: Register = (on, options) => {
   // `segments` state, drawn first on the left of the bar and followed live.
   on('state.set', { key: 'segments' } as never, async ($, e, next) => {
     const ran = await next(e)
+    if (!isOn) return ran
     const write = e as unknown as StateWrite
     if (write.plugin !== 'bottom-bar') await update($, published, all => mergeSegments(all ?? {}, write.plugin, write.value))
     return ran
@@ -366,8 +385,9 @@ export const register: Register = (on, options) => {
   // Task View's to-do list, drawn above the bar in the app while Claude works.
   on('state.set', { key: 'checklist' } as never, async ($, e, next) => {
     const ran = await next(e)
+    if (!isOn) return ran
     const write = e as unknown as StateWrite
-    if (write.plugin === 'clean-view') {
+    if (write.plugin === 'clean-view' && showTodoList) {
       const list = todoFrom(write.value)
       await update($, todo, () => list)
       syncTodoClock($, list)
@@ -376,17 +396,20 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: CHOOSE }, async $ => {
+    if (!isOn) return { text: OFF }
     await openPicker($)
     return {}
   })
 
   on('command.run', { command: 'doole_bottom-bar' }, async $ => {
+    if (!isOn) return { text: OFF }
     await openToolbox($)
     return {}
   })
 
   on('command.run', async ($, e, next) => {
     const ran = await next(e)
+    if (!isOn) return ran
     if (['model', 'effort', 'config', 'theme'].includes(e.command)) void refresh($, { settings: true })
     // A mode's own write lands under this hook too (the toolbox runs it), so its reply is read here.
     if ((await read($, tools)).includes(e.command) || (await read($, modeStates))[e.command]) {
@@ -397,7 +420,7 @@ export const register: Register = (on, options) => {
 
   // In the app the bar is the band above the prompt: the footer slot below it holds about two items.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
+    if (!isOn || e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
     const pal = paletteFor(await read($, theme), colour)
     const list = await read($, todo)
     return desktopBar({
@@ -408,7 +431,9 @@ export const register: Register = (on, options) => {
       published: publishedSegments(await read($, published), pal),
       runCommand: command => void runCommand($, command),
       openToolbox: () => void openToolbox($),
-      todo: showsTodo(list, await $.clock.now()) ? list : undefined,
+      todo: showTodoList && showsTodo(list, await $.clock.now()) ? list : undefined,
+      showUsage,
+      showAgents,
       todoTick: await read($, todoTick),
       columns: e.props.bodyColumns,
     })
@@ -418,6 +443,7 @@ export const register: Register = (on, options) => {
     // The app keeps its own footer labels. It shows the band above the prompt only while Claude works, so
     // only then does the key tell a mod with a fallback button (Enhance Prompt) that the bar hosts it;
     // the rest of the time that mod draws its own button here.
+    if (!isOn) return next(e)
     if (e.surface === 'desktop') {
       const { Box: AppBox } = $.ui.resolve(e)
       if (await read($, isWorking)) return <AppBox key="bottom-bar-segments">{await next(e)}</AppBox>
@@ -442,7 +468,7 @@ export const register: Register = (on, options) => {
     }
 
     // One row that clips: a segment with no room wraps onto the hidden second row.
-    const segs = segments(f, pal)
+    const segs = segments(f, pal, { usage: showUsage, agents: showAgents })
     // Other mods' published segments come first, on the left, in a box of their own that gives way
     // first: it shrinks and clips before the bar's own segments give way, and the pills never do.
     const extra = publishedSegments(await read($, published), pal)
@@ -647,6 +673,7 @@ export const register: Register = (on, options) => {
   // The person's own close of the docked toolbox (Escape, its close mark) closes it in the bar too.
   on('ui.close', async ($, e, next) => {
     const ran = await next(e)
+    if (!isOn) return ran
     if (e.id === TOOLBOX && e.origin.kind !== 'plugin' && (await read($, menu)) === 'tools') await update($, menu, () => '')
     return ran
   })

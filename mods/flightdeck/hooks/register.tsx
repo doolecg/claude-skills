@@ -64,7 +64,32 @@ let ticker: Timer | undefined
 let frames = 0
 /** When git was last asked, so it is asked at most every few seconds. */
 let gitAt = 0
-const GIT_EVERY_MS = 4000
+
+/** The mod's settings, read from `userConfig` each time the module loads. */
+type Config = { isEnabled: boolean; recentActions: number; recentFiles: number; showRepository: boolean; gitMs: number; checkEvery: number; reopen: boolean }
+const DEFAULTS: Config = { isEnabled: true, recentActions: 5, recentFiles: 5, showRepository: true, gitMs: 4000, checkEvery: 8, reopen: true }
+let cfg: Config = DEFAULTS
+
+const count = (v: unknown, fallback: number, min: number, max: number): number => {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
+  return typeof n === 'number' && Number.isFinite(n) ? Math.max(min, Math.min(max, Math.round(n))) : fallback
+}
+const flag = (v: unknown, fallback: boolean): boolean => (v === true || v === 'true' ? true : v === false || v === 'false' ? false : fallback)
+
+function configFrom(options: Record<string, unknown> | undefined): Config {
+  const o = options ?? {}
+  return {
+    isEnabled: flag(o.enabled, true),
+    recentActions: count(o.recentActions, 5, 0, 12),
+    recentFiles: count(o.recentFiles, 5, 0, 50),
+    showRepository: flag(o.showRepository, true),
+    gitMs: count(o.gitSeconds, 4, 1, 120) * 1000,
+    checkEvery: count(o.agentCheckSeconds, 2, 1, 30) * 4,
+    reopen: flag(o.reopenOnStart, true),
+  }
+}
+
+const OFF_TEXT = 'Flightdeck is off. Turn it on in Mod Settings (/doole_settings) or /config.'
 
 /** Task View's current step and Self Improve's one-line summary, read when the pane draws; each is undefined without its mod. */
 async function sideNotes($: Dollar): Promise<{ step?: string; lessons?: string }> {
@@ -82,7 +107,7 @@ async function sideNotes($: Dollar): Promise<{ step?: string; lessons?: string }
 /** The branch, what changed and how far ahead of main; null (and nothing drawn) when this is not a git repo. */
 async function refreshGit($: Dollar, force = false): Promise<void> {
   const at = await $.clock.now()
-  if (!force && at - gitAt < GIT_EVERY_MS) return
+  if (!force && at - gitAt < cfg.gitMs) return
   gitAt = at
   try {
     const cwd = await $.session.cwd()
@@ -126,13 +151,13 @@ async function isLive($: Dollar): Promise<boolean> {
 
 /** The 250ms frame clock runs only while the sidebar is open and something in it moves. */
 async function syncTicker($: Dollar): Promise<void> {
-  const live = await isLive($)
+  const live = cfg.isEnabled && (await isLive($))
   if (live && !ticker) {
     ticker = $.clock.every(250, () => {
       frames += 1
       void quiet(async () => {
         await update($, tickAtom, n => n + 1)
-        if (frames % 8 === 0) {
+        if (frames % cfg.checkEvery === 0) {
           await reconcileAgents($)
           await refreshGit($)
         }
@@ -227,7 +252,9 @@ async function closePane($: Dollar): Promise<void> {
   await setOpen($, false)
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  cfg = configFrom(options as Record<string, unknown> | undefined)
+
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
     await $.command.register({
@@ -236,6 +263,10 @@ export const register: Register = on => {
       argumentHint: '[open|close]',
     })
     await $.command.register({ name: 'doole_flightdeck', description: 'Open Flightdeck' })
+    if (!cfg.isEnabled) {
+      await quiet(() => closePane($))
+      return ran
+    }
     await quiet(() => readSettings($))
     await quiet(() => refreshUsage($))
     await quiet(async () => {
@@ -248,7 +279,7 @@ export const register: Register = on => {
     let isOpen = false
     await quiet(async () => {
       isOpen = (await $.ui.panes()).some(p => p.id === PANE)
-      if (!isOpen && (await $.store.get('isOpen')) === true) {
+      if (!isOpen && cfg.reopen && (await $.store.get('isOpen')) === true) {
         await openPane($)
         isOpen = true
       }
@@ -260,7 +291,7 @@ export const register: Register = on => {
   })
 
   on('session.end', async ($, e, next) => {
-    if (e.reason === 'clear') {
+    if (cfg.isEnabled && e.reason === 'clear') {
       await quiet(async () => {
         await changeAgents($, () => [])
         await update($, clearedAtom, () => [])
@@ -275,6 +306,7 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: ['flightdeck', 'doole_flightdeck'] }, async ($, e) => {
+    if (!cfg.isEnabled) return { text: OFF_TEXT }
     const isOpen = (await $.ui.panes()).some(p => p.id === PANE)
     if (!wantOpen(e.args, isOpen)) {
       await $.ui.close({ id: PANE })
@@ -291,13 +323,14 @@ export const register: Register = on => {
 
   on('command.run', async ($, e, next) => {
     const ran = await next(e)
-    if (e.command === 'theme' || e.command === 'config') await quiet(() => readSettings($))
+    if (cfg.isEnabled && (e.command === 'theme' || e.command === 'config')) await quiet(() => readSettings($))
     return ran
   }).catch(($, e, next) => next(e))
 
   // The Sidebar's strip names this tab, or moves on from it: the pane opens or closes with it.
   on('state.set', { key: 'strip' } as never, async ($, e, next) => {
     const ran = await next(e)
+    if (!cfg.isEnabled) return ran
     const w = e as unknown as StateWrite
     const move = w.plugin === 'sidebar' ? sbPaneMove(PANE, w.value, w.previous) : undefined
     if (move === 'open') {
@@ -315,7 +348,7 @@ export const register: Register = on => {
   // The person's close mark or key, or an unload: the mode reads off.
   on('ui.close', async ($, e, next) => {
     const ran = await next(e)
-    if (e.id === PANE && e.origin.kind !== 'unload') {
+    if (cfg.isEnabled && e.id === PANE && e.origin.kind !== 'unload') {
       await quiet(() => setOpen($, false))
       if (e.origin.kind === 'person') {
         const strip = await stripOf($)
@@ -326,6 +359,7 @@ export const register: Register = on => {
   })
 
   on('turn.start', async ($, e, next) => {
+    if (!cfg.isEnabled) return next(e)
     await quiet(async () => {
       const now = await $.clock.now()
       await update($, mainAtom, m => ({ ...m, isRunning: true, turnStartedAt: now, turnEndedAt: 0 }))
@@ -337,6 +371,7 @@ export const register: Register = on => {
 
   on('turn.step', async function* ($, e, next) {
     const id = e.agentId
+    if (!cfg.isEnabled) return yield* next(e)
     if (id === undefined) {
       await quiet(() =>
         update($, mainAtom, m => ({ ...m, model: e.model || m.model, effort: effortWord(e.effort) || m.effort, steps: m.steps + 1 })),
@@ -353,6 +388,7 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
+    if (!cfg.isEnabled) return done
     await quiet(async () => {
       const now = await $.clock.now()
       const id = e.agentId
@@ -372,7 +408,7 @@ export const register: Register = on => {
   on('agent.spawn', async ($, e, next) => {
     const started = await next(e)
     const id = started.agentId
-    if (id) {
+    if (cfg.isEnabled && id) {
       await quiet(async () => {
         const at = await $.clock.now()
         const agent = newAgent(id, at, {
@@ -388,6 +424,7 @@ export const register: Register = on => {
 
   // Observes every tool call for the Right now card and the agents' "now:" lines; it never blocks or changes one.
   on('tool.call', async ($, e, next) => {
+    if (!cfg.isEnabled) return next(e)
     const input = e as unknown as Record<string, unknown>
     const id = e.agentId
     let call: FdCall | undefined
@@ -432,12 +469,13 @@ export const register: Register = on => {
   // A permission prompt the person has to answer: the card says Claude is waiting for them.
   on('classic.PermissionRequest', async ($, e, next) => {
     const out = await next(e)
-    if (out.decision !== undefined || e.agent_id) return out
+    if (!cfg.isEnabled || out.decision !== undefined || e.agent_id) return out
     await quiet(() => update($, pendingAtom, () => ({ text: pendingText(e.tool_name, e.tool_input), tool: e.tool_name })))
     return out
   }).catch(($, e, next) => next(e))
 
   on('session.measure', async ($, e, next) => {
+    if (!cfg.isEnabled) return next(e)
     await quiet(() =>
       update($, usageAtom, () => ({
         ctxPct: e.context.percent ?? null,
@@ -452,6 +490,7 @@ export const register: Register = on => {
 
   // A wheel over the running or the finished list scrolls that list alone; anywhere else the pane scrolls.
   on('ui.scroll', { requestId: PANE } as never, async ($, e, next) => {
+    if (!cfg.isEnabled) return next(e)
     const s = e as unknown as { by: number; pointer?: { row: number } }
     const L = layout
     if (!s.pointer || !L || s.by === 0) return next(e)
@@ -467,7 +506,8 @@ export const register: Register = on => {
     return {}
   })
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
+    if (!cfg.isEnabled) return next(e)
     const els = $.ui.resolve(e) as unknown as Record<string, any>
     const theme = await read($, themeAtom)
     const strip = await stripOf($)
@@ -487,6 +527,9 @@ export const register: Register = on => {
       files: await read($, filesAtom),
       git: await read($, gitAtom),
       lessons: notes.lessons,
+      recentCount: cfg.recentActions,
+      fileCount: cfg.recentFiles,
+      showRepo: cfg.showRepository,
       right: headline(calls, pending, main, lastEdit, notes.step),
       usage: await read($, usageAtom),
       agents: await read($, agentsAtom),
