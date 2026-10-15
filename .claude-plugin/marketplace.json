@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "dooles-tools",
-  "description": "doolecg's Claude Code mods: Sidebar, Flightdeck, Bottom Bar, Task View, Self Improve, Prompt Enhancer, Idea Shelf, Context, Rule Guard and Mod Settings. The skills are in doolecg/Dooles_Skills.",
+  "description": "doolecg's Claude Code mods: Main Menu, Flightdeck, Bottom Bar, Task View, Self Improve, Prompt Enhancer, Idea Shelf, Context, Rule Guard and Mod Settings. The skills are in doolecg/Dooles_Skills.",
   "owner": {
     "name": "doolecg",
     "email": "doolecg@gmail.com"
@@ -9,19 +9,19 @@
   "plugins": [
     {
       "name": "bottom-bar",
-      "description": "A compact rounded bar at the bottom of the terminal (model, effort, context, 5-hour and 7-day usage, agents) with a Doole's Tools pill that holds the mods you pick and opens a toolbox.",
+      "description": "A compact rounded bar in the terminal and above the prompt in the desktop app (model, effort, context, 5-hour and 7-day usage, agents, and the to-do bar) with a Tools button that opens the Main Menu.",
       "category": "productivity",
       "source": "./mods/bottom-bar"
     },
     {
       "name": "clean-view",
-      "description": "A calm, plain-English checklist above the prompt while Claude works, with the tool calls, diffs and command output hidden.",
+      "description": "Task View: Claude's to-do list drawn with pixel progress bars, green and still when every step is done.",
       "category": "productivity",
       "source": "./mods/clean-view"
     },
     {
       "name": "flightdeck",
-      "description": "A Flightdeck-style sidebar: the main session's vitals and every subagent working now, each as an outlined pixel progress bar with a stop button, in the Bottom Bar's colours.",
+      "description": "The main session and every subagent working now, each with a pixel progress bar, what it is doing and a stop button, in the Bottom Bar's colours.",
       "category": "productivity",
       "source": "./mods/flightdeck"
     },
@@ -51,13 +51,13 @@
     },
     {
       "name": "context",
-      "description": "Context: publishes the facts for the Sidebar footer (Hindsight, CodeGraph, git, test and fix passes) and counts test and fix passes against a limit.",
+      "description": "Publishes the facts for the Main Menu footer (Hindsight, CodeGraph, git, test and fix passes) and counts test and fix passes against a limit.",
       "category": "productivity",
       "source": "./mods/context"
     },
     {
       "name": "rule-guard",
-      "description": "Stops tool calls that break your rules (AI credit in commits, v tags, pushing or releasing unasked, killing by name, skipping hooks, testing past the pass limit) and tells Claude why. Its rules are switches on its Sidebar tab.",
+      "description": "Stops tool calls that break your rules (AI credit in commits, v tags, pushing or releasing unasked, killing by name, skipping hooks, testing past the pass limit) and tells Claude why. Each rule is a switch in Mod Settings.",
       "category": "productivity",
       "source": "./mods/rule-guard"
     },

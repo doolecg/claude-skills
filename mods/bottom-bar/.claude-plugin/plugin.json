@@ -3,6 +3,7 @@
   "version": "1.11.0",
   "description": "A compact rounded bar at the bottom of the terminal and the desktop app (model, effort, context and tokens used, 5-hour and 7-day usage, agents) with a Tools button that opens the Main Menu.",
   "author": { "name": "doolecg" },
+  "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
     "enabled": {
