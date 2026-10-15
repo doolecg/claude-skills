@@ -34,6 +34,7 @@ Run that in a terminal; it then loads in every session. While developing, use `c
 
 - `/passes` shows "Pass N of LIMIT" and whether an edit is waiting.
 - `/passes reset` sets the count back to 0.
+- `/doole_context` does the same as `/passes`.
 
 Both work while Claude is busy.
 

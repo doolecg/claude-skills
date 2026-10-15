@@ -1,40 +1,10 @@
-# Idea Shelf 0.4.1
-
-## Fixed
-- It now shows in the Claude desktop app. The app's own Claude Code refused its spacing, so nothing was drawn there.
-
----
-
-# Idea Shelf 0.4.0
+# Idea Shelf 0.4.2
 
 ## New
-- A proper Claude desktop app version of the shelf, with native buttons. The terminal looks the same as before.
+- `/doole_idea-shelf` opens it, the same as the old command, which still works.
+
+## Fixed
+- Long text with no spaces (file paths, commands, names) is cut with "…" so it stays inside a narrow panel in the desktop app.
 
 ---
 
-# Idea Shelf 0.3.3
-
-## Changed
-- Cards sit on the terminal's own background, and the Settings button on its sidebar tab is gone.
-
----
-
-# Idea Shelf 0.3.2
-
-## Changed
-- With the Context mod installed, the Sidebar tab has a footer at the bottom: context used, Hindsight and CodeGraph, the git branch and changes, and test passes.
-
----
-
-# Idea Shelf 0.3.1
-
-## Changed
-- The Sidebar's tab strip on top shows each tab as a symbol and a word, spread across the full width, with the open tab filled in one accent colour.
-
----
-
-# Idea Shelf 0.3.0
-
-## Changed
-- Opens and closes itself when you pick or leave its Sidebar tab, straight away, even while Claude is working.
-- The Sidebar's tab strip on top uses the new rounded pill and count badges.

@@ -29,7 +29,7 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 
 ## Opening and closing it
 
-- Type `/flightdeck` to open it, and again to close it. `/flightdeck open` and `/flightdeck close` do just that.
+- Type `/flightdeck` to open it, and again to close it. `/flightdeck open` and `/flightdeck close` do just that. `/doole_flightdeck` does the same as `/flightdeck`.
 - With the Bottom Bar mod it shows in the toolbox as an on/off mode, and you can add `/flightdeck` as a pill in `✎ choose pills`: ● when the sidebar is open, ○ when it is closed.
 - In a fullscreen terminal it docks beside the transcript from 110 columns wide; otherwise it sits above the prompt.
 - If you leave it open, it opens again in your next session.

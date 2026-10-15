@@ -29,6 +29,7 @@ The bar replaces a `statusLine` script. If you have one in `~/.claude/settings.j
 ## Doole's Tools
 
 - The commands you pick go at the front of the toolbox's Quick Launch. They are no longer pills in the bar.
+- `/doole_bottom-bar` opens the toolbox.
 - `✎ Choose pills` in the toolbox (or `/choose-pills`) picks them. Mods' own commands are listed first; type in the search box to find any other command.
 - Your picks are saved and come back in every session.
 - The pill's name is the `Pill name` option ("Doole's Tools" by default). Change it in `/plugin` > Installed > Bottom Bar > Configure.

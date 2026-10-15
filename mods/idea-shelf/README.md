@@ -9,7 +9,7 @@ Install (in a terminal; it then loads in every session, including the desktop ap
 Commands:
 - `/idea <text>` parks an idea on the current project's shelf. It does not start a turn and is not sent to the model. It runs during a turn too.
 - `/idea edit <n> <text>` replaces idea number n (the order in `/ideas`). The idea keeps its place.
-- `/ideas` opens the Idea Shelf pane. Each idea has Send, Edit and Delete buttons.
+- `/ideas` opens the Idea Shelf pane. Each idea has Send, Edit and Delete buttons. `/doole_idea-shelf` does the same.
 - Send submits the idea as your own prompt, as if you had typed it. If Claude is working, the prompt is queued and runs when the session is idle. The idea leaves the shelf once it is submitted.
 - Edit shows the idea in a text field with Save and Cancel. Enter also saves. Save with empty text is refused.
 - Delete removes the idea.

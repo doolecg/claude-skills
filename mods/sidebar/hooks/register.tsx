@@ -191,6 +191,7 @@ export const register: Register = on => {
       description: 'Open or close the Sidebar: one tab per mod',
       argumentHint: '[open|close|<mod>]',
     })
+    await $.command.register({ name: 'doole_sidebar', description: 'Open the Sidebar' })
     await quiet(async () => {
       const hidden = await $.store.get('hidden')
       const order = await $.store.get('order')
@@ -223,7 +224,7 @@ export const register: Register = on => {
     return ran
   })
 
-  on('command.run', { command: 'sidebar' }, ($, e) => sidebarCommand($, e.args))
+  on('command.run', { command: ['sidebar', 'doole_sidebar'] }, ($, e) => sidebarCommand($, e.args))
 
   on('command.run', async ($, e, next) => {
     const ran = await next(e)

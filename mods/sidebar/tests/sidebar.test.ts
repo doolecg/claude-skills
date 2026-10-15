@@ -306,6 +306,20 @@ describe('wiring', () => {
     expect(w.panes).not.toContain('sidebar')
   })
 
+  test('/doole_sidebar does the same as /sidebar', async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
+    await settle()
+    expect(w.registered).toContain('doole_sidebar')
+    await $.command.run(command('tab clean-view'))
+    const closed = await $.command.run({ ...command(''), command: 'doole_sidebar' })
+    expect(closed.text).toBe('Sidebar closed.')
+    expect(w.closed).toEqual(['sidebar'])
+    const opened = await $.command.run({ ...command('open'), command: 'doole_sidebar' })
+    expect(opened.text).toBe('Sidebar opened.')
+    expect(w.panes).toContain('sidebar')
+  })
+
   const stripOf = async ($: any) => JSON.parse((await $.command.run({ command: 'fd-strip', args: '', origin: { kind: 'composer' as const } })).text)
   const press = async ($: any, args: string) => {
     await $.command.run({ command: 'fd-press', args, origin: { kind: 'composer' as const } })
@@ -552,6 +566,43 @@ describe('other surfaces', () => {
     expect((await ui.findAll({ type: 'Button' })).length).toBeGreaterThan(0)
     expect(await ui.findAll({ type: 'Input' })).toHaveLength(0)
     expect(await ui.findAll({ type: 'Raster' })).toHaveLength(0)
+    await ui.unmount()
+  })
+})
+
+describe('narrow desktop pane', () => {
+  const LONG = 'C:/' + 'x'.repeat(200)
+  const LONG_GUARD = {
+    name: 'rule-guard',
+    register: ((on: any) => {
+      on('command.run', { command: 'rg-publish' }, async ($: any) => {
+        await $.state.set({ plugin: 'rule-guard', key: 'blocks' }, [{ at: 1_800_000_000_000 - 120_000, rule: 'x', label: 'C:/' + 'y'.repeat(200), what: 'git add C:/' + 'x'.repeat(200) }])
+        return {}
+      })
+    }) as any,
+  }
+  const LONG_CONTEXT = {
+    name: 'context',
+    register: ((on: any) => {
+      on('command.run', { command: 'ctx-publish' }, async ($: any) => {
+        const footer = { hindsight: 'up', codegraph: 'indexed', git: { branch: 'feature/' + 'b'.repeat(200), changed: 3, ahead: 1, behind: 0 }, passes: { count: 2, limit: 3, editedSince: true, extra: [] } }
+        await $.state.set({ plugin: 'context', key: 'footer' }, footer)
+        return {}
+      })
+    }) as any,
+  }
+
+  test('a long stop, command and branch name with no spaces are cut to the pane', { plugins: [LONG_GUARD, LONG_CONTEXT] }, async ($, on) => {
+    world(on)
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run({ ...command(''), command: 'rg-publish' })
+    await $.command.run({ ...command(''), command: 'ctx-publish' })
+    await $.command.run(command('tab rule-guard'))
+    const ui = await $.ui.mount({ ...pane(44), surface: 'desktop' })
+    const words = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).flatMap((t: string) => t.split(/\s+/))
+    expect(words.filter(w => w.endsWith('…')).length).toBeGreaterThanOrEqual(3)
+    for (const w of words) expect([...w].length, w).toBeLessThanOrEqual(44 - 10)
     await ui.unmount()
   })
 })

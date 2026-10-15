@@ -465,6 +465,7 @@ export const register: Register = (on, options) => {
         argumentHint: '[prompt | undo | cancel]',
         immediate: true,
       })
+      await $.command.register({ name: 'doole_prompt-enhancer', description: 'Enhance the prompt in the box', immediate: true })
     } catch {
       say($, 'could not add /enhance-prompt.')
     }
@@ -474,7 +475,7 @@ export const register: Register = (on, options) => {
     return ran
   })
 
-  on('command.run', { command: 'enhance-prompt' }, async ($, e) => {
+  on('command.run', { command: ['enhance-prompt', 'doole_prompt-enhancer'] }, async ($, e) => {
     await run($, opts, e.args)
     return {}
   }).catch(() => ({}))

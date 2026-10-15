@@ -360,6 +360,16 @@ describe('wiring', () => {
     expect(w.modes.at(-1)).toEqual({ flightdeck: { label: 'Flightdeck', isOn: false } })
   })
 
+  test('/doole_flightdeck does the same as /flightdeck', async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
+    const opened = await $.command.run({ ...command(), command: 'doole_flightdeck' })
+    expect(opened.text).toBe('Flightdeck opened.')
+    expect(w.opened[0]).toMatchObject({ id: 'flightdeck', title: 'Flightdeck', columns: 56 })
+    const closed = await $.command.run({ ...command(), command: 'doole_flightdeck' })
+    expect(closed.text).toBe('Flightdeck closed.')
+  })
+
   test('the main card shows the model, effort, context, cost and limits', async ($, on) => {
     world(on)
     await $.session.start(SESSION)
@@ -481,6 +491,12 @@ describe('wiring', () => {
       if (surface === 'desktop') expect(await ui.findAll({ type: 'Svg' })).not.toHaveLength(0)
       await ui.unmount()
     }
+    // In a narrow pane every bar fits inside it.
+    const narrow = await texts($, 'desktop', 40)
+    const widths = ((await narrow.ui.findAll({ type: 'Svg' })) as any[]).map(x => Number(x.props.width))
+    expect(widths.length).toBeGreaterThan(0)
+    for (const w of widths) expect(w).toBeLessThanOrEqual((40 - 6) * 7)
+    await narrow.ui.unmount()
   })
 
   test('with nothing happening the card says Claude is idle', async ($, on) => {

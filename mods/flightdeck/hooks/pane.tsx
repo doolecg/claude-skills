@@ -120,10 +120,18 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
   const working = groups.working.length
   const level = (pct: number) => (pct >= 80 ? pal.bad : pct >= 60 ? pal.warn : pal.good)
   // Every bar is Task View's pixel loader, drawn at its real size so its dots are never stretched.
-  const meter = (key: string, fraction: number, color: string, alt: string, width = 300, isSweep = false) =>
-    Svg ? (
+  // Never wider than the pane: about 7 pixels a column, less the card's border and padding.
+  // Text cut to the pane in code too: the app does not always clip a long line without spaces (a path,
+  // a command), so it would run past the card's edge.
+  const room = Math.max(16, d.columns - 10)
+  const cut = (text: string, n: number) => (text.length > Math.max(8, n) ? `${text.slice(0, Math.max(8, n) - 1)}…` : text)
+  const fit = (width: number) => (d.columns > 0 ? Math.max(60, Math.min(width, (d.columns - 6) * 7)) : width)
+  const meter = (key: string, fraction: number, color: string, alt: string, wide = 300, isSweep = false) => {
+    const width = fit(wide)
+    return Svg ? (
       <Svg key={key} source={barSvg(width, fraction, sbMix(pal.track, color, 0.55), color, pal.track, isSweep, pal.tint, tick)} alt={alt} width={width} height={9} />
     ) : null
+  }
   // A section's title: an accent icon and the name in small capitals.
   const section = (key: string, icon: string, label: string) => (
     <Box key={key} columnGap={1}>
@@ -135,9 +143,13 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
   )
   // A label on the left and its value on the right.
   const pair = (key: string, label: string, value: JSX.Element) => (
-    <Box key={key} columnGap={1} justifyContent="space-between">
-      <Text color={pal.dim}>{label}</Text>
-      {value}
+    <Box key={key} columnGap={2} justifyContent="space-between">
+      <Box flexShrink={0}>
+        <Text color={pal.dim}>{label}</Text>
+      </Box>
+      <Box flexShrink={1} minWidth={0} justifyContent="flex-end">
+        {value}
+      </Box>
     </Box>
   )
 
@@ -229,18 +241,24 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
     const color = a.kind === 'edit' ? fx.edit : a.kind === 'read' ? fx.read : a.kind === 'agent' ? pal.accent : pal.dim
     return (
       <Box key={`act:${c.id}`} columnGap={1} justifyContent="space-between">
-        <Box columnGap={1} flexShrink={1}>
+        <Box columnGap={1} flexGrow={1} flexShrink={1} minWidth={0}>
           <Box width={2} flexShrink={0}>
             <Text color={color}>{a.glyph}</Text>
           </Box>
-          <Text color={pal.text}>{a.verb}</Text>
+          <Box flexShrink={0}>
+            <Text color={pal.text}>{a.verb}</Text>
+          </Box>
           {a.target ? (
-            <Text color={a.isCode ? pal.info : pal.text} bold={!a.isCode} wrap="truncate-end">
-              {a.target}
-            </Text>
+            <Box flexShrink={1} minWidth={0}>
+              <Text color={a.isCode ? pal.info : pal.text} bold={!a.isCode} wrap="truncate-end">
+                {cut(a.target, room - a.verb.length - 6)}
+              </Text>
+            </Box>
           ) : null}
         </Box>
-        <Text color={pal.dim}>{agoText(now - c.at)}</Text>
+        <Box flexShrink={0}>
+          <Text color={pal.dim}>{agoText(now - c.at)}</Text>
+        </Box>
       </Box>
     )
   }
@@ -293,7 +311,7 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
                 </Box>,
               )
             : null}
-          {d.lessons ? pair('lessons', 'Memory', <Text color={pal.text}>{d.lessons}</Text>) : null}
+          {d.lessons ? pair('lessons', 'Memory', <Text color={pal.text}>{d.lessons.replace(/^Memory:\s*/, '')}</Text>) : null}
         </Box>
       ) : null}
       {files.length > 0 ? (
@@ -301,7 +319,7 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
           {section('files-h', '▤', 'Files this session')}
           {files.map(f => (
             <Box key={`file:${f.path}`} columnGap={1} justifyContent="space-between">
-              <Box columnGap={1} flexShrink={1}>
+              <Box columnGap={1} flexShrink={1} minWidth={0}>
                 <Text color={f.kind === 'edit' ? fx.edit : fx.read}>{'●'}</Text>
                 <Text color={pal.text} bold wrap="truncate-middle">
                   {f.name}
@@ -353,12 +371,14 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
     if (!Svg) return null
     const isRun = a.status === 'running' || a.status === 'waiting'
     const to = a.status === 'waiting' ? pal.warn : isRun ? pal.accent : pal.good
+    // The critter takes about 44 pixels beside the bar.
+    const width = Math.max(60, fit(300) - 44)
     return (
       <Svg
         key={`agent-m:${a.id}`}
-        source={barSvg(300, isRun ? 0 : 1, sbMix(pal.track, to, 0.55), to, pal.track, isRun, pal.tint, tick)}
+        source={barSvg(width, isRun ? 0 : 1, sbMix(pal.track, to, 0.55), to, pal.track, isRun, pal.tint, tick)}
         alt={isRun ? 'Working' : 'Finished'}
-        width={300}
+        width={width}
         height={9}
       />
     )
@@ -372,12 +392,12 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
     return (
       <Box key={`row:${a.id}`} borderStyle="round" borderColor={a.status === 'waiting' ? pal.warn : pal.sep} paddingX={1} columnGap={1} alignItems="center">
         {critter(a)}
-        <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+        <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0}>
           <Box columnGap={1} justifyContent="space-between" alignItems="center">
-            <Box columnGap={1} flexShrink={1}>
+            <Box columnGap={1} flexShrink={1} minWidth={0}>
               <Text color={glyphColor}>{glyph}</Text>
               <Text color={pal.text} bold>
-                {a.description || a.type || 'Subagent'}
+                {cut(a.description || a.type || 'Subagent', room - 20)}
               </Text>
             </Box>
             <Box columnGap={1} alignItems="center">
@@ -391,7 +411,7 @@ function drawApp(els: Record<string, any>, surface: string, d: PaneData): { el: 
           </Box>
           {isRun && a.now ? (
             <Text color={pal.accent} wrap="truncate-end">
-              {`Now: ${a.now}`}
+              {cut(`Now: ${a.now}`, room - 7)}
             </Text>
           ) : null}
           {pixelBar(a)}

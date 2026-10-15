@@ -103,4 +103,4 @@ Hitting a budget stops the run and says which.
 
 ## In the Sidebar
 
-With the Sidebar mod on, Self Improve is a tab in it: the same review pane in the Sidebar's look, with the number of lessons and drafts waiting for review as the tab's badge. `/learn open` and `/learn close` open and close the pane; `/learn` alone still opens it.
+With the Sidebar mod on, Self Improve is a tab in it: the same review pane in the Sidebar's look, with the number of lessons and drafts waiting for review as the tab's badge. `/learn open` and `/learn close` open and close the pane; `/learn` alone still opens it. `/doole_self-improve` does the same as `/learn open`.

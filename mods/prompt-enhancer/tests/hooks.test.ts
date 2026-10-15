@@ -249,6 +249,15 @@ test('/enhance-prompt <text> rewrites the text given, and /enhance-prompt undo p
   expect(w.box).toBe('make login faster')
 })
 
+test('/doole_prompt-enhancer does the same as /enhance-prompt', async ($, on) => {
+  const w = baseWorld({ box: '' })
+  const seen = engine(on, w)
+  await start($)
+  await ($ as any).command.run({ command: 'doole_prompt-enhancer', args: 'make login faster' })
+  expect(seen.prompts[0].prompt.includes('"""\nmake login faster\n"""')).toBe(true)
+  expect(w.box.startsWith('Fix the login bug.')).toBe(true)
+})
+
 test('no Hindsight set up: no server call, MEMORY.md and soul.md are used', async ($, on) => {
   const w = baseWorld()
   delete w.files[`${HOME}/.hindsight/coding-agent.json`]

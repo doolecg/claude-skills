@@ -134,16 +134,6 @@ export function effortLabel(effort: string | number | undefined | null): string 
   return String(effort)
 }
 
-/** The app footer's short bar while Claude is idle: `ctx 37% · 373K/1M · 5h 8% · 7d 65%`. */
-export function footerSummary(f: BarFigures): string {
-  const parts = [`ctx ${Math.round(f.ctx ?? 0)}%`]
-  const used = usedLabel(f.tokens, f.window)
-  if (used) parts.push(used)
-  if (f.fiveHour !== null) parts.push(`5h ${Math.round(f.fiveHour)}%`)
-  if (f.sevenDay !== null) parts.push(`7d ${Math.round(f.sevenDay)}%`)
-  return parts.join(' · ')
-}
-
 /** `isPress`: the one part a pickable segment's button holds, so its highlight is one colour. */
 export type Part = { text: string; color: string; bold?: boolean; isPress?: boolean }
 /**

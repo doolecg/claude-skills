@@ -89,6 +89,25 @@ test('the pane follows the sidebar’s strip: opened for its tab, closed when it
   expect(ran).toEqual([])
 })
 
+test('/doole_idea-shelf opens the shelf like /ideas', async ($, on) => {
+  const opened: any[] = []
+  mock.clock(on, { now: 1_800_000_000_000 })
+  mock.store(on)
+  on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: 'F:/repo' }))
+  on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }))
+  on('ui.open', (_$: any, e: any) => {
+    opened.push(e)
+    return { value: { isPlaced: true } }
+  })
+  await $.session.start({ cwd: 'F:/repo', surface: 'terminal', isInteractive: true } as any)
+  await $.command.run({ command: 'ideas', args: '', origin: { kind: 'composer' as const } } as any)
+  await $.command.run({ command: 'doole_idea-shelf', args: '', origin: { kind: 'composer' as const } } as any)
+  expect(opened).toHaveLength(2)
+  expect(opened[1]).toEqual(opened[0])
+  expect(opened[1]).toMatchObject({ id: 'ideas', title: 'Idea Shelf' })
+})
+
 test('on the desktop the shelf is native Buttons and an Input with no Raster or box drawing; mobile has no Input', { plugins: [SIDEBAR] }, async ($, on) => {
   mock.clock(on, { now: 1_800_000_000_000 })
   mock.store(on)
@@ -119,4 +138,26 @@ test('on the desktop the shelf is native Buttons and an Input with no Raster or 
     expect(await mobile.findAll({ type: 'Input' })).toHaveLength(0)
     await mobile.unmount()
   }
+})
+
+test('a long idea with no spaces is cut to the narrow pane on the desktop', { plugins: [SIDEBAR] }, async ($, on) => {
+  mock.clock(on, { now: 1_800_000_000_000 })
+  mock.store(on)
+  on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: 'F:/repo' }))
+  on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }))
+  on('ui.toast', () => ({ value: undefined }))
+  await $.session.start({ cwd: 'F:/repo', surface: 'terminal', isInteractive: true } as any)
+  await $.command.run({ command: 'idea', args: 'C:/' + 'x'.repeat(200), origin: { kind: 'composer' as const } } as any)
+  await $.command.run({
+    command: 'sb-strip',
+    args: JSON.stringify({ isOn: true, active: 'idea-shelf', tabs: [{ id: 'idea-shelf', icon: 'I', name: 'Idea Shelf', badge: 1 }], theme: 'dark', colour: 'Coral' }),
+    origin: { kind: 'composer' as const },
+  } as any)
+  const props = { title: 'Idea Shelf', isFocused: false, bodyColumns: 44, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} }
+  const ui = await $.ui.mount({ plugin: 'idea-shelf', surface: 'desktop', component: 'Pane', requestId: 'ideas', props } as any)
+  const texts = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
+  expect(texts.some(t => t.includes('xxxx') && t.endsWith('…'))).toBe(true)
+  for (const t of texts) expect(t.length, t).toBeLessThanOrEqual(44 - 10)
+  await ui.unmount()
 })

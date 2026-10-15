@@ -111,11 +111,12 @@ export function registerCleanView(on: On): void {
       description: 'Turn Task View on or off (no argument flips it)',
       argumentHint: '[on|off]',
     })
+    await $.command.register({ name: 'doole_task-view', description: 'Turn Task View on or off' })
     syncTicker($, await read($, checklistAtom))
     return ran
   })
 
-  on('command.run', { command: 'simple' }, async ($, e) => {
+  on('command.run', { command: ['simple', 'doole_task-view'] }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
     const target = arg === 'on' ? true : arg === 'off' ? false : !(await read($, enabledAtom))
     await setEnabled($, target)

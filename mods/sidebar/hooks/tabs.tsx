@@ -4,6 +4,7 @@ import {
   sbButton,
   sbCappedBar,
   sbCard,
+  sbClip,
   sbFramedBar,
   sbGood,
   sbMeter,
@@ -35,6 +36,10 @@ export type ViewData = {
   setHidden: (id: string, isHidden: boolean) => void
   moveTab: (id: string, by: -1 | 1) => void
 }
+
+// Text that can hold a path or a command is cut in code to the pane: the app does not always clip a long
+// line without spaces, so it would run past the card's edge.
+const roomOf = (k: SbKit) => Math.max(16, k.columns - 10)
 
 /** The dim line that points a mod's options to Claude Code's plugin menu. */
 const optionsHint = (k: SbKit, id: string) => (
@@ -83,14 +88,18 @@ function cleanView(k: SbKit, d: ViewData) {
       if (!k.isTerminal) {
         return (
           <Box key={`step:${t.id}`} alignItems="center" gap={1}>
-            <Text color={done ? pal.good : active ? pal.accent : pal.faint}>{done ? '✓' : active ? '▶' : '○'}</Text>
-            <Box flexGrow={1} flexShrink={1}>
+            <Box flexShrink={0}>
+              <Text color={done ? pal.good : active ? pal.accent : pal.faint}>{done ? '✓' : active ? '▶' : '○'}</Text>
+            </Box>
+            <Box flexGrow={1} flexShrink={1} minWidth={0}>
               <Text color={done ? pal.dim : active ? pal.text : pal.faint} bold={active}>
-                {t.name}
+                {sbClip(t.name, roomOf(k) - 22)}
               </Text>
             </Box>
-            {sbCappedBar(k, `step-bar:${t.id}`, pixels)}
-            <Text color={active ? pal.accent : pal.dim}>{done ? 'done' : active ? (t.hasReported ? `${t.percent}%` : '…') : ''}</Text>
+            <Box flexShrink={0}>{sbCappedBar(k, `step-bar:${t.id}`, pixels)}</Box>
+            <Box flexShrink={0}>
+              <Text color={active ? pal.accent : pal.dim}>{done ? 'done' : active ? (t.hasReported ? `${t.percent}%` : '…') : ''}</Text>
+            </Box>
           </Box>
         )
       }
@@ -117,7 +126,7 @@ function cleanView(k: SbKit, d: ViewData) {
             <Text wrap={k.isTerminal ? 'truncate-end' : undefined}>
               <Text color={isDone ? pal.good : pal.warmFrom}>{isDone ? '✓ ' : '✶ '}</Text>
               <Text color={isDone ? pal.good : pal.text} bold>
-                {job.title}
+                {k.isTerminal ? job.title : sbClip(job.title, roomOf(k) - 14)}
               </Text>
             </Text>,
             <Text color={pal.dim}>{isDone ? `took ${took}` : took}</Text>,
@@ -159,7 +168,7 @@ function configTab(k: SbKit, d: ViewData, id: string) {
     extra.push(
       <Text key="last" wrap={k.isTerminal ? 'truncate-end' : undefined}>
         <Text color={k.pal.dim}>Last run </Text>
-        <Text color={k.pal.text}>{d.enhance.counts || 'no sources'}</Text>
+        <Text color={k.pal.text}>{k.isTerminal ? d.enhance.counts || 'no sources' : sbClip(d.enhance.counts || 'no sources', roomOf(k) - 28)}</Text>
         <Text color={d.enhance.ok ? k.pal.good : k.pal.bad}>{d.enhance.ok ? ' · ✓ rewritten' : ' · ✗ no rewrite'}</Text>
       </Text>,
     )
@@ -179,12 +188,12 @@ function ruleGuard(k: SbKit, d: ViewData) {
       `block:${i}`,
       <Text wrap={k.isTerminal ? 'truncate-end' : undefined}>
         <Text color={pal.bad}>{'⊘ '}</Text>
-        <Text color={pal.text}>{b.label}</Text>
+        <Text color={pal.text}>{k.isTerminal ? b.label : sbClip(b.label, roomOf(k) - 12)}</Text>
       </Text>,
       <Text color={pal.dim}>{fmtAgo(b.at, d.now)}</Text>,
     ),
     <Text key={`block-what:${i}`} color={pal.faint} wrap={k.isTerminal ? 'truncate-end' : undefined}>
-      {k.isTerminal ? `  ${b.what}` : b.what}
+      {k.isTerminal ? `  ${b.what}` : sbClip(b.what, roomOf(k))}
     </Text>,
   ])
   return [

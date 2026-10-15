@@ -96,6 +96,10 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
   const flagged = Object.entries(state.skills).filter(([, c]) => c.flagged)
 
   const k = d.sb ? sbKit(els, d.sb.surface, d.sb.pal, d.sb.columns, 0, d.sb.rows) : null
+  // In the narrow sidebar every word is cut in code to the pane: the app does not always clip a long word
+  // without spaces (a path, a file name), so it would run past the card's edge.
+  const room = d.sb ? Math.max(16, d.sb.columns - 10) : 0
+  const fit = (text: string, n = 0) => (room ? text.split(/(\s+)/).map(w => cut(w, Math.max(8, room - n))).join('') : text)
 
   // Buttons and item cards take the sidebar's look when the pane is a tab there.
   const btn = (key: string, label: string, onPress: () => void, primary = false) =>
@@ -119,8 +123,8 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
 
   const confirmRow = () =>
     ui.confirm ? (
-      <Box key="confirm">
-        <Text color="yellow">{ui.confirm.label} </Text>
+      <Box key="confirm" flexWrap="wrap">
+        <Text color="yellow">{fit(ui.confirm.label)} </Text>
         <Button
           key="confirm-yes"
           label="Confirm"
@@ -163,12 +167,12 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
           return (
             card(`l${l.id}`, [
               <Text key="text">
-                <Text bold>#{l.id}</Text> <Text color="cyan">[{l.kind}]</Text> {l.text}
+                <Text bold>#{l.id}</Text> <Text color="cyan">[{l.kind}]</Text> {fit(l.text, 12)}
               </Text>,
               <Text key="meta" dimColor>
-                {l.scope === 'user' ? 'about you' : l.folder ? 'this project' : `project ${l.project}`} · {storeOf(l)}
-                {l.reviewReason ? ` · waits: ${l.reviewReason}` : ''}
-                {l.files.length ? ` · ${cut(l.files.join(', '), 60)}` : ''} · seen {l.hits}x
+                {fit(`${l.scope === 'user' ? 'about you' : l.folder ? 'this project' : `project ${l.project}`} · ${storeOf(l)}`)}
+                {l.reviewReason ? fit(` · waits: ${l.reviewReason}`) : ''}
+                {l.files.length ? fit(` · ${cut(l.files.join(', '), 60)}`) : ''} · seen {l.hits}x
               </Text>,
               ui.editing?.key === editKey ? (
                 <Box key="editing" flexDirection="column">
@@ -197,14 +201,14 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
     const list = state.drafts.filter(x => x.status === 'pending' || x.status === 'approved').slice(-20).reverse()
     return (
       <Box flexDirection="column">
-        <Text dimColor>Edit a draft in its file under {d.draftsDir}, then press Reload. Approve installs it.</Text>
+        <Text dimColor>{fit(`Edit a draft in its file under ${d.draftsDir}, then press Reload. Approve installs it.`)}</Text>
         {list.length === 0 && <Text dimColor>No skill drafts yet. Procedures seen in two or more sessions, and corrections that name a skill, become drafts.</Text>}
         {list.map(x =>
           card(`d${x.id}`, [
             <Text key="name">
-              <Text bold>{x.name}</Text> <Text dimColor>({x.kind}{x.isOverride ? ', local override of a plugin skill' : ''}, {x.status})</Text>
+              <Text bold>{fit(x.name, 24)}</Text> <Text dimColor>({x.kind}{x.isOverride ? ', local override of a plugin skill' : ''}, {x.status})</Text>
             </Text>,
-            <Text key="valid" color={x.validation ? 'yellow' : 'green'}>{x.validation ? `Fails validation: ${x.validation}` : 'Passes validation'}</Text>,
+            <Text key="valid" color={x.validation ? 'yellow' : 'green'}>{x.validation ? fit(`Fails validation: ${x.validation}`) : 'Passes validation'}</Text>,
             <Code key={`diff-${x.id}`} source={unifiedDiff(x.previousBody ?? (x.kind === 'new' ? '' : x.previousBody ?? ''), x.body)} format="diff" />,
             x.status === 'pending' && (
               <Box key="actions">
@@ -226,8 +230,8 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
         {flagged.map(([name]) => {
           const change = [...state.changes].reverse().find(c => c.kind === 'skill' && c.status === 'applied' && c.title.endsWith(name))
           return (
-            <Box key={`flag-${name}`}>
-              <Text color="yellow">Skill {name} got worse after the change — roll back? </Text>
+            <Box key={`flag-${name}`} flexWrap="wrap">
+              <Text color="yellow">{fit(`Skill ${name} got worse after the change — roll back? `)}</Text>
               {change && <Button key={`flag-roll-${name}`} label="Roll back" onPress={() => void a.set({ confirm: { action: 'rollback', ids: [change.id], label: `Roll back "${change.title}"?` } })} />}
             </Box>
           )
@@ -240,7 +244,7 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
           const after = afterChange(card)
           return (
             <Box key={`s-${name}`} flexDirection="column" marginTop={1}>
-              <Text bold>{name}</Text>
+              <Text bold>{fit(name)}</Text>
               <Text dimColor>
                 loaded {d.loads[name] ?? 0}x · {st.sessions} sessions learned from · corrected in {st.corrected} ({rate}% of the last 5) · {st.interrupts} interrupts · {st.failures} tool failures in the loading turn
                 {st.avgTurnsToEnd !== null ? ` · ${st.avgTurnsToEnd} turns from load to the end` : ''} · trend: {trend(card)}
@@ -262,10 +266,10 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
           <Box key={`c${c.id}`} flexDirection="column" marginTop={1}>
             <Text>
               <Text dimColor>{when(c.at)} </Text>
-              {cut(c.title, 140)} <Text dimColor>({c.auto ? 'automatic' : 'approved'}{c.status === 'rolledBack' ? ', rolled back' : ''})</Text>
+              {fit(cut(c.title, 140), 14)} <Text dimColor>({c.auto ? 'automatic' : 'approved'}{c.status === 'rolledBack' ? ', rolled back' : ''})</Text>
             </Text>
-            {c.before && <Text color="red">- {cut(c.before.replace(/\s+/g, ' '), 200)}</Text>}
-            {c.after && <Text color="green">+ {cut(c.after.replace(/\s+/g, ' '), 200)}</Text>}
+            {c.before && <Text color="red">- {fit(cut(c.before.replace(/\s+/g, ' '), 200), 2)}</Text>}
+            {c.after && <Text color="green">+ {fit(cut(c.after.replace(/\s+/g, ' '), 200), 2)}</Text>}
             {c.status === 'applied' && <Button key={`roll-${c.id}`} label="Roll back" onPress={() => void a.set({ confirm: { action: 'rollback', ids: [c.id], label: `Roll back "${cut(c.title, 60)}"?` } })} />}
           </Box>
         ))}
@@ -280,7 +284,7 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
         {list.length === 0 && <Text dimColor>No runs yet. /done, /learn-now, or closing a session with edits starts one.</Text>}
         {list.map(r => (
           <Text key={`r${r.id}`} color={r.error && !r.error.startsWith('Skipped') ? 'yellow' : undefined}>
-            {runLine(r).slice(2)}
+            {fit(runLine(r).slice(2))}
           </Text>
         ))}
       </Box>
@@ -295,16 +299,16 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
     return (
       <Box flexDirection="column">
         <Text dimColor>
-          {d.soulFile} · Soul Bank: {d.settings.soulBank} · {hs ? (hs.on ? 'Hindsight connected' : `Hindsight ${hs.reason}`) : 'Hindsight not checked yet'}
+          {fit(`${d.soulFile} · Soul Bank: ${d.settings.soulBank} · ${hs ? (hs.on ? 'Hindsight connected' : `Hindsight ${hs.reason}`) : 'Hindsight not checked yet'}`)}
           {state.soul.lastSync ? ` · last sync ${when(state.soul.lastSync)}` : ''}
-          {state.soul.lastError ? ` · ${state.soul.lastError}` : ''}
+          {state.soul.lastError ? fit(` · ${state.soul.lastError}`) : ''}
         </Text>
         <Button key="soul-sync" label="Sync with the Soul Bank" onPress={() => void a.soulSync()} />
         {state.soul.pending.length > 0 && <Text bold>From the Soul Bank, waiting for you ({state.soul.pending.length})</Text>}
         {state.soul.pending.slice(0, 15).map(p => (
-          <Box key={`sp-${p.id}`}>
+          <Box key={`sp-${p.id}`} flexWrap="wrap">
             <Text>
-              {cut(p.text, 160)} <Text dimColor>({p.section})</Text>{' '}
+              {fit(cut(p.text, 160), 12)} <Text dimColor>({p.section})</Text>{' '}
             </Text>
             <Button key={`sp-add-${p.id}`} label="Add" onPress={() => void a.soulPending(p.id, true)} />
             <Button key={`sp-skip-${p.id}`} label="Skip" onPress={() => void a.soulPending(p.id, false)} />
@@ -324,8 +328,8 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
                     <Button key={`soul-cancel-${sec.title}-${i}`} label="Cancel" onPress={() => void a.set({ editing: null })} />
                   </Box>
                 ) : (
-                  <Box key={key}>
-                    <Text>- {fact} </Text>
+                  <Box key={key} flexWrap="wrap">
+                    <Text>- {fit(fact, 12)} </Text>
                     <Button key={`soul-e-${sec.title}-${i}`} label="Edit" plain onPress={() => void a.set({ editing: { key, value: fact } })} />
                     <Button key={`soul-r-${sec.title}-${i}`} label="Remove" plain onPress={() => void a.soulRemove(fact)} />
                   </Box>
@@ -346,7 +350,7 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
 
   const tabLabel = (t: (typeof TABS)[number]) =>
     t.id === 'lessons' && pendingLessons ? `${t.label} (${pendingLessons})` : t.id === 'drafts' && pendingDrafts ? `${t.label} (${pendingDrafts})` : t.id === 'skills' && flagged.length ? `${t.label} (!)` : t.id === 'soul' && state.soul.pending.length ? `${t.label} (${state.soul.pending.length})` : t.label
-  const modeLine = <Text dimColor>Mode: {d.settings.mode}{d.settings.mode === 'suggest' ? ' (everything waits for you)' : ''} · learn model: {d.settings.learnModel}</Text>
+  const modeLine = <Text dimColor>Mode: {d.settings.mode}{d.settings.mode === 'suggest' ? ' (everything waits for you)' : ''} · learn model: {fit(d.settings.learnModel, 40)}</Text>
 
   if (k && d.sb) {
     const { pal } = k
@@ -366,7 +370,7 @@ export function drawPane(els: Els, surface: string, d: PaneData) {
         {chip('test', 'Test', false, () => void a.test())}
       </Box>,
       <Box key="mode">{modeLine}</Box>,
-      ui.message ? <Text key="message" color="cyan">{ui.message}</Text> : null,
+      ui.message ? <Text key="message" color="cyan">{fit(ui.message)}</Text> : null,
       confirmRow(),
       <Box key="body" flexDirection="column">
         {body()}

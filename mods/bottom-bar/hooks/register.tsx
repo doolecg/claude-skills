@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, StateWrite } from 'claude-code'
 
-import type { BarFigures, BarMod, BarTool } from '../types'
+import type { BarFigures, BarMod, BarTodo, BarTool } from '../types'
 import {
   ACCENTS,
   EFFORTS,
@@ -23,7 +23,6 @@ import {
   sameFigures,
   segmentOffset,
   segments,
-  footerSummary,
   toolLabel,
   EMPTY_TODO,
   showsTodo,
@@ -61,6 +60,7 @@ const todoTick = atom({ plugin: 'bottom-bar', key: 'todoTick' } as const, 0)
  * writes under the bar's own call, where no hook of the bar's runs. Applied once that call returns.
  */
 const missed: Array<{ plugin: string; value: unknown }> = []
+let todoClock: { cancel: () => void } | undefined
 
 async function applyMissed($: Dollar): Promise<void> {
   if (missed.length === 0) return
@@ -69,6 +69,20 @@ async function applyMissed($: Dollar): Promise<void> {
 }
 
 type Dollar = EngineInterface
+
+/**
+ * The to-do list's own frame clock: every 250ms while a list is open and not all done, so its pixels
+ * flicker and its wave rolls; stopped once every step is done or the turn ends (Task View then marks
+ * the list as waiting).
+ */
+function syncTodoClock($: Dollar, list: BarTodo): void {
+  const isLive = list.phase === 'working' && list.items.length > 0 && list.items.some(t => t.status !== 'done')
+  if (isLive && !todoClock) todoClock = $.clock.every(250, () => void update($, todoTick, n => n + 1).catch(() => {}))
+  else if (!isLive && todoClock) {
+    todoClock.cancel()
+    todoClock = undefined
+  }
+}
 
 async function setFigures($: Dollar, change: (f: BarFigures) => BarFigures): Promise<void> {
   const now = await read($, figures)
@@ -219,21 +233,20 @@ async function openPicker($: Dollar): Promise<void> {
   await $.ui.open({ id: PICKER, title: await read($, label), focus: true, closeOnEscape: true })
 }
 
-async function closeTools($: Dollar): Promise<void> {
-  if ((await read($, menu)) === 'tools') await update($, menu, () => '')
-  try {
-    await $.ui.close({ id: TOOLBOX })
-  } catch {}
-}
-
-/** Opens the toolbox as a pane in the app, its lists fresh. */
-async function openAppToolbox($: Dollar): Promise<void> {
+async function openToolbox($: Dollar): Promise<void> {
   void loadMods($).catch(() => {})
   try {
     await loadChoices($)
   } catch {}
   await update($, menu, () => 'tools')
   await $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
+}
+
+async function closeTools($: Dollar): Promise<void> {
+  if ((await read($, menu)) === 'tools') await update($, menu, () => '')
+  try {
+    await $.ui.close({ id: TOOLBOX })
+  } catch {}
 }
 
 /** The toolbox's rows, for the box in the bar or the docked pane. */
@@ -286,6 +299,7 @@ export const register: Register = (on, options) => {
     void loadMods($).catch(() => {})
     $.clock.every(4000, () => void refresh($))
     await $.command.register({ name: CHOOSE, description: 'Choose which commands are in Quick Launch in the toolbox' })
+    await $.command.register({ name: 'doole_bottom-bar', description: 'Open the toolbox' })
     return ran
   })
 
@@ -353,20 +367,21 @@ export const register: Register = (on, options) => {
   on('state.set', { key: 'checklist' } as never, async ($, e, next) => {
     const ran = await next(e)
     const write = e as unknown as StateWrite
-    if (write.plugin === 'clean-view') await update($, todo, () => todoFrom(write.value))
-    return ran
-  }).catch(($, e, next) => next(e))
-
-  // Task View's frame clock: each tick redraws the list so its pixels flicker.
-  on('state.set', { key: 'tick' } as never, async ($, e, next) => {
-    const ran = await next(e)
-    const write = e as unknown as StateWrite
-    if (write.plugin === 'clean-view' && typeof write.value === 'number') await update($, todoTick, () => write.value as number)
+    if (write.plugin === 'clean-view') {
+      const list = todoFrom(write.value)
+      await update($, todo, () => list)
+      syncTodoClock($, list)
+    }
     return ran
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: CHOOSE }, async $ => {
     await openPicker($)
+    return {}
+  })
+
+  on('command.run', { command: 'doole_bottom-bar' }, async $ => {
+    await openToolbox($)
     return {}
   })
 
@@ -383,14 +398,6 @@ export const register: Register = (on, options) => {
   // In the app the bar is the band above the prompt: the footer slot below it holds about two items.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
-    const openToolbox = async () => {
-      void loadMods($).catch(() => {})
-      try {
-        await loadChoices($)
-      } catch {}
-      await update($, menu, () => 'tools')
-      await $.ui.open({ id: TOOLBOX, title: await read($, label), focus: true, closeOnEscape: true })
-    }
     const pal = paletteFor(await read($, theme), colour)
     const list = await read($, todo)
     return desktopBar({
@@ -400,9 +407,10 @@ export const register: Register = (on, options) => {
       figures: await read($, figures),
       published: publishedSegments(await read($, published), pal),
       runCommand: command => void runCommand($, command),
-      openToolbox: () => void openToolbox(),
+      openToolbox: () => void openToolbox($),
       todo: showsTodo(list, await $.clock.now()) ? list : undefined,
       todoTick: await read($, todoTick),
+      columns: e.props.bodyColumns,
     })
   })
 
@@ -411,16 +419,10 @@ export const register: Register = (on, options) => {
     // only then does the key tell a mod with a fallback button (Enhance Prompt) that the bar hosts it;
     // the rest of the time that mod draws its own button here.
     if (e.surface === 'desktop') {
-      const { Box: AppBox, Text: AppText, Button: AppButton } = $.ui.resolve(e)
+      const { Box: AppBox } = $.ui.resolve(e)
       if (await read($, isWorking)) return <AppBox key="bottom-bar-segments">{await next(e)}</AppBox>
-      // Idle: the app hides the band above the prompt, so the bar stays in view here as one short line.
-      const pal = paletteFor(await read($, theme), colour)
-      const f = await read($, figures)
-      return (
-        <AppButton key="pill" plain onPress={() => void openAppToolbox($)}>
-          <AppText color={pal.dim}>{footerSummary(f)}</AppText>
-        </AppButton>
-      )
+      // Idle: the figures are in the bar above the prompt, so nothing of the bar's is added here.
+      return next(e)
     }
     if (e.surface !== 'terminal') return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
@@ -617,6 +619,7 @@ export const register: Register = (on, options) => {
         toggleMod: mod => void toggleMod($, mod),
         launch: command => void closeTools($).then(() => runCommand($, command)),
         choosePills: () => void openPicker($),
+        columns: e.props.bodyColumns,
       })
     }
     if (e.surface !== 'terminal') {

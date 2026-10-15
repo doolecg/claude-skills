@@ -69,6 +69,12 @@ async function readStrip($: EngineInterface): Promise<SbStrip | undefined> {
 
 const openPane = ($: EngineInterface) => $.ui.open({ id: PANE, title: 'Self Improve', closeOnEscape: true, columns: SIDEBAR_COLUMNS })
 
+async function openLearn($: EngineInterface): Promise<Record<string, never>> {
+  const strip = await readStrip($)
+  await $.ui.open({ id: PANE, title: 'Self Improve', closeOnEscape: true, ...(strip?.isOn ? { columns: SIDEBAR_COLUMNS } : {}) })
+  return {}
+}
+
 async function closePane($: EngineInterface): Promise<void> {
   if ((await $.ui.panes()).some(p => p.id === PANE)) await $.ui.close({ id: PANE })
 }
@@ -180,6 +186,7 @@ export const register: Register = (on, options) => {
         await $.command.register({ name: 'learn-now', description: 'Learn from this session now (Self Improve)', immediate: true })
         await $.command.register({ name: 'learn-off', description: 'Turn Self Improve off for this session', immediate: true })
         await $.command.register({ name: 'learn', description: 'Self Improve: review lessons, skill drafts, the scorecard, changes, runs and soul.md', argumentHint: '[open|close|status|approve <id>|reject <id>]', immediate: true })
+        await $.command.register({ name: 'doole_self-improve', description: 'Open Self Improve', immediate: true })
         await $.tool.register({
           name: 'recall',
           description: 'Search what past sessions learned about this project and about the user: lessons, decisions, preferences. Searches Hindsight (when set up), then soul.md and the local lessons. Set why=true to ask Hindsight to reflect on why something was decided.',
@@ -332,10 +339,10 @@ export const register: Register = (on, options) => {
       await $.ui.close({ id: PANE })
       return {}
     }
-    const strip = await readStrip($)
-    await $.ui.open({ id: PANE, title: 'Self Improve', closeOnEscape: true, ...(strip?.isOn ? { columns: SIDEBAR_COLUMNS } : {}) })
-    return {}
+    return openLearn($)
   })
+
+  on('command.run', { command: 'doole_self-improve' }, $ => openLearn($))
 
   // The Sidebar's strip names this tab, or moves on from it: the pane opens or closes with it.
   on('state.set', { key: 'strip' } as never, async ($, e, next) => {

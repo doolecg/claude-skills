@@ -21,7 +21,6 @@ import {
   segmentOffset,
   segments,
   toolLabel,
-  footerSummary,
   usedLabel,
   windowLabel,
 } from '../hooks/bar-logic'
@@ -94,7 +93,7 @@ function world(on: any, saved: Record<string, unknown> = {}, commands: any[] = A
     return next(e)
   })
   mock.store(on, saved)
-  mock.clock(on)
+  ;(seen as any).clock = mock.clock(on)
   on('command.list', () => ({ value: commands }))
   on('ui.open', (_$: any, e: any) => {
     seen.opened.push(e.id)
@@ -1097,8 +1096,17 @@ test('/choose-pills is registered at session start', async ($, on) => {
   })
   expect(registered).toEqual([])
   await startSession($)
-  expect(registered.map(r => r.name)).toEqual(['choose-pills'])
+  expect(registered.map(r => r.name)).toEqual(['choose-pills', 'doole_bottom-bar'])
   expect(registered[0]!.description).toBeTruthy()
+})
+
+test('/doole_bottom-bar opens the toolbox pane', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  await startSession($)
+  const reply = await runCommand($, 'doole_bottom-bar')
+  expect(seen.opened).toEqual(['bottom-bar-toolbox'])
+  expect(reply).toEqual({})
 })
 
 test('/choose-pills opens the picker pane, with every mod listed', async ($, on) => {
@@ -1447,12 +1455,12 @@ test('app: the bar sits above the prompt with no model or effort, and the footer
   on('ui.render', { component: 'SessionMode' }, ($: any, e: any) => (globalThis as any).h($.ui.resolve(e).Text, {}, 'Opus 5.5 High'))
   on('turn.start', (_$: any, e: any) => ({ turnId: e.turnId }))
   await startSession($)
-  // Idle, the app hides the band above the prompt, so the bar stays in view in the footer as one
-  // short line (and a mod's own button can sit beside it); while Claude works the band hosts it all.
+  // Idle, the footer keeps only the app's own labels (and a mod's own button); while Claude works the
+  // band above the prompt hosts the bar.
   const idle = await mountBar($, 'desktop')
-  expect(textsOf(await idle.drawn()).join(' ')).toMatch(/^ctx 10%/)
+  expect(textsOf(await idle.drawn()).join(' ')).toBe('Opus 5.5 High')
   expect(await idle.find({ key: 'bottom-bar-segments' })).toBeUndefined()
-  expect(await idle.find({ key: 'pill' })).toBeDefined()
+  expect(await idle.find({ key: 'pill' })).toBeUndefined()
   await $.turn.start({ text: 'go', turnId: 't1' } as any)
   const footer = await mountBar($, 'desktop')
   expect(textsOf(await footer.drawn()).join(' ')).toBe('Opus 5.5 High')
@@ -1527,12 +1535,6 @@ test('app: the picker pane draws with Buttons and no glyph art', async ($, on) =
 })
 
 
-test('footerSummary is the short bar for the app footer while Claude is idle', () => {
-  expect(footerSummary({ ...EMPTY_FIGURES, ctx: 37, tokens: 373_000, window: 1_000_000, fiveHour: 8, sevenDay: 65 })).toBe(
-    'ctx 37% · 373K/1M · 5h 8% · 7d 65%',
-  )
-  expect(footerSummary(EMPTY_FIGURES)).toBe('ctx 0%')
-})
 
 
 // Task View publishing its to-do list as its `checklist` state.
@@ -1554,31 +1556,62 @@ const TASK_VIEW = {
   }) as any,
 }
 
-test("app: Task View's list sits above the bar in the band, and turns green and still when done", { plugins: [TASK_VIEW] }, async ($, on) => {
-  world(on)
+test("app: Task View's list is one bar above the bar, with counts at its end, green and still when done", { plugins: [TASK_VIEW] }, async ($, on) => {
+  const seen = world(on)
   registerCommands(on)
   seedModel(on)
   await startSession($)
-  const before = await mountAppBar($)
-  expect(await before.find({ key: 'todo' })).toBeUndefined()
+  expect(await (await mountAppBar($)).find({ key: 'todo' })).toBeUndefined()
   await $.command.run({ command: 'publish-list', args: 'working done active upcoming' } as any)
   const bar = await mountAppBar($)
   expect(await bar.find({ key: 'todo' })).toBeDefined()
   expect(await bar.find({ key: 'pill' })).toBeDefined()
   const all = textsOf(await bar.drawn()).join(' ')
-  expect(all).toContain('1 of 3 done · 33%')
-  expect(all.indexOf('Step 1')).toBeLessThan(all.indexOf('context'))
+  expect(all).toContain('1 of 3')
+  expect(all).not.toContain('Step 1')
+  expect(all.indexOf('To-do')).toBeLessThan(all.indexOf('context'))
   const svgs = async (m: any) => (await m.findAll({ type: 'Svg' })) as any[]
-  const active = (await svgs(bar)).find(x => x.props.alt === 'Step 2: in progress')
-  // The pixels are redrawn on Task View's frame clock, so they change from one frame to the next.
-  await $.command.run({ command: 'tick-list', args: '' } as any)
-  const later = (await svgs(await mountAppBar($))).find(x => x.props.alt === 'Step 2: in progress')
-  expect(String(later.props.source)).not.toBe(String(active.props.source))
+  const main = (await svgs(bar)).find(x => x.props.alt === '1 of 3 steps done')
+  // It spans the band (ABOVE_PROPS has no bodyColumns, so the 360 fallback here), with room for the counts.
+  expect(main.props.width).toBe(360)
+  // While steps are open the empty track carries the moving wave; a finished bar has none.
+  expect(String(main.props.source).match(/<rect/g)!.length).toBeGreaterThan(100)
+  // The bar keeps its own frame clock while steps are open, so its pixels change from one frame to the next.
+  await (seen as any).clock.advance(500)
+  const later = (await svgs(await mountAppBar($))).find(x => x.props.alt === '1 of 3 steps done')
+  expect(String(later.props.source)).not.toBe(String(main.props.source))
   await $.command.run({ command: 'publish-list', args: 'done done done done' } as any)
   const finished = await mountAppBar($)
   expect(textsOf(await finished.drawn()).join(' ')).toContain('All done · 3 of 3')
-  const main = (await svgs(finished)).find(x => x.props.alt === 'All 3 done')
-  expect(String(main.props.source)).toContain('120 of 120 lit')
+  const green = (await svgs(finished)).find(x => x.props.alt === 'All 3 steps done')
+  const wide = await $.ui.mount({ plugin: 'bottom-bar', surface: 'desktop', component: 'AbovePrompt', props: { ...ABOVE_PROPS, bodyColumns: 120 } })
+  const span = ((await wide.findAll({ type: 'Svg' })) as any[]).find(x => x.props.alt === 'All 3 steps done')
+  expect(span.props.width).toBe(Math.round(120 * 7.2) - 160)
+  expect(String(green.props.source)).toContain('120 of 120 lit')
   await $.command.run({ command: 'publish-list', args: 'idle' } as any)
   expect(await (await mountAppBar($)).find({ key: 'todo' })).toBeUndefined()
+})
+
+const LONG_MOD = {
+  name: 'demo-mode',
+  register: ((on: any) => {
+    on('session.start', async ($: any, e: any, next: any) => {
+      const ran = await next(e)
+      await $.state.set({ plugin: 'demo-mode', key: 'modes' }, { demo: { label: 'C:/' + 'x'.repeat(200), isOn: true } })
+      return ran
+    })
+  }) as any,
+}
+
+test('app: a long mod label and launcher name with no spaces are cut to the narrow toolbox pane', { plugins: [LONG_MOD] }, async ($, on) => {
+  const LONG = cmd('z'.repeat(200), 'demo-mode', 'plugin', 'Long')
+  world(on, { tools: [LONG.name] }, [LONG, COMPACT])
+  registerCommands(on)
+  seedModel(on)
+  await startSession($)
+  const pane = await $.ui.mount({ plugin: 'bottom-bar', surface: 'desktop', component: 'Pane', requestId: TOOLBOX, props: { ...PANE_PROPS, bodyColumns: 44 } })
+  const buttons = (await pane.findAll({ type: 'Button' })).map((b: any) => String(b.props.label))
+  const words = [...textsOf(await pane.drawn()), ...buttons].flatMap(t => t.split(/\s+/))
+  expect(words.filter(w => w.endsWith('…')).length).toBeGreaterThanOrEqual(2)
+  for (const w of words) expect([...w].length, w).toBeLessThanOrEqual(44 - 10)
 })

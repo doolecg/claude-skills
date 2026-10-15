@@ -150,6 +150,7 @@ export const register: Register = (on, options: PluginOptions) => {
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
     await quiet(() => $.command.register({ name: 'passes', description: 'Show how many test and fix passes this problem has had, or reset the count', argumentHint: '[reset]', immediate: true }))
+    await quiet(() => $.command.register({ name: 'doole_context', description: 'Show the test and fix pass count', immediate: true }))
     await quiet(() => setFooter($, f => f))
     await quiet(() => refreshCodegraph($))
     await quiet(() => refreshGit($))
@@ -188,7 +189,7 @@ export const register: Register = (on, options: PluginOptions) => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  on('command.run', { command: 'passes' }, async ($, e) => {
+  on('command.run', { command: ['passes', 'doole_context'] }, async ($, e) => {
     if (/^\s*reset\b/i.test(e.args)) {
       await quiet(() => setPasses($, resetPasses))
       return { text: 'Passes reset.' }

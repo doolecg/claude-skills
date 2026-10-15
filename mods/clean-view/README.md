@@ -25,7 +25,7 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 
 - It starts on.
 - With the Bottom Bar mod, the toolbox's Mods list shows Task View with an On/Off switch; one click flips it.
-- Or type `/simple off`. `/simple on` turns it back on, and `/simple` on its own flips it.
+- Or type `/simple off`. `/simple on` turns it back on, and `/simple` on its own flips it. `/doole_task-view` does the same as `/simple`.
 - When it's off, the to-do rows are Claude Code's normal ones. Your choice is remembered after a restart.
 
 ## What it draws

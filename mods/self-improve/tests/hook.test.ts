@@ -105,6 +105,21 @@ test('/learn status says nothing was learned yet', async ($, on) => {
   expect(text).toMatch(/Memory: nothing learned yet/)
 })
 
+test('/doole_self-improve opens the pane like /learn open', async ($, on) => {
+  host(on)
+  const opened: any[] = []
+  on('ui.open', (_$: any, e: any) => {
+    opened.push(e)
+    return { value: { isPlaced: true } } as never
+  })
+  await start($)
+  await $.command.run({ command: 'learn', args: 'open' } as never)
+  await $.command.run({ command: 'doole_self-improve', args: '' } as never)
+  expect(opened).toHaveLength(2)
+  expect(opened[1]).toEqual(opened[0])
+  expect(opened[1]).toMatchObject({ id: 'self-improve', title: 'Self Improve' })
+})
+
 const BOX = new RegExp('[' + String.fromCharCode(0x2500) + '-' + String.fromCharCode(0x259f) + String.fromCharCode(0x2800) + '-' + String.fromCharCode(0x28ff) + ']')
 const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join(String.fromCharCode(10))
 
@@ -128,4 +143,36 @@ test('the recall tool answers from soul.md when Hindsight is not set up', async 
   await start($)
   const r = await $.tool.call({ tool: 'mcp__self-improve__recall', query: 'how should replies be worded' } as never)
   expect(String((r as { result?: unknown }).result)).toContain('Keep replies short and in plain words.')
+})
+
+// A stand-in for the Sidebar: `/sb-strip <json>` writes its `strip` state.
+const SIDEBAR = {
+  name: 'sidebar',
+  register: ((on: any) => {
+    on('command.run', { command: 'sb-strip' }, async ($: any, e: any) => {
+      await $.state.set({ plugin: 'sidebar', key: 'strip' }, JSON.parse(e.args))
+      return {}
+    })
+  }) as any,
+}
+
+test('a long fact with no spaces is cut to the narrow sidebar pane on the desktop', { plugins: [SIDEBAR] }, async ($, on) => {
+  host(on, { [SOUL]: `# Soul
+
+## How to respond
+
+- C:/${'x'.repeat(200)}
+` })
+  await start($)
+  await $.command.run({
+    command: 'sb-strip',
+    args: JSON.stringify({ isOn: true, active: 'self-improve', tabs: [{ id: 'self-improve', icon: 'S', name: 'Self Improve', badge: 0 }], theme: 'dark', colour: 'Coral' }),
+    origin: { kind: 'composer' as const },
+  } as never)
+  const pane = await $.ui.mount({ plugin: 'self-improve', surface: 'desktop', component: 'Pane', requestId: 'self-improve', props: { title: 'Self Improve', isFocused: false, bodyColumns: 44, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} } } as never)
+  await pane.press({ key: 'tab-soul' })
+  const words = (await texts(pane)).split(/\s+/)
+  expect(words.some(w => w.includes('xxxx') && w.endsWith('…'))).toBe(true)
+  for (const w of words) expect([...w].length, w).toBeLessThanOrEqual(44 - 10)
+  await pane.unmount()
 })

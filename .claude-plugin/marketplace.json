@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "dooles-tools",
-  "description": "doolecg's Claude Code mods: Sidebar, Flightdeck, Bottom Bar, Task View, Self Improve, Prompt Enhancer, Idea Shelf, Context and Rule Guard. The skills are in doolecg/Dooles_Skills.",
+  "description": "doolecg's Claude Code mods: Sidebar, Flightdeck, Bottom Bar, Task View, Self Improve, Prompt Enhancer, Idea Shelf, Context, Rule Guard and Mod Settings. The skills are in doolecg/Dooles_Skills.",
   "owner": {
     "name": "doolecg",
     "email": "doolecg@gmail.com"
@@ -60,6 +60,12 @@
       "description": "Stops tool calls that break your rules (AI credit in commits, v tags, pushing or releasing unasked, killing by name, skipping hooks, testing past the pass limit) and tells Claude why. Its rules are switches on its Sidebar tab.",
       "category": "productivity",
       "source": "./mods/rule-guard"
+    },
+    {
+      "name": "mod-settings",
+      "description": "Every installed mod's settings in one side panel in the desktop app, changed in place. Open it with /doole_settings.",
+      "category": "productivity",
+      "source": "./mods/mod-settings"
     }
   ]
 }

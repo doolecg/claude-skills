@@ -1,7 +1,7 @@
 import type { Elements } from 'claude-code'
 
-import type { BarFigures, BarMod, BarMode, BarTodo, BarTodoItem, BarTool } from '../types'
-import { EFFORTS, modelChoiceLabel, toolLabel, usedLabel } from './bar-logic'
+import type { BarFigures, BarMod, BarMode, BarTodo, BarTool } from '../types'
+import { EFFORTS, clip, modelChoiceLabel, toolLabel, usedLabel } from './bar-logic'
 import type { Palette, Segment } from './bar-logic'
 import { barSvg, mixHex } from './pixel-bar'
 import { currentAlias, effortName, modLines, quickLaunch } from './toolbox-logic'
@@ -70,61 +70,32 @@ function pixelBar(els: AppEls, pal: Palette, pct: number, color: string, width: 
   return <Svg key={key} source={source} alt={alt} width={width} height={tall} isInteractive />
 }
 
-const MAIN_PX = 360
-const ITEM_PX = 160
-const mark = (s: BarTodoItem['status']) => (s === 'done' ? '✓' : s === 'active' ? '▶' : '○')
+/** About how many CSS pixels a column of the band is, to size the bar from `bodyColumns`. */
+const COLUMN_PX = 7.2
+/** Room kept for "To-do" before the bar and the counts after it. */
+const TODO_LABELS_PX = 160
 
 /**
- * Task View's to-do list: a header, a main bar, then a line and a bar for each item. The bars are Task
- * View's own, redrawn on its frame clock (`tick`) so the pixels flicker the same way; green and still
- * once all are done.
+ * Task View's to-do list as one line: "To-do", the main pixel bar on Task View's frame clock (`tick`), and
+ * the step counts at its end. Claude's chat already lists the steps, so they are not repeated here. Green
+ * and still once every step is done.
  */
-export function todoCard(els: AppEls, pal: Palette, todo: BarTodo, tick: number): JSX.Element {
+export function todoCard(els: AppEls, pal: Palette, todo: BarTodo, tick: number, columns = 0): JSX.Element {
   const { Box, Text, Svg } = els
   const total = todo.items.length
   const done = todo.items.filter(t => t.status === 'done').length
   const isAllDone = total > 0 && done === total
-  const percent = total === 0 ? 0 : Math.round((done / total) * 100)
   const track = mixHex(pal.panel, pal.sep, 0.5)
-  const warm = { from: mixHex(track, pal.accent, 0.55), to: pal.accent }
-  const good = { from: mixHex(track, pal.good, 0.55), to: pal.good }
-  const bar = (key: string, width: number, fraction: number, c: { from: string; to: string }, isSweep: boolean, t: number, alt: string) => (
-    <Svg key={key} source={barSvg(width, fraction, c.from, c.to, track, isSweep, pal.text, t)} alt={alt} width={width} height={9} />
-  )
-  const rows = todo.items.map((t, i) => {
-    const key = `todo-${i}`
-    const pixels =
-      t.status === 'done'
-        ? bar(`${key}-bar`, ITEM_PX, 1, good, false, 0, `${t.name}: done`)
-        : t.status === 'active'
-          ? bar(`${key}-bar`, ITEM_PX, 0, warm, true, tick, `${t.name}: in progress`)
-          : bar(`${key}-bar`, ITEM_PX, 0, warm, false, 0, `${t.name}: not started`)
-    return (
-      <Box key={key} flexDirection="row" alignItems="center" columnGap={1}>
-        <Text color={t.status === 'done' ? pal.good : t.status === 'active' ? pal.accent : pal.dim}>{mark(t.status)}</Text>
-        <Box flexGrow={1} flexShrink={1} minWidth={0}>
-          <Text color={t.status === 'active' ? pal.text : pal.dim} bold={t.status === 'active'}>
-            {t.name}
-          </Text>
-        </Box>
-        <Box flexShrink={0}>{pixels}</Box>
-      </Box>
-    )
-  })
+  const c = isAllDone ? { from: mixHex(track, pal.good, 0.55), to: pal.good } : { from: mixHex(track, pal.accent, 0.55), to: pal.accent }
+  const width = columns > 0 ? Math.max(120, Math.round(columns * COLUMN_PX) - TODO_LABELS_PX) : 360
+  const alt = isAllDone ? `All ${total} steps done` : `${done} of ${total} steps done`
   return (
-    <Box key="todo" flexDirection="column" borderStyle="round" borderColor={pal.sep} paddingX={1} gap={1}>
-      <Box key="todo-head" flexDirection="row" justifyContent="space-between" columnGap={2}>
-        <Text color={pal.text} bold>
-          {'To-do'}
-        </Text>
-        {isAllDone ? <Text color={pal.good}>{`All done · ${total} of ${total}`}</Text> : <Text color={pal.dim}>{`${done} of ${total} done · ${percent}%`}</Text>}
+    <Box key="todo" flexDirection="row" alignItems="center" columnGap={1} width="100%">
+      <Text color={pal.dim}>{'To-do'}</Text>
+      <Box flexGrow={1} flexShrink={1} minWidth={0}>
+        <Svg key="todo-main-bar" source={barSvg(width, isAllDone ? 1 : done / Math.max(1, total), c.from, c.to, track, false, pal.text, isAllDone ? 0 : tick, !isAllDone)} alt={alt} width={width} height={9} />
       </Box>
-      <Box key="todo-main" flexShrink={0}>
-        {isAllDone
-          ? bar('todo-main-bar', MAIN_PX, 1, good, false, 0, `All ${total} done`)
-          : bar('todo-main-bar', MAIN_PX, done / Math.max(1, total), warm, false, tick, `${done} of ${total} done, ${percent}%`)}
-      </Box>
-      <Box key="todo-rows" flexDirection="column">{rows}</Box>
+      <Text color={isAllDone ? pal.good : pal.text}>{isAllDone ? `All done · ${total} of ${total}` : `${done} of ${total}`}</Text>
     </Box>
   )
 }
@@ -142,6 +113,8 @@ export type DesktopBarArgs = {
   todo?: BarTodo
   /** Task View's frame clock, so the list's pixels flicker with it. */
   todoTick?: number
+  /** The band's width in columns, so the list's bar spans it. */
+  columns?: number
 }
 
 /**
@@ -191,7 +164,7 @@ export function desktopBar(a: DesktopBarArgs): JSX.Element {
   if (!a.todo) return bar
   return (
     <Box key="bottom-bar-stack" flexDirection="column" gap={1} width="100%">
-      {todoCard(a.els, pal, a.todo, a.todoTick ?? 0)}
+      {todoCard(a.els, pal, a.todo, a.todoTick ?? 0, a.columns ?? 0)}
       {bar}
     </Box>
   )
@@ -214,12 +187,18 @@ export type DesktopToolboxArgs = {
   toggleMod: (mod: BarMod) => void
   launch: (command: string) => void
   choosePills: () => void
+  /** The panel's columns, to cut text to; 44 when not given. */
+  columns?: number
 }
 
 /** The toolbox pane in the app: one rounded panel with Model, Effort, Mods and Quick Launch sections. */
 export function desktopToolbox(a: DesktopToolboxArgs): JSX.Element {
   const { Box, Text, Button } = a.els
   const { pal } = a
+  // Text that can hold a name or a path is cut in code to the panel: the app does not always clip a long
+  // word without spaces, so it would run past the card's edge.
+  const room = Math.max(16, (a.columns ?? 44) - 10)
+  const fit = (text: string, n: number) => text.split(/(\s+)/).map(w => clip(w, Math.max(8, n))).join('')
   const heading = (name: string) => (
     <Text key={`h:${name}`} color={pal.dim} bold>
       {name}
@@ -246,7 +225,7 @@ export function desktopToolbox(a: DesktopToolboxArgs): JSX.Element {
       backgroundColor={pal.panel}
     >
       <Text color={pal.accent} bold>
-        {a.title}
+        {clip(a.title, room)}
       </Text>
       {section(
         'Model',
@@ -268,16 +247,18 @@ export function desktopToolbox(a: DesktopToolboxArgs): JSX.Element {
           {lines.length === 0 ? <Text color={pal.dim}>No mods installed.</Text> : null}
           {lines.map(l => (
             <Box key={`mod:${l.key}`} flexDirection="row" alignItems="center" justifyContent="space-between" gap={2}>
-              <Box flexDirection="column" flexShrink={1}>
-                <Text color={pal.text}>{l.label}</Text>
-                {l.about ? <Text color={pal.dim}>{l.about}</Text> : null}
+              <Box flexDirection="column" flexShrink={1} minWidth={0}>
+                <Text color={pal.text}>{fit(l.label, room - 12)}</Text>
+                {l.about ? <Text color={pal.dim}>{fit(l.about, room - 12)}</Text> : null}
               </Box>
-              <Button
-                key={l.key}
-                label={l.isOn ? 'On' : 'Off'}
-                variant={l.isOn ? 'primary' : 'secondary'}
-                onPress={() => (l.command !== undefined ? a.flip(l.command) : a.toggleMod(l.mod!))}
-              />
+              <Box flexShrink={0}>
+                <Button
+                  key={l.key}
+                  label={l.isOn ? 'On' : 'Off'}
+                  variant={l.isOn ? 'primary' : 'secondary'}
+                  onPress={() => (l.command !== undefined ? a.flip(l.command) : a.toggleMod(l.mod!))}
+                />
+              </Box>
             </Box>
           ))}
         </Box>,
@@ -287,7 +268,7 @@ export function desktopToolbox(a: DesktopToolboxArgs): JSX.Element {
         <Box flexDirection="row" flexWrap="wrap" gap={1}>
           <Button key="tb-choose" label="Choose pills" variant="secondary" onPress={a.choosePills} />
           {quickLaunch(a.choices, a.chosen, a.modes).map(c => (
-            <Button key={`tb-launch:${c.name}`} label={toolLabel(c.name)} variant="secondary" onPress={() => a.launch(c.name)} />
+            <Button key={`tb-launch:${c.name}`} label={clip(toolLabel(c.name), room - 6)} variant="secondary" onPress={() => a.launch(c.name)} />
           ))}
         </Box>,
       )}

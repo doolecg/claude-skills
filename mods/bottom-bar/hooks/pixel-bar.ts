@@ -15,7 +15,7 @@ function grain(i: number, seed: number): number {
  * fuller and brighter toward the front, where the last column is bright and glows. The empty track
  * keeps a faint scatter that shifts too. With no percent yet, a lit patch runs along the track.
  */
-export function barSvg(width: number, fraction: number, from: string, to: string, track: string, isSweep = false, tint = '#FFFFFF', tick = 0): string {
+export function barSvg(width: number, fraction: number, from: string, to: string, track: string, isSweep = false, tint = '#FFFFFF', tick = 0, isWave = false): string {
   const tall = 9
   const pitch = 3
   const rows = 3
@@ -49,6 +49,12 @@ export function barSvg(width: number, fraction: number, from: string, to: string
         if (grain(i, t * 7 + 11) > 0.3 + 0.65 * b) continue
         const o = 0.2 + 0.75 * b * (0.35 + 0.65 * grain(i, t * 13 + 5))
         dot(c, r, grain(i, t + 17) > 0.85 ? from : to, o)
+      } else if (isWave) {
+        // Bottom Bar only: while Claude works the empty track carries a slow wave of faint pixels,
+        // rolling from left to right, a little ragged so it reads as pixels rather than a gradient.
+        const crest = Math.sin(c * 0.32 - tick * 0.45 + r * 0.6)
+        const o = 0.04 + 0.26 * Math.max(0, crest) * (0.6 + 0.4 * grain(i, t + 31))
+        if (crest > -0.2 || grain(i, t + 37) > 0.8) dot(c, r, crest > 0.75 ? tint : to, o)
       } else if (grain(i, Math.floor(t / 2) * 3 + 23) > 0.84) {
         dot(c, r, tint, 0.05 + 0.12 * grain(i, t + 29))
       }

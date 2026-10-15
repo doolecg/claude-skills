@@ -1,6 +1,6 @@
 {
   "name": "context",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Context: publishes the facts for the Sidebar footer (Hindsight, CodeGraph, git, test and fix passes) and counts test and fix passes against a limit.",
   "author": { "name": "doolecg" },
   "license": "MIT",

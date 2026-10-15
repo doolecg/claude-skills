@@ -19,7 +19,7 @@ Press `y` to add the marketplace, then pick the user scope so it loads in every 
 - When it is done the box holds the rewrite. Beside the button you see how many recalls it found, Hindsight and CodeGraph together, such as `9 recalls`, and **Undo**, which puts your text back. Undo stays until you send a prompt.
 - A source that was not used is named in the short note after the run, with why: not set up, timed out, unavailable, not installed or not indexed.
 - If you type in the box while it works, your text is kept, and **Use rewrite** and **Discard** let you take the rewrite or drop it.
-- `/enhance-prompt <your prompt>` rewrites the text you give it. `/enhance-prompt` alone rewrites what is in the box. `/enhance-prompt undo`, `cancel`, `use` and `discard` do what the buttons do.
+- `/enhance-prompt <your prompt>` rewrites the text you give it. `/enhance-prompt` alone rewrites what is in the box. `/enhance-prompt undo`, `cancel`, `use` and `discard` do what the buttons do. `/doole_prompt-enhancer` does the same as `/enhance-prompt`.
 
 The rewrite has this shape (lines with nothing to say are left out):
 

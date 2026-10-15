@@ -3,10 +3,13 @@ import type { EngineInterface, Register, StateWrite } from 'claude-code'
 
 import type { Editing } from '../types'
 import { ageOf, cleanIdea, ideaKey, isIdea, newId, parseEdit, shelfPrefix } from './shelf'
-import { SIDEBAR_COLUMNS, isSidebarTab, sbActions, sbAsker, sbButton, sbCard, sbFrame, sbKit, sbPaneMove, sbPalette, sbRows, sbSplit, sbTitle } from './sidebar-kit'
+import { SIDEBAR_COLUMNS, isSidebarTab, sbActions, sbAsker, sbButton, sbCard, sbClip, sbFrame, sbKit, sbPaneMove, sbPalette, sbRows, sbSplit, sbTitle } from './sidebar-kit'
 import type { SbStrip } from './sidebar-kit'
 
 type Row = { id: string; text: string; at: number }
+
+// Cut in code to the pane: the app does not always clip a long word without spaces (a path, a command).
+const fit = (text: string, n: number) => text.split(/(\s+)/).map(w => sbClip(w, Math.max(8, n))).join('')
 
 const editing = atom({ plugin: 'idea-shelf', key: 'editing' } as const, null as Editing | null)
 const badge = atom({ plugin: 'idea-shelf', key: 'sidebarBadge' } as const, 0)
@@ -63,6 +66,7 @@ export const register: Register = on => {
         argumentHint: '[open|close]',
         immediate: true,
       })
+      await $.command.register({ name: 'doole_idea-shelf', description: 'Open the Idea Shelf', immediate: true })
     } catch {
       $.ui.toast('Idea Shelf: could not register its commands')
     }
@@ -102,7 +106,7 @@ export const register: Register = on => {
     return {}
   })
 
-  on('command.run', { command: 'ideas' }, async ($, e) => {
+  on('command.run', { command: ['ideas', 'doole_idea-shelf'] }, async ($, e) => {
     if (e.args.trim().toLowerCase() === 'close') {
       await $.ui.close({ id: 'ideas' })
       return {}
@@ -226,6 +230,7 @@ export const register: Register = on => {
     if (strip !== undefined && isSidebarTab(strip, 'idea-shelf')) {
       const k = sbKit(els, e.surface, sbPalette(strip.theme, strip.colour), e.props.bodyColumns, 0, sbRows(e.props))
       const ask = sbAsker(args => askSidebar($, args), 'idea-shelf', () => closePane($))
+      const room = Math.max(16, k.columns - 10)
       const body: unknown[] = [
         sbTitle(k, { icon: '◇', name: 'Idea Shelf', status: `${ideas.length} ${ideas.length === 1 ? 'idea' : 'ideas'} · ${folder}` }),
       ]
@@ -242,7 +247,7 @@ export const register: Register = on => {
             current?.id === idea.id
               ? editor(idea, index)
               : [
-                  sbSplit(k, `sb-text:${idea.id}`, <Text color={k.pal.text}>{idea.text}</Text>, <Text color={k.pal.dim}>{ageOf(now, idea.at)}</Text>),
+                  sbSplit(k, `sb-text:${idea.id}`, <Text color={k.pal.text}>{e.surface === 'terminal' ? idea.text : fit(idea.text, room - 6)}</Text>, <Text color={k.pal.dim}>{ageOf(now, idea.at)}</Text>),
                   <Box key={`sb-btns:${idea.id}`} columnGap={1}>
                     {sbButton(k, `send:${idea.id}`, 'Send', () => send(idea), true)}
                     {sbButton(k, `edit:${idea.id}`, 'Edit', () => startEdit(idea))}
@@ -255,15 +260,16 @@ export const register: Register = on => {
       return sbFrame(k, strip, sbActions(ask), body)
     }
 
+    const room = Math.max(16, (e.props.bodyColumns ?? 44) - 10)
     return (
       <Box flexDirection="column">
-        <Text dimColor>{folder}: {ideas.length} idea(s) on the shelf</Text>
+        <Text dimColor>{fit(`${folder}: ${ideas.length} idea(s) on the shelf`, room)}</Text>
         {ideas.length === 0 && <Text dimColor>{'The shelf is empty. Park an idea with /idea <text>.'}</Text>}
         {ideas.map((idea, index) => (
           <Box key={idea.id} flexDirection="column">
             {current?.id === idea.id ? editor(idea, index) : (
               <Box flexDirection="column">
-                <Text>{`${index + 1}. ${idea.text}`}</Text>
+                <Text>{fit(`${index + 1}. ${idea.text}`, room)}</Text>
                 <Box>
                   <Button key={`send:${idea.id}`} label="Send" variant="primary" onPress={() => send(idea)} />
                   <Button key={`edit:${idea.id}`} label="Edit" onPress={() => startEdit(idea)} />

@@ -396,7 +396,7 @@ export function sbSplit(k: SbKit, key: string, left: unknown, right?: unknown) {
   if (!k.isTerminal) {
     return (
       <Box key={key} width="100%" justifyContent="space-between" alignItems="center" gap={1}>
-        <Box flexShrink={1}>{left}</Box>
+        <Box flexShrink={1} minWidth={0}>{left}</Box>
         {right ? <Box flexShrink={0}>{right}</Box> : null}
       </Box>
     )
@@ -738,6 +738,8 @@ export function sbTitle(
   const { Text, Button } = k.els
   const { pal } = k
   if (!k.isTerminal) {
+    // The status can hold a folder or a path: cut in code, as the app does not always clip a long word.
+    const status = t.status ? sbClip(t.status, Math.max(8, Math.max(16, k.columns - 10) - (right ? 10 : 0) - t.name.length - 5)) : ''
     return sbSplit(
       k,
       'sb-title',
@@ -745,7 +747,7 @@ export function sbTitle(
         <Text color={pal.accent} bold>
           {`${t.icon} ${t.name.toUpperCase()}`}
         </Text>
-        <Text color={pal.dim}>{t.status ? ` · ${t.status}` : ''}</Text>
+        <Text color={pal.dim}>{status ? ` · ${status}` : ''}</Text>
       </Text>,
       right ? <Button key="sb-back" label={`‹ ${right.label}`} variant="secondary" onPress={right.onPress} /> : undefined,
     )
@@ -801,7 +803,7 @@ export function sbFooter(k: SbKit, f: SbFooter) {
         <Text key="ft-git">
           <Text color={pal.info}>{'⎇ '}</Text>
           <Text color={pal.text} bold>
-            {git.branch}
+            {sbClip(git.branch, Math.max(8, k.columns - 28))}
           </Text>
           <Text color={git.changed > 0 ? pal.warn : pal.dim}>{git.changed > 0 ? ` · ${git.changed} changed` : ' · clean'}</Text>
           <Text color={pal.dim}>{`${git.ahead > 0 ? ` ↑${git.ahead}` : ''}${git.behind > 0 ? ` ↓${git.behind}` : ''}`}</Text>

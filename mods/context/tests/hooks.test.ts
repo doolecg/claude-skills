@@ -126,6 +126,15 @@ test('the pass limit and extra check words come from the options', { options: { 
   expect(f.passes).toEqual({ count: 1, limit: 5, editedSince: false, extra: ['smoke'] })
 })
 
+test('/doole_context does the same as /passes', async ($, on) => {
+  engine(on)
+  await start($)
+  await call($, 'Bash', 'npm test')
+  await call($, 'Write')
+  const said = await $.command.run({ command: 'doole_context', args: '' } as any)
+  expect(said.text).toBe('Pass 1 of 3. An edit is waiting for the next check.')
+})
+
 test('/passes reports and /passes reset resets', async ($, on) => {
   const seen = engine(on)
   await start($)

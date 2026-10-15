@@ -21,6 +21,7 @@ Press `y` to add the marketplace, then pick the user scope so it loads everywher
 ## Commands
 
 - `/sidebar` opens it, and again closes it. `/sidebar open` and `/sidebar close` do just that.
+- `/doole_sidebar` does the same as `/sidebar`.
 - `/sidebar <mod>` opens that mod's tab, for example `/sidebar flightdeck`. `/sidebar tab <id>` does the same.
 - If you leave it open, it opens again in your next session.
 

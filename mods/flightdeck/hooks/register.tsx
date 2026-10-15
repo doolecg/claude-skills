@@ -235,6 +235,7 @@ export const register: Register = on => {
       description: 'Open or close the Flightdeck sidebar: the main session and every subagent working now',
       argumentHint: '[open|close]',
     })
+    await $.command.register({ name: 'doole_flightdeck', description: 'Open Flightdeck' })
     await quiet(() => readSettings($))
     await quiet(() => refreshUsage($))
     await quiet(async () => {
@@ -273,7 +274,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'flightdeck' }, async ($, e) => {
+  on('command.run', { command: ['flightdeck', 'doole_flightdeck'] }, async ($, e) => {
     const isOpen = (await $.ui.panes()).some(p => p.id === PANE)
     if (!wantOpen(e.args, isOpen)) {
       await $.ui.close({ id: PANE })

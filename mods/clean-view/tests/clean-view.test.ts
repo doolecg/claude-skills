@@ -166,6 +166,15 @@ test('/simple off leaves the vanilla row, and /simple on brings the list back', 
   await ui.unmount()
 })
 
+test('/doole_task-view flips Task View like /simple', async ($, on) => {
+  world(on)
+  await start($)
+  const off = await $.command.run({ command: 'doole_task-view', args: '' } as any)
+  expect((off as any).text).toBe('Task View is off.')
+  const on2 = await $.command.run({ command: 'doole_task-view', args: '' } as any)
+  expect((on2 as any).text).toBe('Task View is on.')
+})
+
 test('the checklist is published for the sidebar from the to-do list', async ($, on) => {
   world(on)
   const seen: any[] = []

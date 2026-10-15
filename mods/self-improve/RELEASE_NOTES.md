@@ -1,62 +1,10 @@
-# Self Improve 2.4.2
-
-## Changed
-- The memory line above the prompt ("Memory: nothing learned yet", "Learned N lessons") is gone. `/learn status` still tells you, and `/learn` opens the review pane.
-
----
-
-# Self Improve 2.4.1
-
-## Fixed
-- It now shows in the Claude desktop app. The app's own Claude Code refused its spacing, so nothing was drawn there.
-
----
-
-# Self Improve 2.4.0
+# Self Improve 2.4.3
 
 ## New
-- A proper Claude desktop app version of its band and tab: a rounded card with a native Review button, and native buttons for the filters. The terminal looks the same as before.
-
----
-
-# Self Improve 2.3.0
-
-## New
-- A Hindsight address setting. Leave it empty to use apiUrl from ~/.hindsight/coding-agent.json, as before; if neither is set, Hindsight is skipped with a short note.
-
-## Changed
-- The Settings button on its sidebar tab is gone. Every option is in /plugin › Installed › Self Improve › Configure, with plain labels, help and defaults.
-- Cards and bars sit on the terminal's own background.
-
----
-
-# Self Improve 2.2.3
-
-## Changed
-- With the Context mod installed, the Sidebar tab has a footer at the bottom: context used, Hindsight and CodeGraph, the git branch and changes, and test passes.
-
----
-
-# Self Improve 2.2.2
+- `/doole_self-improve` opens the review pane, the same as the old command, which still works.
 
 ## Fixed
-- Lessons for one project no longer wait forever when Hindsight cannot save to another project's bank. Each bank is tried on its own, and the run notes name the bank that failed.
-- Learning from a long session (a transcript over 4 MB) no longer fails with "still running after 20000ms" on Windows. The end of the transcript is now read in about a second instead of over a minute.
+- Long text with no spaces (file paths, commands, names) is cut with "…" so it stays inside the Sidebar tab in the desktop app.
 
 ---
 
-# Self Improve 2.2.1
-
-## Changed
-- The Sidebar's tab strip on top shows each tab as a symbol and a word, spread across the full width, with the open tab filled in one accent colour.
-
----
-
-# Self Improve 2.2.0
-
-## Changed
-- Opens and closes itself when you pick or leave its Sidebar tab, straight away, even while Claude is working.
-- The Sidebar's tab strip on top uses the new rounded pill and count badges.
-
-## Fixed
-- Leaving its Sidebar tab printed "no command.run hook answered it" and left the pane open.
