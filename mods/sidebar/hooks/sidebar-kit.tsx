@@ -2,7 +2,7 @@
 // Every mod that draws a sidebar tab keeps a copy of this file as hooks/sidebar-kit.tsx.
 // Edit it in mods/sidebar/hooks and run `python mods/sidebar/copy-kit.py` so the copies stay the same.
 
-export const KIT_VERSION = 5
+export const KIT_VERSION = 6
 
 /** The pane id every sidebar tab is drawn under its own plugin, and the width they all open at. */
 export const SIDEBAR_COLUMNS = 56
@@ -253,8 +253,8 @@ export function sbRasterCells(pixels: readonly SbPixel[], background?: string): 
 
 // ---- the strip the Sidebar publishes ------------------------------------------
 
-/** One tab in the strip. `id` is the mod's plugin name; `label` the one word the strip shows (`name` without one). */
-export type SbTab = { id: string; icon: string; name: string; label?: string; badge: number }
+/** One tab in the strip. `id` is the mod's plugin name; `label` the one word the strip shows (`name` without one); `isOff` marks a mod that is switched off (its tab is dimmed). */
+export type SbTab = { id: string; icon: string; name: string; label?: string; badge: number; isOff?: boolean }
 
 /** The Context mod's `footer` state: what the footer at the bottom of every tab shows. */
 export type SbFooter = {
@@ -489,8 +489,11 @@ export type SbStripActions = {
 /** What a tab shows in the strip: its icon and one word. */
 export const sbTabText = (t: SbTab): string => `${t.icon} ${t.label ?? t.name}`
 
-/** Cells a tab takes: a space either side of its text and its count. */
-const tabCells = (t: SbTab): number => [...sbTabText(t)].length + 2 + tabBadge(t.badge).length
+/** The tab that closes the strip: Mod Settings, set apart from the rest by a thin separator. */
+const isEndTab = (t: SbTab): boolean => t.id === 'mod-settings'
+
+/** Cells a tab takes: a space either side of its text and its count, and the separator before the end tab. */
+const tabCells = (t: SbTab): number => [...sbTabText(t)].length + 2 + tabBadge(t.badge).length + (isEndTab(t) ? 1 : 0)
 
 /** The cells across the strip's card, inside its border and padding. */
 export const sbStripWidth = (k: SbKit): number => Math.max(8, k.columns - 4)
@@ -540,7 +543,7 @@ export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
         k,
         'sb-head',
         <Text color={pal.accent} bold>
-          ◆ DOOLE'S SIDEBAR
+          ◆ MAIN MENU
         </Text>,
         <Box gap={1}>
           <Button key="sb-menu" label="⋯" variant={strip.active === 'sidebar' ? 'primary' : 'secondary'} onPress={a.onMenu} />
@@ -552,7 +555,9 @@ export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
           const isOpen = t.id === strip.active
           return (
             <Button key={`sb-tab:${t.id}`} variant={isOpen ? 'primary' : 'secondary'} onPress={() => a.onTab(t.id)}>
-              <Text bold={isOpen}>{sbTabText(t)}</Text>
+              <Text bold={isOpen} color={t.isOff && !isOpen ? pal.faint : undefined}>
+                {sbTabText(t)}
+              </Text>
               {t.badge > 0 ? <Text color={isOpen ? pal.ink : pal.accent}>{` ${Math.min(t.badge, 99)}`}</Text> : null}
             </Button>
           )
@@ -566,8 +571,13 @@ export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
         const isOpen = t.id === strip.active
         return [
           r.gaps[i]! > 0 ? <Text key={`sb-gap:${t.id}`}>{' '.repeat(r.gaps[i]!)}</Text> : null,
+          isEndTab(t) && i > 0 ? (
+            <Text key={`sb-sep:${t.id}`} color={pal.sep}>
+              │
+            </Text>
+          ) : null,
           <Button key={`sb-tab:${t.id}`} plain onPress={() => a.onTab(t.id)}>
-            <Text backgroundColor={isOpen ? pal.accent : undefined} color={isOpen ? pal.ink : pal.dim} bold={isOpen}>
+            <Text backgroundColor={isOpen ? pal.accent : undefined} color={isOpen ? pal.ink : t.isOff ? pal.faint : pal.dim} bold={isOpen}>
               {` ${sbTabText(t)}`}
             </Text>
             {t.badge > 0 ? (
@@ -586,7 +596,7 @@ export function sbStrip(k: SbKit, strip: SbStrip, a: SbStripActions) {
       k,
       'sb-head',
       <Text color={pal.accent} bold>
-        ◆ DOOLE'S SIDEBAR
+        ◆ MAIN MENU
       </Text>,
       <Box>
         <Button key="sb-menu" plain onPress={a.onMenu}>

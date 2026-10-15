@@ -21,12 +21,12 @@ const ROWS = [
 ]
 
 // A world whose /config holds ROWS and records each change.
-function world(on: any) {
+function world(on: any, hasOpen = true) {
   const rows = ROWS.map(r => ({ ...r }))
   const sets: { key: string; value: unknown }[] = []
   on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
   on('command.register', (_$: any, e: any) => ({ value: { command: e.name } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
+  if (hasOpen) on('ui.open', () => ({ value: { isPlaced: true } }))
   on('config.list', () => ({ value: rows }))
   on('config.set', (_$: any, e: any) => {
     sets.push({ key: e.key, value: e.value })
@@ -110,4 +110,108 @@ test('a long value, label and description with no spaces are cut to the narrow p
   } finally {
     ROWS.pop()
   }
+})
+
+// A stand-in for the Main Menu (the Sidebar mod): `/sb-strip <json>` writes its `strip` state, every `sidebarAsk` Mod Settings writes is recorded,
+// and `/sb-asks` tells the test what was asked (hooks run in a world of their own).
+const SIDEBAR = {
+  name: 'sidebar',
+  register: ((on: any) => {
+    const asked: string[] = []
+    on('command.run', { command: 'sb-asks' }, async () => ({ text: JSON.stringify(asked) }))
+    on('command.run', { command: 'sb-strip' }, async ($: any, e: any) => {
+      await $.state.set({ plugin: 'sidebar', key: 'strip' }, JSON.parse(e.args))
+      return {}
+    })
+    on('state.set', { key: 'sidebarAsk' }, async ($: any, e: any, next: any) => {
+      const ran = await next(e)
+      if (e.plugin === 'mod-settings') asked.push(e.value.args)
+      return ran
+    })
+  }) as any,
+}
+const asks = async ($: any): Promise<string[]> => JSON.parse((await $.command.run({ command: 'sb-asks', args: '', origin: { kind: 'composer' as const } })).text)
+const TABS = [
+  { id: 'flightdeck', icon: '✈', name: 'Flightdeck', label: 'Flightdeck', badge: 0 },
+  { id: 'mod-settings', icon: '⚙', name: 'Mod Settings', label: 'Settings', badge: 0 },
+]
+const setStrip = ($: any, isOn: boolean, active: string) =>
+  $.command.run({ command: 'sb-strip', args: JSON.stringify({ isOn, active, tabs: TABS, theme: 'dark', colour: 'Coral' }), origin: { kind: 'composer' as const } })
+
+function tabWorld(on: any) {
+  const opened: any[] = []
+  const closed: string[] = []
+  let panes: string[] = []
+  const sets = world(on, false)
+  on('ui.open', (_$: any, e: any) => {
+    opened.push(e)
+    panes.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', (_$: any, e: any) => {
+    closed.push(e.id)
+    panes = panes.filter(p => p !== e.id)
+    return { value: undefined }
+  })
+  on('ui.panes', () => ({ value: panes.map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })) }))
+  return { opened, closed, sets }
+}
+
+test('as the Main Menu’s last tab, the pane follows the strip at the menu’s width and draws the strip above its settings', { plugins: [SIDEBAR] }, async ($, on) => {
+  const w = tabWorld(on)
+  await $.session.start({ cwd: 'F:/proj', surface: 'desktop', isInteractive: true } as any)
+  await setStrip($, true, 'mod-settings')
+  expect(w.opened.at(-1)).toMatchObject({ id: 'mod-settings', title: 'Mod Settings', columns: 56 })
+  const ui = await $.ui.mount({ ...PANE('desktop'), props: { ...PANE('desktop').props, bodyColumns: 56 } })
+  const all = await texts(ui)
+  expect(all).toContain('MAIN MENU')
+  expect(all).toContain('MOD SETTINGS')
+  expect(all).toContain('3 mods · 4 settings')
+  expect(await ui.find({ type: 'Button', key: 'sb-tab:flightdeck' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'sb-close' })).toBeDefined()
+  // A mod’s settings still open and change in place under the strip.
+  await ui.press({ key: 'mod:clean-view:toggle' })
+  await ui.press({ key: 'clean-view.enabled:off' })
+  expect(w.sets).toEqual([{ key: 'clean-view.enabled', value: false }])
+  // A strip press asks the Main Menu for that tab, through state and not a command.
+  await ui.press({ key: 'sb-tab:flightdeck' })
+  await new Promise(r => (globalThis as any).setTimeout(r, 0))
+  expect(w.closed).toContain('mod-settings')
+  expect(await asks($)).toEqual(['tab flightdeck'])
+  await ui.unmount()
+  await setStrip($, true, 'flightdeck')
+  expect(w.closed).toContain('mod-settings')
+})
+
+test('without the Main Menu the pane is the plain 44 column panel with no strip', { plugins: [SIDEBAR] }, async ($, on) => {
+  const w = tabWorld(on)
+  await $.session.start({ cwd: 'F:/proj', surface: 'desktop', isInteractive: true } as any)
+  await $.command.run({ command: 'doole_settings', args: '' } as any)
+  expect(w.opened.at(-1)).toMatchObject({ id: 'mod-settings', columns: 44 })
+  await setStrip($, true, 'flightdeck')
+  const ui = await $.ui.mount(PANE('desktop'))
+  const all = await texts(ui)
+  expect(all).not.toContain('MAIN MENU')
+  expect(all).toContain('Mod Settings')
+  await ui.unmount()
+})
+
+test('/doole_settings with the Main Menu up asks for the Mod Settings tab instead of opening a pane of its own', { plugins: [SIDEBAR] }, async ($, on) => {
+  const w = tabWorld(on)
+  await $.session.start({ cwd: 'F:/proj', surface: 'desktop', isInteractive: true } as any)
+  await setStrip($, true, 'flightdeck')
+  await $.command.run({ command: 'doole_settings', args: '' } as any)
+  expect(await asks($)).toEqual(['tab mod-settings'])
+  expect(w.opened).toEqual([])
+})
+
+test('in the terminal the tab keeps the strip and points to /config', { plugins: [SIDEBAR] }, async ($, on) => {
+  tabWorld(on)
+  await $.session.start({ cwd: 'F:/proj', surface: 'terminal', isInteractive: true } as any)
+  await setStrip($, true, 'mod-settings')
+  const ui = await $.ui.mount(PANE('terminal'))
+  const all = await texts(ui)
+  expect(all).toContain('MAIN MENU')
+  expect(all).toContain('type /config')
+  await ui.unmount()
 })

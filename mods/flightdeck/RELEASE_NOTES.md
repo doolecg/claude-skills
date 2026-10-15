@@ -1,8 +1,7 @@
-# Flightdeck 1.7.0
+# Flightdeck 1.7.1
 
-## New
-- An Enabled setting, first in its list, turns the mod off without uninstalling it. Find it in Mod Settings (`/doole_settings`) in the desktop app or `/config` in the terminal.
-- Settings for how many recent actions and files are shown, showing the repository, how often git and agents are checked, and reopening on start.
+## Changed
+- Its Main Menu tab uses the menu's new look: switched-off mods are dimmed and Mod Settings sits last.
 
 ---
 

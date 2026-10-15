@@ -16,6 +16,8 @@ A side panel in the Claude desktop app with every installed mod's settings in on
 - A line under the header says what changed, or why a change was refused.
 - Refresh reads the settings again, for changes made elsewhere (such as `/config`).
 
+With the Main Menu (the `sidebar` plugin) installed and open, Mod Settings is its last tab: `/doole_settings` switches the menu to that tab, and the panel opens at the menu's width with the menu's tab strip above the settings. Without the Main Menu it is the plain panel.
+
 Changes go through Claude Code's own settings, the same as `/config`, so they are saved and other mods see them.
 
 ## Limits

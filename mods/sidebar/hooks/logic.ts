@@ -24,6 +24,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   { id: 'prompt-enhancer', icon: '✎', name: 'Prompt Enhancer', label: 'Enhance', about: 'Rewrites the prompt box into a clearer prompt.' },
   { id: 'bottom-bar', icon: '▭', name: 'Bottom Bar', label: 'Bar', about: 'The rounded bar under the prompt and its toolbox.' },
   { id: 'rule-guard', icon: '⊘', name: 'Rule Guard', label: 'Rules', about: 'Stops tool calls that break your rules and tells Claude why.' },
+  { id: 'mod-settings', icon: '⚙', name: 'Mod Settings', label: 'Settings', about: "Every installed mod's settings, changed in place.", pane: { command: 'doole_settings' } },
   { id: 'context', icon: '◎', name: 'Context', label: 'Context', about: 'Hindsight, CodeGraph, the git repo and test passes, at the bottom of every tab.', footer: true },
 ]
 
@@ -31,22 +32,37 @@ export const SIDEBAR_TAB = 'sidebar'
 
 export const entryOf = (id: string): CatalogEntry | undefined => CATALOG.find(c => c.id === id)
 
-/** The strip's tabs: installed catalog mods, in the person's order, less the hidden ones. */
-export function tabsFor(installed: readonly string[], order: readonly string[], hidden: readonly string[], badges: Record<string, number>): SbTab[] {
+/** The tab that always closes the strip, whatever order the person saved. */
+export const END_TAB = 'mod-settings'
+
+/**
+ * The strip's tabs: installed catalog mods in the person's order, less the hidden ones; then the mods switched off
+ * (`off`), dimmed and without a badge; then Mod Settings, always last.
+ */
+export function tabsFor(installed: readonly string[], order: readonly string[], hidden: readonly string[], badges: Record<string, number>, off: readonly string[] = []): SbTab[] {
   const known = CATALOG.filter(c => installed.includes(c.id) && !c.footer)
   const rank = (id: string) => {
     const at = order.indexOf(id)
     return at < 0 ? order.length + CATALOG.findIndex(c => c.id === id) : at
   }
+  const isOff = (id: string) => id !== END_TAB && off.includes(id)
+  const group = (id: string) => (id === END_TAB ? 2 : isOff(id) ? 1 : 0)
   return known
     .filter(c => !hidden.includes(c.id))
-    .sort((a, b) => rank(a.id) - rank(b.id))
-    .map(c => ({ id: c.id, icon: c.icon, name: c.name, label: c.label, badge: Math.max(0, Math.floor(badges[c.id] ?? 0)) }))
+    .sort((a, b) => group(a.id) - group(b.id) || rank(a.id) - rank(b.id))
+    .map(c => ({
+      id: c.id,
+      icon: c.icon,
+      name: c.name,
+      label: c.label,
+      badge: isOff(c.id) ? 0 : Math.max(0, Math.floor(badges[c.id] ?? 0)),
+      ...(isOff(c.id) ? { isOff: true } : {}),
+    }))
 }
 
-/** All installed catalog mods in the person's order, hidden ones included: the sidebar's own tab list. */
-export function orderedIds(installed: readonly string[], order: readonly string[]): string[] {
-  return tabsFor(installed, order, [], {}).map(t => t.id)
+/** The installed catalog mods in the strip's order, hidden ones included and Mod Settings left out (it is always last): the Main Menu's own tab list. */
+export function orderedIds(installed: readonly string[], order: readonly string[], off: readonly string[] = []): string[] {
+  return tabsFor(installed, order, [], {}, off).map(t => t.id).filter(id => id !== END_TAB)
 }
 
 /** `order` with `id` moved one place up (`-1`) or down (`1`) among `ids`. */

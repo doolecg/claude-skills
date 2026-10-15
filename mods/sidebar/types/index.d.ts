@@ -1,5 +1,5 @@
 /** One tab in the strip. `id` is the mod's plugin name. */
-export type SbTab = { id: string; icon: string; name: string; label?: string; badge: number }
+export type SbTab = { id: string; icon: string; name: string; label?: string; badge: number; isOff?: boolean }
 
 /** The Context mod's `footer`, drawn at the bottom of every tab. */
 export type SbFooter = {
@@ -48,6 +48,8 @@ declare module 'claude-code' {
       order: string[]
       /** The mods installed and enabled here, by plugin name. */
       installed: string[]
+      /** Mods switched off (their `<id>.enabled` setting is false): their tabs are dimmed. */
+      off: string[]
       /** Rule Guard's stops this session, newest first. */
       blocks: SbBlock[]
     }

@@ -19,6 +19,11 @@ declare module 'claude-code' {
       note: string
       /** The mod whose card is open; `''` shows them all folded. */
       open: string
+      /** The Main Menu request a strip press or pane close writes (what `/sidebar <args>` does); `n` counts up so a repeat is a new value. */
+      sidebarAsk: { args: string; n: number }
+    }
+    sidebar: {
+      strip: { isOn: boolean; active: string; tabs: { id: string; icon: string; name: string; badge: number; isOff?: boolean }[]; theme: string; colour: string }
     }
   }
 }

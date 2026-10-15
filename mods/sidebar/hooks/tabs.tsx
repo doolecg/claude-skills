@@ -30,9 +30,13 @@ export type ViewData = {
   /** Every installed catalog mod with a tab, in the person's order, hidden ones included. */
   all: string[]
   hidden: string[]
+  /** The mods switched off: their tab shows an off page. */
+  off: string[]
   tabs: SbTab[]
   now: number
   openTab: (id: string) => void
+  /** Switches a mod on (its `<id>.enabled` setting). */
+  turnOn: (id: string) => void
   setHidden: (id: string, isHidden: boolean) => void
   moveTab: (id: string, by: -1 | 1) => void
 }
@@ -205,19 +209,38 @@ function ruleGuard(k: SbKit, d: ViewData) {
   ]
 }
 
-/** The sidebar's own page (the ⋯): which tabs show and their order. */
+/** The page an off mod's tab shows: its name, that it is off, and a button to switch it on. */
+function offTab(k: SbKit, d: ViewData, id: string) {
+  const { Text } = k.els
+  const entry = entryOf(id)!
+  return [
+    sbTitle(k, { icon: entry.icon, name: entry.name, status: 'off' }),
+    sbCard(k, `off:${id}`, [
+      <Text key="off-name" color={k.pal.text} bold wrap="wrap">
+        {`${sbClip(entry.name, roomOf(k))} is off`}
+      </Text>,
+      <Text key="off-about" color={k.pal.dim} wrap="wrap">
+        {entry.about}
+      </Text>,
+      sbButton(k, `sb-turn-on:${id}`, 'Turn on', () => d.turnOn(id), true),
+    ]),
+  ]
+}
+
+/** The Main Menu's own page (the ⋯): which tabs show and their order. */
 function sidebarPage(k: SbKit, d: ViewData) {
   const { Box, Text, Button } = k.els
   const { pal } = k
   const rows = d.all.map((id, i) => {
     const entry = entryOf(id)!
     const isShown = !d.hidden.includes(id)
+    const isOff = d.off.includes(id)
     return sbSplit(
       k,
       `order:${id}`,
       <Text wrap={k.isTerminal ? 'truncate-end' : undefined}>
         <Text color={isShown ? pal.accent : pal.faint}>{`${entry.icon} `}</Text>
-        <Text color={isShown ? pal.text : pal.dim}>{entry.name}</Text>
+        <Text color={isShown && !isOff ? pal.text : pal.dim}>{isOff ? `${entry.name} (off)` : entry.name}</Text>
       </Text>,
       k.isTerminal ? (
       <Box>
@@ -242,10 +265,10 @@ function sidebarPage(k: SbKit, d: ViewData) {
   })
   const missing = CATALOG.filter(c => !d.installed.includes(c.id)).map(c => c.name)
   return [
-    sbTitle(k, { icon: '◆', name: 'Sidebar', status: 'tabs' }, d.tabs[0] ? { label: 'Back', onPress: () => d.openTab(d.tabs[0]!.id) } : undefined),
+    sbTitle(k, { icon: '◆', name: 'Main Menu', status: 'tabs' }, d.tabs[0] ? { label: 'Back', onPress: () => d.openTab(d.tabs[0]!.id) } : undefined),
     sbCard(k, 'about-sidebar', [
       <Text key="a" color={pal.dim} wrap="wrap">
-        One tab per mod. It follows your theme and the Bottom Bar's colour. Open it with /sidebar.
+        One tab per mod, with Mod Settings last. A mod that is switched off shows dimmed after the others. It follows your theme and the Bottom Bar's colour. Open it with /doole_main-menu.
       </Text>,
     ]),
     sbSection(k, 'tabs', 'Tabs'),
@@ -267,6 +290,7 @@ function sidebarPage(k: SbKit, d: ViewData) {
 /** The rows the sidebar's own pane draws under the strip, for its current view. */
 export function viewRows(k: SbKit, d: ViewData): unknown[] {
   if (d.view === SIDEBAR_TAB) return sidebarPage(k, d)
+  if (d.view !== SIDEBAR_TAB && entryOf(d.view) && d.off.includes(d.view)) return offTab(k, d, d.view)
   if (d.view === 'clean-view') return cleanView(k, d)
   if (entryOf(d.view)) return configTab(k, d, d.view)
   return sidebarPage(k, d)

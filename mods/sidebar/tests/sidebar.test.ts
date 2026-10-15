@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { CATALOG, blocksOf, fmtAgo, fmtElapsed, footerOf, installedFrom, jobOf, move, parseArg, pickTab, progressOf, tabsFor } from '../hooks/logic'
+import { CATALOG, blocksOf, fmtAgo, fmtElapsed, footerOf, installedFrom, jobOf, move, orderedIds, parseArg, pickTab, progressOf, tabsFor } from '../hooks/logic'
 import { DENSE_FULL, sbAsker, sbBadge, sbMeter, sbPaneMove, sbTabRows } from '../hooks/sidebar-kit'
 
 const SESSION = { cwd: 'F:/proj', surface: 'terminal', isInteractive: true } as any
@@ -12,7 +12,7 @@ const pane = (bodyColumns = 56) =>
     plugin: 'sidebar',
     component: 'Pane' as const,
     requestId: 'sidebar',
-    props: { title: 'Sidebar', isFocused: false, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows: 60 }, view: {} },
+    props: { title: 'Main Menu', isFocused: false, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows: 60 }, view: {} },
   }) as any
 
 const command = (args = '') =>
@@ -29,6 +29,24 @@ describe('logic', () => {
     const badged = tabsFor(['flightdeck', 'clean-view'], [], [], { flightdeck: 3.9, 'clean-view': -2 })
     expect(badged.map(t => t.badge)).toEqual([3, 0])
     expect(badged[0]).toMatchObject({ id: 'flightdeck', name: 'Flightdeck' })
+  })
+
+  test('tabs are the installed mods in order, then the mods switched off, then Mod Settings last, whatever order was saved', () => {
+    const installed = ['flightdeck', 'self-improve', 'clean-view', 'bottom-bar', 'mod-settings']
+    // A saved order that tries to put Mod Settings first.
+    const saved = ['mod-settings', 'bottom-bar', 'flightdeck']
+    expect(tabsFor(installed, saved, [], {}, ['flightdeck', 'clean-view']).map(t => t.id)).toEqual(['bottom-bar', 'self-improve', 'flightdeck', 'clean-view', 'mod-settings'])
+    expect(tabsFor(installed, saved, [], {}).map(t => t.id)).toEqual(['bottom-bar', 'flightdeck', 'self-improve', 'clean-view', 'mod-settings'])
+    expect(tabsFor(ALL, [], [], {}).map(t => t.id).at(-1)).toBe('mod-settings')
+    // Off tabs are marked and carry no badge; the rest are not marked.
+    const tabs = tabsFor(installed, [], [], { flightdeck: 4, 'clean-view': 2 }, ['flightdeck'])
+    expect(tabs.find(t => t.id === 'flightdeck')).toMatchObject({ isOff: true, badge: 0 })
+    expect(tabs.find(t => t.id === 'clean-view')).toMatchObject({ badge: 2 })
+    expect(tabs.find(t => t.id === 'clean-view')!.isOff).toBeUndefined()
+    // Mod Settings stays last and is never dimmed, and the reorder list leaves it out.
+    expect(tabsFor(installed, [], [], {}, ['mod-settings']).at(-1)).toMatchObject({ id: 'mod-settings' })
+    expect(tabsFor(installed, [], [], {}, ['mod-settings']).at(-1)!.isOff).toBeUndefined()
+    expect(orderedIds(installed, saved, ['flightdeck'])).toEqual(['bottom-bar', 'self-improve', 'clean-view', 'flightdeck'])
   })
 
   test('every tab icon is one cell, its label one word, and the strip badges are one superscript cell', () => {
@@ -139,7 +157,7 @@ describe('kit strip rows', () => {
     const rows = sbTabRows(tabs, 52)
     expect(rows).toHaveLength(2)
     expect(rows.flatMap(r => r.tabs).map(t => t.id)).toEqual(tabs.map(t => t.id))
-    const cells = (r: (typeof rows)[number]) => r.tabs.reduce((n, t, i) => n + r.gaps[i]! + [...`${t.icon} ${t.label}`].length + 2, 0)
+    const cells = (r: (typeof rows)[number]) => r.tabs.reduce((n, t, i) => n + r.gaps[i]! + [...`${t.icon} ${t.label}`].length + 2 + (t.id === 'mod-settings' ? 1 : 0), 0)
     expect(cells(rows[0]!)).toBe(52)
     for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(52)
   })
@@ -175,10 +193,11 @@ describe('kit strip asks', () => {
 
 // ---------------------------------------------------------------- wiring
 
-type World = { opened: any[]; closed: string[]; panes: string[]; ran: string[]; registered: string[]; clock: any }
+type World = { opened: any[]; closed: string[]; panes: string[]; ran: string[]; registered: string[]; sets: { key: string; value: unknown }[]; rows: any[]; clock: any }
 
-function world(on: any): World {
-  const w: World = { opened: [], closed: [], panes: [], ran: [], registered: [], clock: null }
+// `rows` are extra `/config` rows, such as `<mod>.enabled` set to false for a mod that is switched off.
+function world(on: any, rows: any[] = []): World {
+  const w: World = { opened: [], closed: [], panes: [], ran: [], registered: [], sets: [], rows: [], clock: null }
   w.clock = mock.clock(on, { now: 1_800_000_000_000 })
   mock.store(on)
   on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
@@ -192,13 +211,20 @@ function world(on: any): World {
     value: [
       { name: 'flightdeck', description: '' },
       { name: 'simple', description: '' },
+      { name: 'doole_settings', description: '' },
     ],
   }))
-  on('config.list', () => ({
-    value: [
-      { key: 'prompt-enhancer.mode', label: 'Mode', description: 'How', kind: 'boolean', value: true, options: [], isLocked: false, provider: { plugin: 'prompt-enhancer' } },
-    ],
-  }))
+  w.rows = [
+    { key: 'prompt-enhancer.mode', label: 'Mode', description: 'How', kind: 'boolean', value: true, options: [], isLocked: false, provider: { plugin: 'prompt-enhancer' } },
+    ...rows.map(r => ({ label: 'Enabled', description: '', kind: 'boolean', options: [], isLocked: false, provider: { plugin: String(r.key).split('.')[0] }, ...r })),
+  ]
+  on('config.list', () => ({ value: w.rows }))
+  on('config.set', (_$: any, e: any) => {
+    w.sets.push({ key: e.key, value: e.value })
+    const r = w.rows.find(x => x.key === e.key)
+    if (r) r.value = e.value
+    return { value: e.value }
+  })
   on('process.run', () => ({ value: { exitCode: 0, stdout: JSON.stringify([{ id: 'bottom-bar@doole-skills', enabled: true }]), stderr: '' } }))
   // Every command that reaches the bottom: the sidebar answers `/sidebar` itself, so a tab switch must leave this empty.
   on('command.run', (_$: any, e: any) => {
@@ -257,6 +283,17 @@ const FLIGHTDECK = {
   }) as any,
 }
 
+// A stand-in for Mod Settings: `/ms-set <mod>` switches that mod off, as a plugin's own `$.config.set` does (the Main Menu's hook sees it).
+const MOD_SETTINGS = {
+  name: 'mod-settings',
+  register: ((on: any) => {
+    on('command.run', { command: 'ms-set' }, async ($: any, e: any) => {
+      await $.config.set({ key: `${e.args}.enabled`, value: false })
+      return {}
+    })
+  }) as any,
+}
+
 describe('wiring', () => {
   test('session start registers /sidebar', async ($, on) => {
     const w = world(on)
@@ -269,9 +306,9 @@ describe('wiring', () => {
     await $.session.start(SESSION)
     await settle()
     await $.command.run(command('tab clean-view'))
-    expect(w.opened.at(-1)).toMatchObject({ id: 'sidebar', title: 'Sidebar', columns: 56 })
+    expect(w.opened.at(-1)).toMatchObject({ id: 'sidebar', title: 'Main Menu', columns: 56 })
     const { ui, all } = await texts($)
-    expect(all).toContain("DOOLE'S SIDEBAR")
+    expect(all).toContain("MAIN MENU")
     expect(all).toContain('TASK VIEW')
     expect(all).toContain('No job running')
     await ui.unmount()
@@ -296,13 +333,13 @@ describe('wiring', () => {
     await settle()
     await $.command.run(command('tab clean-view'))
     const closed = await $.command.run(command('close'))
-    expect(closed.text).toBe('Sidebar closed.')
+    expect(closed.text).toBe('Main Menu closed.')
     expect(w.closed).toEqual(['sidebar'])
     const opened = await $.command.run(command('open'))
-    expect(opened.text).toBe('Sidebar opened.')
+    expect(opened.text).toBe('Main Menu opened.')
     expect(w.panes).toContain('sidebar')
     const flipped = await $.command.run(command(''))
-    expect(flipped.text).toBe('Sidebar closed.')
+    expect(flipped.text).toBe('Main Menu closed.')
     expect(w.panes).not.toContain('sidebar')
   })
 
@@ -313,10 +350,10 @@ describe('wiring', () => {
     expect(w.registered).toContain('doole_sidebar')
     await $.command.run(command('tab clean-view'))
     const closed = await $.command.run({ ...command(''), command: 'doole_sidebar' })
-    expect(closed.text).toBe('Sidebar closed.')
+    expect(closed.text).toBe('Main Menu closed.')
     expect(w.closed).toEqual(['sidebar'])
     const opened = await $.command.run({ ...command('open'), command: 'doole_sidebar' })
-    expect(opened.text).toBe('Sidebar opened.')
+    expect(opened.text).toBe('Main Menu opened.')
     expect(w.panes).toContain('sidebar')
   })
 
@@ -415,6 +452,88 @@ describe('wiring', () => {
     expect(w.ran).toEqual([])
   })
 
+  test('/doole_main-menu opens the Main Menu, and again closes it', async ($, on) => {
+    const w = world(on)
+    await $.session.start(SESSION)
+    await settle()
+    expect(w.registered).toContain('doole_main-menu')
+    await $.command.run({ ...command('tab clean-view'), command: 'doole_main-menu' })
+    expect(w.opened.at(-1)).toMatchObject({ id: 'sidebar', title: 'Main Menu', columns: 56 })
+    const closed = await $.command.run({ ...command(''), command: 'doole_main-menu' })
+    expect(closed.text).toBe('Main Menu closed.')
+    expect(w.panes).not.toContain('sidebar')
+    const opened = await $.command.run({ ...command('open'), command: 'doole_main-menu' })
+    expect(opened.text).toBe('Main Menu opened.')
+  })
+
+  test('the strip lists installed mods, then the ones switched off dimmed, then Mod Settings last', { plugins: [FLIGHTDECK] }, async ($, on) => {
+    world(on, [{ key: 'flightdeck.enabled', value: false }])
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('tab clean-view'))
+    expect((await stripOf($)).tabs.map((t: any) => t.id)).toEqual(['clean-view', 'prompt-enhancer', 'bottom-bar', 'flightdeck', 'mod-settings'])
+    expect((await stripOf($)).tabs.filter((t: any) => t.isOff).map((t: any) => t.id)).toEqual(['flightdeck'])
+    const { ui: narrow, all: narrowAll } = await texts($)
+    expect(narrowAll).toContain(' ⚙ Settings')
+    await narrow.unmount()
+    // Wide enough for one row, Mod Settings sits at the end behind a thin separator.
+    const ui = await $.ui.mount({ ...pane(70), surface: 'terminal' })
+    const all = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text)).join('\n')
+    expect(all).toContain('│')
+    expect(all.indexOf('│')).toBeGreaterThan(all.indexOf('✈ Flightdeck'))
+    expect(all.indexOf('│')).toBeLessThan(all.indexOf('⚙ Settings'))
+    const off = (await ui.findAll({ type: 'Text' })).find((t: any) => String(t.text) === ' ✈ Flightdeck')
+    expect(off?.props?.color).toBe('#6A655D')
+    await ui.unmount()
+  })
+
+  test('an off mod’s tab says it is off and Turn on switches it on', async ($, on) => {
+    const w = world(on, [{ key: 'clean-view.enabled', value: false }])
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('tab clean-view'))
+    let { ui, all } = await texts($)
+    expect(all).toContain('Task View is off')
+    expect(all).toContain('Turn on')
+    expect(all).not.toContain('No job running')
+    await ui.press({ key: 'sb-turn-on:clean-view' })
+    await settle()
+    expect(w.sets).toEqual([{ key: 'clean-view.enabled', value: true }])
+    await ui.unmount()
+    ;({ ui, all } = await texts($))
+    expect(all).not.toContain('is off')
+    expect(all).toContain('No job running')
+    await ui.unmount()
+  })
+
+  test('an off pane mod is drawn by the Main Menu’s pane, not its own', { plugins: [FLIGHTDECK] }, async ($, on) => {
+    const w = world(on, [{ key: 'flightdeck.enabled', value: false }])
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('tab flightdeck'))
+    expect(w.panes).toContain('sidebar')
+    const { ui, all } = await texts($)
+    expect(all).toContain('Flightdeck is off')
+    expect(all).toContain('Turn on')
+    await ui.unmount()
+  })
+
+  test('another mod switching a mod off (a config change) dims its tab', { plugins: [MOD_SETTINGS] }, async ($, on) => {
+    const w = world(on, [{ key: 'clean-view.enabled', value: true }])
+    await $.session.start(SESSION)
+    await settle()
+    await $.command.run(command('tab clean-view'))
+    const first = await texts($)
+    expect(first.all).toContain('No job running')
+    await first.ui.unmount()
+    await $.command.run({ ...command('clean-view'), command: 'ms-set' })
+    await settle()
+    const { ui, all } = await texts($)
+    expect(all).toContain('Task View is off')
+    expect(w.sets).toEqual([{ key: 'clean-view.enabled', value: false }])
+    await ui.unmount()
+  })
+
   test('every tab shows its icon and one word, the open one filled in the accent colour alone', async ($, on) => {
     world(on)
     await $.session.start(SESSION)
@@ -439,7 +558,7 @@ describe('wiring', () => {
     expect(await stripOf($)).toMatchObject({ isOn: false })
     expect(w.ran).toEqual([])
     // The sidebar is off now, so a bare /sidebar opens it rather than closing it.
-    expect((await $.command.run(command(''))).text).toBe('Sidebar opened.')
+    expect((await $.command.run(command(''))).text).toBe('Main Menu opened.')
   })
 })
 
@@ -554,7 +673,7 @@ describe('other surfaces', () => {
       expect(await ui.find({ key: 'sb-close' })).toBeDefined()
       expect(await ui.findAll({ type: 'Raster' })).toHaveLength(0)
       const texts = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
-      expect(texts.join('\n')).toContain("DOOLE'S SIDEBAR")
+      expect(texts.join('\n')).toContain("MAIN MENU")
       for (const t of texts) expect(t).not.toMatch(BOX_DRAWING)
       await ui.unmount()
     })
@@ -614,9 +733,9 @@ describe('settings', () => {
     await settle()
     expect(w.registered).toContain('sidebar')
     const ran = await $.command.run(command('open'))
-    expect(ran.text).toBe('Sidebar is off. Turn it on in Mod Settings (/doole_settings) or /config.')
+    expect(ran.text).toBe('Main Menu is off. Turn it on in Mod Settings (/doole_settings) or /config.')
     const again = await $.command.run({ ...command('tab clean-view'), command: 'doole_sidebar' })
-    expect(again.text).toContain('Sidebar is off.')
+    expect(again.text).toContain('Main Menu is off.')
     expect(w.opened).toEqual([])
     // The render hook passes straight through: with nothing beneath it, there is nothing to draw.
     await expect($.ui.mount({ ...pane(), surface: 'terminal' })).rejects.toThrow('ui.render')

@@ -9,7 +9,7 @@ import { viewRows } from './tabs'
 type Dollar = EngineInterface
 
 const PANE = 'sidebar'
-const TITLE = 'Sidebar'
+const TITLE = 'Main Menu'
 
 const stripAtom = atom({ plugin: 'sidebar', key: 'strip' } as const, EMPTY_STRIP)
 const viewAtom = atom({ plugin: 'sidebar', key: 'view' } as const, SIDEBAR_TAB)
@@ -21,6 +21,7 @@ const enhanceAtom = atom({ plugin: 'sidebar', key: 'enhance' } as const, null)
 const hiddenAtom = atom({ plugin: 'sidebar', key: 'hidden' } as const, [])
 const orderAtom = atom({ plugin: 'sidebar', key: 'order' } as const, [])
 const installedAtom = atom({ plugin: 'sidebar', key: 'installed' } as const, [])
+const offAtom = atom({ plugin: 'sidebar', key: 'off' } as const, [])
 const blocksAtom = atom({ plugin: 'sidebar', key: 'blocks' } as const, [])
 
 /** The commands each mod registers, so a mod loaded with --plugin-dir counts as installed too. */
@@ -30,6 +31,7 @@ const COMMAND_OF: Record<string, string> = {
   'idea-shelf': 'ideas',
   'clean-view': 'simple',
   context: 'passes',
+  'mod-settings': 'doole_settings',
 }
 
 let ticker: Timer | undefined
@@ -52,7 +54,7 @@ function configFrom(options: Record<string, unknown> | undefined): Config {
   }
 }
 
-const OFF_TEXT = 'Sidebar is off. Turn it on in Mod Settings (/doole_settings) or /config.'
+const OFF_TEXT = 'Main Menu is off. Turn it on in Mod Settings (/doole_settings) or /config.'
 const footerFor = (value: unknown) => (cfg.showFooter ? footerOf(value) : null)
 
 async function quiet(fn: () => Promise<unknown>): Promise<void> {
@@ -63,11 +65,11 @@ async function quiet(fn: () => Promise<unknown>): Promise<void> {
 
 /** Rebuilds the strip every tab draws from: the tabs, their badges, the open one, the look. */
 async function syncStrip($: Dollar, patch: { isOn?: boolean; active?: string } = {}): Promise<void> {
-  const tabs = tabsFor(await read($, installedAtom), await read($, orderAtom), await read($, hiddenAtom), cfg.showBadges ? await read($, badgesAtom) : {})
+  const tabs = tabsFor(await read($, installedAtom), await read($, orderAtom), await read($, hiddenAtom), cfg.showBadges ? await read($, badgesAtom) : {}, await read($, offAtom))
   await update($, stripAtom, s => ({ ...(s ?? EMPTY_STRIP), ...patch, tabs }))
   // Tells the bottom bar (and any mod that reads it) whether the sidebar is open.
   const isOn = (await read($, stripAtom)).isOn
-  if ((await read($, modesAtom)).sidebar?.isOn !== isOn) await update($, modesAtom, () => ({ sidebar: { label: 'Sidebar', isOn } }))
+  if ((await read($, modesAtom)).sidebar?.isOn !== isOn) await update($, modesAtom, () => ({ sidebar: { label: 'Main Menu', isOn } }))
 }
 
 /** The 250ms frame clock runs while the sidebar's own pane shows a moving Task View job. */
@@ -92,6 +94,17 @@ async function loadLook($: Dollar): Promise<void> {
   if (strip.theme !== theme || strip.colour !== colour) await update($, stripAtom, st => ({ ...st, theme, colour }))
 }
 
+/** The mods switched off: those whose `<id>.enabled` setting is false. Returns whether the list changed. */
+async function loadOff($: Dollar): Promise<boolean> {
+  const rows = await $.config.list().catch(() => [])
+  const off = CATALOG.map(c => c.id).filter(id => rows.some(r => r.key === `${id}.enabled` && (r.value === false || r.value === 'false')))
+  const before = await read($, offAtom)
+  if (before.length === off.length && before.every(id => off.includes(id))) return false
+  await update($, offAtom, () => off)
+  return true
+}
+
+
 /** The installed mods: `claude plugin list`, plus any whose commands or options are loaded here. */
 async function loadInstalled($: Dollar): Promise<void> {
   const found = new Set<string>()
@@ -107,6 +120,7 @@ async function loadInstalled($: Dollar): Promise<void> {
   // What is loaded here shows at once; `claude plugin list` takes a few seconds and adds the rest.
   const known = (await read($, installedAtom)).filter(id => found.has(id) || CATALOG.some(c => c.id === id))
   await update($, installedAtom, () => CATALOG.map(c => c.id).filter(id => found.has(id) || known.includes(id)))
+  await quiet(() => loadOff($))
   await syncStrip($)
   await quiet(async () => {
     const ran = await $.process.run(['claude', 'plugin', 'list', '--json'], { timeoutMs: 30000 })
@@ -139,7 +153,9 @@ async function isLoaded($: Dollar, command: string): Promise<boolean> {
  */
 async function showTab($: Dollar, id: string): Promise<void> {
   const entry = id === SIDEBAR_TAB ? undefined : entryOf(id)
-  const hasPane = !!entry?.pane && (await isLoaded($, entry.pane.command))
+  await quiet(() => loadOff($))
+  // A mod that is off draws nothing: the Main Menu's pane shows its off page.
+  const hasPane = !!entry?.pane && !(await read($, offAtom)).includes(id) && (await isLoaded($, entry.pane.command))
 
   await syncStrip($, { isOn: true, active: id })
   await quiet(() => $.store.set('active', id))
@@ -153,6 +169,22 @@ async function showTab($: Dollar, id: string): Promise<void> {
   await syncTicker($)
 }
 
+/** A mod was switched on or off: redraws the tabs, and the open tab follows (an off page gives way to the mod's own tab, and back). */
+async function refreshOff($: Dollar): Promise<void> {
+  const before = await read($, offAtom)
+  if (!(await loadOff($))) return
+  await syncStrip($)
+  const strip = await read($, stripAtom)
+  const after = await read($, offAtom)
+  if (strip.isOn && strip.active !== SIDEBAR_TAB && before.includes(strip.active) !== after.includes(strip.active)) await showTab($, strip.active)
+}
+
+/** Switches a mod on from its off page. A plugin's own hooks do not see its `$.config.set`, so this redraws the tabs itself. */
+async function turnOn($: Dollar, id: string): Promise<void> {
+  await $.config.set({ key: `${id}.enabled`, value: true })
+  await refreshOff($)
+}
+
 async function closeAll($: Dollar): Promise<void> {
   await syncStrip($, { isOn: false })
   await quiet(() => $.store.set('isOn', false))
@@ -162,6 +194,9 @@ async function closeAll($: Dollar): Promise<void> {
 
 async function openSidebar($: Dollar): Promise<void> {
   await quiet(() => $.store.set('isOn', true))
+  await quiet(async () => {
+    if (await loadOff($)) await syncStrip($)
+  })
   const strip = await read($, stripAtom)
   const saved = await $.store.get('active').catch(() => undefined)
   const last = typeof saved === 'string' ? saved : strip.active
@@ -176,13 +211,13 @@ async function setLayout($: Dollar, hidden: string[], order: string[]): Promise<
   await syncStrip($)
 }
 
-/** `/sidebar <args>`: what the command hook answers, and what the sidebar's own buttons call directly. */
+/** `/sidebar <args>` (or `/doole_main-menu`): what the command hook answers, and what the sidebar's own buttons call directly. */
 async function sidebarCommand($: Dollar, args: string): Promise<{ text?: string }> {
   const arg = parseArg(args)
   const strip = await read($, stripAtom)
   if (arg.kind === 'close' || (arg.kind === 'flip' && strip.isOn)) {
     await closeAll($)
-    return { text: 'Sidebar closed.' }
+    return { text: 'Main Menu closed.' }
   }
   if (arg.kind === 'closed') {
     // A mod's own pane was closed by the person: the sidebar reads off with it.
@@ -199,7 +234,7 @@ async function sidebarCommand($: Dollar, args: string): Promise<{ text?: string 
     return {}
   }
   await openSidebar($)
-  return { text: 'Sidebar opened.' }
+  return { text: 'Main Menu opened.' }
 }
 
 /** Another mod's write of a key the sidebar follows; read untyped, as the contract does not declare it. */
@@ -212,10 +247,11 @@ export const register: Register = (on, options) => {
     const ran = await next(e)
     await $.command.register({
       name: 'sidebar',
-      description: 'Open or close the Sidebar: one tab per mod',
+      description: 'Open or close the Main Menu: one tab per mod (the Sidebar, renamed)',
       argumentHint: '[open|close|<mod>]',
     })
-    await $.command.register({ name: 'doole_sidebar', description: 'Open the Sidebar' })
+    await $.command.register({ name: 'doole_sidebar', description: 'Open the Main Menu (the Sidebar, renamed)' })
+    await $.command.register({ name: 'doole_main-menu', description: 'Open the Main Menu: one tab per mod' })
     if (!cfg.isEnabled) {
       await quiet(() => closeOwnPane($))
       return ran
@@ -252,7 +288,7 @@ export const register: Register = (on, options) => {
     return ran
   })
 
-  on('command.run', { command: ['sidebar', 'doole_sidebar'] }, ($, e) => (cfg.isEnabled ? sidebarCommand($, e.args) : { text: OFF_TEXT }))
+  on('command.run', { command: ['sidebar', 'doole_sidebar', 'doole_main-menu'] }, ($, e) => (cfg.isEnabled ? sidebarCommand($, e.args) : { text: OFF_TEXT }))
 
   on('command.run', async ($, e, next) => {
     const ran = await next(e)
@@ -330,6 +366,14 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  // A setting changed: a mod switched on or off redraws the tabs, and the open tab follows (an off page gives way to the mod's own tab).
+  on('config.set', async ($, e, next) => {
+    const ran = await next(e)
+    if (!cfg.isEnabled || !String((e as unknown as { key?: unknown }).key).endsWith('.enabled')) return ran
+    await quiet(() => refreshOff($))
+    return ran
+  }).catch(($, e, next) => next(e))
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
     if (!cfg.isEnabled) return next(e)
     const els = $.ui.resolve(e) as unknown as Record<string, any>
@@ -344,11 +388,13 @@ export const register: Register = (on, options) => {
       enhance: await read($, enhanceAtom),
       blocks: await read($, blocksAtom),
       installed,
-      all: orderedIds(installed, await read($, orderAtom)),
+      off: await read($, offAtom),
+      all: orderedIds(installed, await read($, orderAtom), await read($, offAtom)),
       hidden: await read($, hiddenAtom),
       tabs: strip.tabs,
       now: await $.clock.now(),
       openTab: id => ask(`tab ${id}`),
+      turnOn: id => void turnOn($, id).catch(() => {}),
       setHidden: (id, isHidden) =>
         void (async () => {
           const hidden = await read($, hiddenAtom)
@@ -356,7 +402,7 @@ export const register: Register = (on, options) => {
         })().catch(() => {}),
       moveTab: (id, by) =>
         void (async () => {
-          const order = move(orderedIds(await read($, installedAtom), await read($, orderAtom)), id, by)
+          const order = move(orderedIds(await read($, installedAtom), await read($, orderAtom), await read($, offAtom)), id, by)
           await setLayout($, await read($, hiddenAtom), order)
         })().catch(() => {}),
     })
