@@ -544,7 +544,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const below = await next(e)
     if (!opts.isEnabled) return below
-    if (e.surface !== 'terminal' && e.surface !== 'desktop') return below
+    if (e.surface !== 'terminal' && e.surface !== 'desktop' && e.surface !== 'mobile') return below
     if (treeHasKey(below, HOST_KEY)) return below
     const { Box, Button, Text } = $.ui.resolve(e)
     const now = await read($, phase)

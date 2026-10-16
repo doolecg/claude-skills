@@ -38,7 +38,12 @@ const SAVED = {
   },
 }
 
-const norm = (path: unknown) => String(path).split(String.fromCharCode(92)).join('/')
+// The fixtures use Windows paths; off Windows the engine joins them onto the working folder, so drop what comes before the drive.
+const norm = (path: unknown) => {
+  const flat = String(path).split(String.fromCharCode(92)).join('/')
+  const at = flat.indexOf('C:/')
+  return at > 0 ? flat.slice(at) : flat
+}
 
 // A world with `claude plugin list`, the manifests, and a settings.json held in `files`; every write is recorded.
 function world(on: any, hasOpen = true, saved: unknown = SAVED) {
@@ -271,4 +276,19 @@ test('in the terminal the tab keeps the strip and points to /config', { plugins:
   expect(all).toContain('MAIN MENU')
   expect(all).toContain('type /config')
   await ui.unmount()
+})
+
+test('on mobile choices are Buttons, text and number settings are read-only, and a Button press saves into settings.json', async ($, on) => {
+  const w = world(on)
+  await $.session.start({ cwd: 'F:/proj', surface: 'mobile', isInteractive: true } as any)
+  await $.command.run({ command: 'doole_settings', args: '' } as any)
+  const ui = await $.ui.mount(PANE('mobile'))
+  await ui.press({ key: 'mod:bottom-bar:toggle' })
+  expect(await ui.find({ type: 'Select' } as any)).toBeUndefined()
+  expect(await ui.find({ type: 'Input' } as any)).toBeUndefined()
+  expect(await texts(ui)).toContain('Change it on the desktop app or in /config.')
+  expect(await ui.find({ key: 'bottom-bar.colour:pick:Coral' })).toBeDefined()
+  await ui.press({ key: 'bottom-bar.colour:pick:Coral' })
+  expect(w.writes).toHaveLength(1)
+  expect(JSON.parse(w.writes[0]!.text).pluginConfigs['bottom-bar@dooles-tools'].options.colour).toBe('Coral')
 })

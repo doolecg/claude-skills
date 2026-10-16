@@ -115,7 +115,24 @@ function control($: EngineInterface, els: Record<string, any>, row: MsRow, hasFi
         <Button key={`${row.key}:off`} label="Off" variant={row.value === true ? undefined : 'primary'} onPress={() => void (row.value === true ? change($, row, false) : null)} />
       </Box>
     )
-  else if (!hasFields) field = <Text color={dim}>{cut(shown(row.value), room)}</Text>
+  else if (!hasFields && row.kind === 'choice')
+    // The phone draws no drop-down, so each choice is a Button; the current one is filled in.
+    field = (
+      <Box flexDirection="row" flexWrap="wrap" columnGap={1} rowGap={1}>
+        {row.options.map(o => (
+          <Button key={`${row.key}:pick:${o}`} label={o} variant={String(row.value) === o ? 'primary' : undefined} onPress={() => void (String(row.value) === o ? null : change($, row, o))} />
+        ))}
+      </Box>
+    )
+  else if (!hasFields)
+    field = (
+      <Box flexDirection="column">
+        <Text color={dim}>{cut(shown(row.value), room)}</Text>
+        <Text color={dim} wrap="wrap">
+          Change it on the desktop app or in /config.
+        </Text>
+      </Box>
+    )
   else if (row.kind === 'choice')
     field = (
       <Select
@@ -224,7 +241,8 @@ export const register: Register = on => {
     const open = await read($, openAtom)
     const groups = groupRows(rows)
     const room = Math.max(16, (e.props.bodyColumns ?? COLUMNS) - 10)
-    const hasFields = 'Input' in els && 'Select' in els
+    // The phone's table has no Input or Select; the surface's name is the sure check.
+    const hasFields = e.surface !== 'mobile' && 'Input' in els && 'Select' in els
     const counts = `${groups.length} mod${groups.length === 1 ? '' : 's'} · ${rows.length} setting${rows.length === 1 ? '' : 's'}`
     const body = [
       !k ? (

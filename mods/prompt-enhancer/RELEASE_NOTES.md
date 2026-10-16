@@ -1,3 +1,10 @@
+# Prompt Enhancer 0.7.0
+
+## New
+- The Enhance Prompt, Undo and Use rewrite buttons now show in the Claude mobile app too.
+
+---
+
 # Prompt Enhancer 0.6.0
 
 ## New

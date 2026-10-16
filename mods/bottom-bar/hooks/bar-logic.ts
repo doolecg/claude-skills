@@ -1,5 +1,8 @@
 import type { BarFigures, BarMode, BarTodo, BarSegment, BarSegmentAction, BarSegmentState, BarTool } from '../types'
 
+/** The desktop app and the mobile app draw the same Button/Text/Svg bar; the phone's table lacks only Input, Select and Client. */
+export const isAppSurface = (surface: string): boolean => surface === 'desktop' || surface === 'mobile'
+
 export const EMPTY_TODO: BarTodo = { phase: 'idle', items: [], finishedAt: 0 }
 
 /** Task View's `checklist` state, cut down to what the bar draws. Anything else gives an empty list. */

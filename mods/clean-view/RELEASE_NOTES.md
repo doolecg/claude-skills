@@ -1,3 +1,10 @@
+# Task View 1.10.0
+
+## New
+- Claude's to-do list is drawn with the same pixel bars in the Claude mobile app.
+
+---
+
 # Task View 1.9.1
 
 ## Changed

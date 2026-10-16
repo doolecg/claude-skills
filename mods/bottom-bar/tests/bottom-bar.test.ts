@@ -64,7 +64,7 @@ const PANE_PROPS = {
 
 const draw = (...args: any[]) => (globalThis as any).h(...args)
 
-const mountBar = ($: any, surface: 'terminal' | 'desktop' = 'terminal', props: any = BAR_PROPS) =>
+const mountBar = ($: any, surface: 'terminal' | 'desktop' | 'mobile' = 'terminal', props: any = BAR_PROPS) =>
   $.ui.mount({ plugin: 'bottom-bar', surface, component: 'SessionMode', props })
 
 const mountPane = ($: any, surface: 'terminal' | 'desktop' = 'terminal') =>
@@ -1453,7 +1453,7 @@ const textsOf = (tree: any, out: string[] = []): string[] => {
 const GLYPHS = /[◖◗│─┌┐└┘╭╮╰╯▰▱]/
 
 const ABOVE_PROPS = { hasSurvey: false, isWorking: false, maxRows: 10 } as any
-const mountAppBar = ($: any) => $.ui.mount({ plugin: 'bottom-bar', surface: 'desktop', component: 'AbovePrompt', props: ABOVE_PROPS })
+const mountAppBar = ($: any, surface: 'desktop' | 'mobile' = 'desktop') => $.ui.mount({ plugin: 'bottom-bar', surface, component: 'AbovePrompt', props: ABOVE_PROPS })
 
 test('app: the bar sits above the prompt with no model or effort, and the footer keeps its own labels', async ($, on) => {
   world(on)
@@ -1497,6 +1497,28 @@ test('app: the bar is one row of figures, a toolbox Button, no Raster and no gly
   expect(all).not.toMatch(/ {2,}/)
   await bar.press({ key: 'pill' })
   expect(seen.opened).toContain(TOOLBOX)
+})
+
+test('mobile: the bar above the prompt and the working footer draw like the desktop app, with no field', async ($, on) => {
+  const seen = world(on)
+  registerCommands(on)
+  seedModel(on)
+  on('ui.render', { component: 'SessionMode' }, ($: any, e: any) => (globalThis as any).h($.ui.resolve(e).Text, {}, 'Opus 5.5 High'))
+  on('turn.start', (_$: any, e: any) => ({ turnId: e.turnId }))
+  await startSession($)
+  const bar = await mountAppBar($, 'mobile')
+  const all = textsOf(await bar.drawn()).join(' ')
+  expect(all).toContain('10%')
+  expect(all).toContain('0 agents')
+  expect(all).not.toMatch(GLYPHS)
+  expect(await bar.find({ type: 'Svg' })).toBeDefined()
+  expect(await bar.find({ type: 'Input' } as any)).toBeUndefined()
+  await bar.press({ key: 'pill' })
+  expect(seen.opened).toContain(TOOLBOX)
+  await $.turn.start({ text: 'go', turnId: 't1' } as any)
+  const footer = await mountBar($, 'mobile')
+  expect(await footer.find({ key: 'bottom-bar-segments' })).toBeDefined()
+  expect(await footer.find({ key: 'pill' })).toBeUndefined()
 })
 
 test('app: the toolbox pane has the pickers and mods as Buttons, and picking a model sets it', async ($, on) => {

@@ -1,7 +1,7 @@
 {
   "name": "mod-settings",
-  "version": "0.3.0",
-  "description": "Every installed mod's settings in one side panel in the desktop app, changed in place.",
+  "version": "0.4.0",
+  "description": "Every installed mod's settings in one side panel in the desktop and mobile apps, changed in place.",
   "author": { "name": "doolecg" },
   "license": "MIT",
   "types": "./types/index.d.ts"

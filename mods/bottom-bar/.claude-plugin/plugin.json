@@ -1,7 +1,7 @@
 {
   "name": "bottom-bar",
-  "version": "1.11.0",
-  "description": "A compact rounded bar at the bottom of the terminal and the desktop app (model, effort, context and tokens used, 5-hour and 7-day usage, agents) with a Tools button that opens the Main Menu.",
+  "version": "1.12.0",
+  "description": "A compact rounded bar at the bottom of the terminal and above the prompt in the desktop and mobile apps (model, effort, context and tokens used, 5-hour and 7-day usage, agents) with a Tools button that opens the Main Menu.",
   "author": { "name": "doolecg" },
   "license": "MIT",
   "types": "./types/index.d.ts",
@@ -46,7 +46,7 @@
     "showTodo": {
       "type": "boolean",
       "title": "Show the to-do list",
-      "description": "Draw Claude's to-do list above the bar in the desktop app while Claude works. Default: on.",
+      "description": "Draw Claude's to-do list above the bar in the desktop and mobile apps while Claude works. Default: on.",
       "default": true
     }
   }

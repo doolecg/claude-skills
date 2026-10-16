@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 const HOME = '/home/ann'
 const ROOT = '/work/app'
-const SURFACES = ['terminal', 'desktop'] as const
+const SURFACES = ['terminal', 'desktop', 'mobile'] as const
 
 type World = {
   box: string
@@ -152,10 +152,11 @@ for (const surface of SURFACES) {
 }
 
 // The desktop row is native Buttons and plain Text: no pill caps (◖ ◗) and no box-drawing glyphs in any Text.
-test('desktop: no Text draws a pill cap or box-drawing glyph, idle or after a run', { options: { soulBank: 'soul' } }, async ($, on) => {
+for (const surface of ['desktop', 'mobile'] as const) {
+test(`${surface}: no Text draws a pill cap or box-drawing glyph, idle or after a run`, { options: { soulBank: 'soul' } }, async ($, on) => {
   engine(on, baseWorld())
   await start($)
-  const row = await mountRow($, 'desktop')
+  const row = await mountRow($, surface)
   const glyph = /[◖◗─-╿]/
   const texts = async (): Promise<string[]> => (await row.findAll({ type: 'Text' })).map((t: { text?: unknown }) => String(t.text ?? ''))
   expect((await texts()).length).toBeGreaterThan(0)
@@ -164,8 +165,9 @@ test('desktop: no Text draws a pill cap or box-drawing glyph, idle or after a ru
   expect(await row.find({ type: 'Text', text: '3 recalls' })).toBeDefined()
   expect((await texts()).some((t: string) => glyph.test(t))).toBe(false)
 })
+}
 
-for (const surface of ['vscode', 'mobile'] as const) {
+for (const surface of ['vscode'] as const) {
   test(`${surface}: the row is left to the hooks beneath, with no Enhance button`, async ($, on) => {
     engine(on, baseWorld())
     await start($)

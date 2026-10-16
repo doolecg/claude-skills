@@ -1,6 +1,6 @@
 {
   "name": "clean-view",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "description": "Restyles Claude's own to-do list in the transcript: a header with the count, a pixel progress bar, and a pixel bar for each item.",
   "author": {
     "name": "doolecg"

@@ -9,6 +9,7 @@ A bottom bar, one menu for everything, live agent bars, and a settings panel.
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-6C5CE7)
 ![Terminal](https://img.shields.io/badge/works%20in-Terminal-2D3436)
 ![Desktop app](https://img.shields.io/badge/works%20in-Desktop%20app%20Code%20tab-2D3436)
+![Mobile app](https://img.shields.io/badge/works%20in-Mobile%20app-2D3436)
 ![Licence](https://img.shields.io/badge/licence-MIT-2D3436)
 
 `✈  ✺  ✶  ◇  ✎  ▭  ⊘  ◎  ⚙  ◆`
@@ -33,7 +34,7 @@ While Claude works, its to-do list gets pixel progress bars, and every subagent 
  └──────────┘          └───────────────────────────┘       (last tab)
 ```
 
-Everything works in the terminal and in the Code tab of the Claude desktop app.
+Everything works in the terminal, in the Code tab of the Claude desktop app and in the Claude mobile app. The phone has no text box yet, so there you can switch and pick things with buttons but not type into the mods; type on the desktop app or in the terminal.
 
 ---
 
@@ -66,12 +67,12 @@ Every mod opens with `/doole_<mod>`. The plugin id is what you pass to `claude p
 | | Mod | Plugin id | Open with | What it does | Version |
 |---|---|---|---|---|---|
 | ◆ | **Main Menu** | `sidebar` | `/doole_main-menu` | One menu with a tab for each installed mod. Switched-off mods are dimmed. | 1.8.0 |
-| ▭ | **Bottom Bar** | `bottom-bar` | `/doole_bottom-bar` | A rounded bar with model, effort, context, 5-hour and 7-day usage and agents. Its Tools button opens the Main Menu. | 1.11.0 |
-| ⚙ | **Mod Settings** | `mod-settings` | `/doole_settings` | Every installed mod's settings in one side panel in the desktop app. | 0.3.0 |
+| ▭ | **Bottom Bar** | `bottom-bar` | `/doole_bottom-bar` | A rounded bar with model, effort, context, 5-hour and 7-day usage and agents. Its Tools button opens the Main Menu. | 1.12.0 |
+| ⚙ | **Mod Settings** | `mod-settings` | `/doole_settings` | Every installed mod's settings in one side panel in the desktop and mobile apps. | 0.4.0 |
 | ✈ | **Flightdeck** | `flightdeck` | `/doole_flightdeck` | The main session and every subagent working now, each as a pixel progress bar with a stop button. | 1.7.1 |
-| ✶ | **Task View** | `clean-view` | `/doole_task-view` | Claude's to-do list redrawn with a header and pixel progress bars. | 1.9.1 |
+| ✶ | **Task View** | `clean-view` | `/doole_task-view` | Claude's to-do list redrawn with a header and pixel progress bars. | 1.10.0 |
 | ✺ | **Self Improve** | `self-improve` | `/doole_self-improve` | Learns from finished sessions, keeps `soul.md` in step, and drafts skill fixes for your approval. | 2.5.1 |
-| ✎ | **Prompt Enhancer** | `prompt-enhancer` | `/doole_prompt-enhancer` | Rewrites the prompt box with the files, memories and skills the task needs. Nothing is sent until you press Enter. | 0.6.0 |
+| ✎ | **Prompt Enhancer** | `prompt-enhancer` | `/doole_prompt-enhancer` | Rewrites the prompt box with the files, memories and skills the task needs. Nothing is sent until you press Enter. | 0.7.0 |
 | ◇ | **Idea Shelf** | `idea-shelf` | `/doole_idea-shelf` | Park ideas with `/idea` while Claude works, one shelf per project. Send them later from `/ideas`. | 0.5.1 |
 | ◎ | **Context** | `context` | `/doole_context` | The footer on every tab (Hindsight, CodeGraph, git) and a count of test and fix passes. | 1.2.0 |
 | ⊘ | **Rule Guard** | `rule-guard` | none | Stops tool calls that break your standing rules and tells Claude why. Its rules are switches in its settings. | 1.1.0 |
@@ -84,7 +85,7 @@ Flightdeck is inspired by [scasella/claude-flightdeck](https://github.com/scasel
 
 ## Settings
 
-- **Desktop app:** open **Mod Settings** (`/doole_settings`, or the last tab of the Main Menu). Each mod is a card. Change a setting in place.
+- **Desktop and mobile apps:** open **Mod Settings** (`/doole_settings`, or the last tab of the Main Menu). Each mod is a card. Change a setting in place.
 - **Terminal:** use `/config`, or `/plugin`, then Installed, then the mod, then Configure.
 - Every mod has an **Enabled** switch as its first setting.
 - Changes are saved to Claude Code's own settings. If a mod does not pick one up, run `/reload-plugins`.

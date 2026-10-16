@@ -1,6 +1,6 @@
 {
   "name": "prompt-enhancer",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Enhance Prompt: a button under the prompt that rewrites what you typed, in place, with the files, memories, conversation and skills the task needs. Nothing is sent until you press Enter.",
   "author": {
     "name": "doolecg"

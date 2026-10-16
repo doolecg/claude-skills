@@ -25,6 +25,7 @@ import {
   segments,
   toolLabel,
   EMPTY_TODO,
+  isAppSurface,
   showsTodo,
   todoFrom,
 } from './bar-logic'
@@ -429,7 +430,7 @@ export const register: Register = (on, options) => {
 
   // In the app the bar is the band above the prompt: the footer slot below it holds about two items.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (!isOn || e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
+    if (!isOn || !isAppSurface(e.surface) || e.props.hasSurvey) return next(e)
     const pal = paletteFor(await read($, theme), colour)
     const list = await read($, todo)
     return desktopBar({
@@ -453,7 +454,7 @@ export const register: Register = (on, options) => {
     // only then does the key tell a mod with a fallback button (Enhance Prompt) that the bar hosts it;
     // the rest of the time that mod draws its own button here.
     if (!isOn) return next(e)
-    if (e.surface === 'desktop') {
+    if (isAppSurface(e.surface)) {
       const { Box: AppBox } = $.ui.resolve(e)
       if (await read($, isWorking)) return <AppBox key="bottom-bar-segments">{await next(e)}</AppBox>
       // Idle: the figures are in the bar above the prompt, so nothing of the bar's is added here.
@@ -635,7 +636,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: TOOLBOX }, async ($, e) => {
-    if (e.surface === 'desktop' || e.surface === 'mobile') {
+    if (isAppSurface(e.surface)) {
       const loaded = await read($, models)
       return desktopToolbox({
         els: $.ui.resolve(e) as AppEls,
@@ -701,7 +702,7 @@ export const register: Register = (on, options) => {
       saveTools($, chosen.includes(name) ? chosen.filter(n => n !== name) : [...chosen, name])
 
     const onOff = await read($, modeStates)
-    const isApp = e.surface === 'desktop' || e.surface === 'mobile'
+    const isApp = isAppSurface(e.surface)
     const item = (c: BarTool, isIn: boolean) => {
       const mode = onOff[c.name]
       const about = mode ? `  ${mode.label} on/off button, now ${mode.isOn ? 'on' : 'off'}` : c.description ? `  ${c.description}` : ''

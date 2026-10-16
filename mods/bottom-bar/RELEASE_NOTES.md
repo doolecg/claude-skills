@@ -1,3 +1,10 @@
+# Bottom Bar 1.12.0
+
+## New
+- Works in the Claude mobile app: the bar sits above the prompt and the Tools button opens the Main Menu, drawn the same as in the desktop app. Typing the pick-list filter stays on the desktop app and in the terminal, because the phone has no text box yet.
+
+---
+
 # Bottom Bar 1.11.0
 
 ## Changed

@@ -112,7 +112,7 @@ async function drawTodo($: Dollar, cfg: CvConfig, e: any, next: (e: any) => Prom
   if (tasks.length === 0) return next(e)
   const pal = sbPalette(await read($, themeAtom), cfg.colour ?? (await read($, colourAtom)))
   const d = { pal, isLive: id === latest && cl.phase === 'working', tick: await read($, tickAtom), columns: e.props.bodyColumns, scale: cfg.scale, showMain: cfg.showMain, showItems: cfg.showItems }
-  return e.surface === 'desktop' ? drawTodoDesktop(els, d, tasks) : drawTodoTerminal(els, d, tasks)
+  return e.surface === 'desktop' || e.surface === 'mobile' ? drawTodoDesktop(els, d, tasks) : drawTodoTerminal(els, d, tasks)
 }
 
 /** Task View draws when the master setting is on and the per-session switch (/simple) is on. */

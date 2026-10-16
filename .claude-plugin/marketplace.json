@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "bottom-bar",
-      "description": "A compact rounded bar in the terminal and above the prompt in the desktop app (model, effort, context, 5-hour and 7-day usage, agents, and the to-do bar) with a Tools button that opens the Main Menu.",
+      "description": "A compact rounded bar in the terminal and above the prompt in the desktop and mobile apps (model, effort, context, 5-hour and 7-day usage, agents, and the to-do bar) with a Tools button that opens the Main Menu.",
       "category": "productivity",
       "source": "./mods/bottom-bar"
     },
@@ -63,7 +63,7 @@
     },
     {
       "name": "mod-settings",
-      "description": "Every installed mod's settings in one side panel in the desktop app, changed in place. Open it with /doole_settings.",
+      "description": "Every installed mod's settings in one side panel in the desktop and mobile apps, changed in place. Open it with /doole_settings.",
       "category": "productivity",
       "source": "./mods/mod-settings"
     }

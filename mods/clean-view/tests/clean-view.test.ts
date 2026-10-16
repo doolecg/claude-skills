@@ -5,7 +5,7 @@ import { addTask, allDone, planStep, summary, tasksFromList, tasksFromTodos, upd
 
 import { sbPalette } from '../hooks/sidebar-kit'
 
-const SURFACES = ['terminal', 'desktop'] as const
+const SURFACES = ['terminal', 'desktop', 'mobile'] as const
 
 const TODOS = [
   { content: 'Read your brand notes', status: 'completed', activeForm: 'Reading' },
@@ -44,7 +44,7 @@ async function todoCall($: any, id: string, todos: unknown[]) {
   await $.tool.call({ tool: 'TodoWrite', tool_use_id: id, todos } as any)
 }
 
-async function row($: any, surface: 'terminal' | 'desktop', id: string, todos: unknown[], tool = 'TodoWrite', component = 'ToolUse') {
+async function row($: any, surface: 'terminal' | 'desktop' | 'mobile', id: string, todos: unknown[], tool = 'TodoWrite', component = 'ToolUse') {
   const ui = await $.ui.mount({
     plugin: 'clean-view',
     surface,
